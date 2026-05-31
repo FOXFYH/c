@@ -1781,6 +1781,28 @@
         }
     };
 
+    App._zoomLevel=100;
+    App.zoomIn=function(){
+        if(App._zoomLevel>=200)return;
+        App._zoomLevel+=10;
+        App._applyZoom();
+    };
+    App.zoomOut=function(){
+        if(App._zoomLevel<=50)return;
+        App._zoomLevel-=10;
+        App._applyZoom();
+    };
+    App._applyZoom=function(){
+        document.body.style.zoom=App._zoomLevel/100;
+        var el=document.getElementById('zoom-level');
+        if(el)el.textContent=App._zoomLevel+'%';
+        try{localStorage.setItem('exam_zoom',App._zoomLevel)}catch(e){}
+    };
+    (function(){
+        var saved=parseInt(localStorage.getItem('exam_zoom'));
+        if(saved>=50&&saved<=200){App._zoomLevel=saved;App._applyZoom()}
+    })();
+
     App.Sync = {
         frame:null,
         ready:false,

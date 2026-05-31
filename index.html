@@ -23,6 +23,7 @@
         <div class="nav-sound" onclick="App.Effects.toggleSound()" id="sound-toggle" title="音效开关">🔊</div>
         <button class="nav-exam-ctrl hidden" id="nav-exam-mode" onclick="App.switchView('home')"></button>
         <button class="nav-exam-ctrl hidden" id="nav-exam-end" onclick="App.Exam.endExam()">⏹ 结束</button>
+        <div class="nav-zoom" id="nav-zoom-controls"><button class="zoom-btn" onclick="App.zoomOut()" title="缩小">−</button><span class="zoom-level" id="zoom-level">100%</span><button class="zoom-btn" onclick="App.zoomIn()" title="放大">+</button></div>
         <div class="nav-fullscreen" onclick="App.toggleFullscreen()" title="全屏显示">⛶</div>
     </nav>
     <main id="app-content">

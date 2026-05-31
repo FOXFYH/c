@@ -2511,6 +2511,40 @@ input:checked + .slider:before {
     .pk-player-item { flex: 1; min-width: 140px; }
 }
 
+.nav-zoom {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    user-select: none;
+}
+.zoom-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 700;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    padding: 0;
+    line-height: 1;
+}
+.zoom-btn:hover {
+    background: var(--bg-card);
+    border-color: var(--accent-1);
+}
+.zoom-level {
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 36px;
+    text-align: center;
+    font-weight: 600;
+}
 .nav-fullscreen {
     font-size: 20px;
     cursor: pointer;
