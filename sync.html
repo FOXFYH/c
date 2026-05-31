@@ -536,23 +536,25 @@ async function syncAllBanks(){
         var cloudFiles=cloudResult.数据;
         var localBankIds={};
         for(var j=0;j<banks.length;j++){localBankIds[banks[j].id||banks[j].name]=true}
+        var allMetasCheck=getAllBankMetas();
+        var cloudBankIdSet={};
+        for(var mKey in allMetasCheck){if(allMetasCheck[mKey]&&allMetasCheck[mKey].id)cloudBankIdSet[allMetasCheck[mKey].id]=true}
         for(var k=0;k<cloudFiles.length;k++){
             var cf=cloudFiles[k];
             if(!cf.ID||!cf.ID.trim())continue;
             if(cf.ID.indexOf('QB_')!==0)continue;
             if(!cf.文件名||!cf.文件名.trim())continue;
             var bankId=cf.ID;
-            if(localBankIds[bankId])continue;
-            var existingMeta=getBankMeta(bankId);
-            if(existingMeta)continue;
+            if(cloudBankIdSet[bankId])continue;
 
             try{
                 var cloudData=JSON.parse(cf.内容||'{}');
                 var currentBanks=readLocalBanks();
                 currentBanks.push(cloudData);
                 writeLocalBanks(currentBanks);
+                var newBankKey=cloudData.id||cloudData.name||bankId;
                 var newMeta={id:bankId,name:cf.文件名,version:parseInt(cf.版本号||'0'),lastSyncVersion:parseInt(cf.版本号||'0')};
-                setBankMeta(bankId,newMeta);
+                setBankMeta(newBankKey,newMeta);
                 notifyParent('dataUpdated',{dataType:'banks',data:currentBanks,bankId:bankId,version:newMeta.version});
                 console.log('[Sync] 从云端下载新题库:',cf.文件名);
             }catch(e){
@@ -845,6 +847,10 @@ window.addEventListener('message',function(e){
                 lastSyncTime:getLastSyncTime(),
                 syncing:syncMutex
             });
+            break;
+
+        case 'ping':
+            notifyParent('syncReady',{});
             break;
     }
 });
