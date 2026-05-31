@@ -3,6 +3,29 @@
     var App = window.App = {};
     function genId(){return Date.now().toString(36)+Math.random().toString(36).substr(2,6)}
     function shuffle(arr){var a=arr.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+    function getAvatarChar(name,usedChars){
+        if(!name)return'?';
+        var last=name.charAt(name.length-1);
+        if(!usedChars||!usedChars[last])return last;
+        for(var i=name.length-2;i>=1;i--){
+            var ch=name.charAt(i);
+            if(!usedChars[ch])return ch;
+        }
+        var first=name.charAt(0);
+        if(!usedChars[first])return first;
+        return last;
+    }
+    function buildAvatarCharMap(students){
+        var used={},result={};
+        var sorted=students.slice().sort(function(a,b){return a.name.length-b.name.length});
+        sorted.forEach(function(s){
+            if(s.avatar)return;
+            var ch=getAvatarChar(s.name,used);
+            result[s.id]=ch;
+            used[ch]=true;
+        });
+        return result;
+    }
 
     var DEFAULT_STUDENTS = DemoData.students;
     var DEFAULT_BANKS = DemoData.banks;
@@ -185,13 +208,14 @@
                 return a.name.localeCompare(b.name,'zh-CN')*dir;
             });
             var html=filterHTML;
+            var avMap=buildAvatarCharMap(filtered);
             html+='<table class="student-table readonly"><thead><tr>';
             html+='<th>头像</th><th>姓名</th><th>积分</th><th>等级</th><th>正确率</th><th>性别</th><th>小组</th><th>场次</th>';
             html+='</tr></thead><tbody>';
             filtered.forEach(function(s){
                 var lv=getLevel(s.totalPoints);
                 html+='<tr data-id="'+s.id+'">';
-                html+='<td><div class="st-avatar-cell">'+(s.avatar?'<img src="'+s.avatar+'">':s.name.charAt(0))+'</div></td>';
+                html+='<td><div class="st-avatar-cell">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div></td>';
                 html+='<td class="st-name-readonly">'+s.name+'</td>';
                 html+='<td class="st-points-readonly" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看积分详情">⭐ '+s.totalPoints+'</td>';
                 html+='<td><span class="st-level-badge">'+lv.name+'</span></td>';
@@ -213,7 +237,7 @@
             var history=App.Records.getStudentHistory(id);
             var body='<div class="student-history-modal">';
             body+='<div style="text-align:center;margin-bottom:20px">';
-            body+='<div class="lb-avatar" style="width:64px;height:64px;font-size:28px;margin:0 auto 10px">'+(student.avatar?'<img src="'+student.avatar+'">':student.name.charAt(0))+'</div>';
+            body+='<div class="lb-avatar" style="width:64px;height:64px;font-size:28px;margin:0 auto 10px">'+(student.avatar?'<img src="'+student.avatar+'">':(buildAvatarCharMap([student])[student.id]||student.name.charAt(0)))+'</div>';
             body+='<div style="font-size:22px;font-weight:800">'+student.name+'</div>';
             body+='<div style="color:var(--gold);font-weight:600">'+lv.name+' - '+lv.comment+'</div>';
             body+='<div style="font-size:28px;font-weight:900;color:var(--accent-2);margin-top:8px">⭐ '+st.totalPoints+' 分</div>';
@@ -660,7 +684,7 @@
                 this.showQuestion();
             }
         },
-        startDrawing:function(){var students=this.currentExam.students;if(students.length===0)return;var settings=App.Storage.getSettings();var drawDuration=(settings.drawDuration||3)*1000;var card=document.getElementById('drawing-card');var avatar=document.getElementById('drawing-avatar');var nameEl=document.getElementById('drawing-name');card.classList.add('spinning');card.classList.remove('revealed');App.Effects.playDrumRoll();var self=this,startTime=Date.now(),stopped=false;var finalStudent=this.currentExam.currentStudent;function animate(){var rs=students[Math.floor(Math.random()*students.length)];nameEl.textContent=rs.name;if(rs.avatar){avatar.innerHTML='<img src="'+rs.avatar+'">'}else{avatar.innerHTML='';avatar.textContent=rs.name.charAt(0)}var elapsed=Date.now()-startTime;var progress=Math.min(elapsed/drawDuration,1);if(progress>=1||stopped){setTimeout(function(){card.classList.remove('spinning');card.classList.add('revealed');nameEl.textContent=finalStudent.name;if(finalStudent.avatar){avatar.innerHTML='<img src="'+finalStudent.avatar+'">'}else{avatar.innerHTML='';avatar.textContent=finalStudent.name.charAt(0)}App.Effects.playFanfare();App.Effects.spawnConfetti(window.innerWidth/2,window.innerHeight/3,80);setTimeout(function(){self.showQuestion()},1800)},300);return}var delay=50+progress*200;setTimeout(animate,delay)}animate();this._drawingStop=function(){stopped=true}},
+        startDrawing:function(){var students=this.currentExam.students;if(students.length===0)return;var settings=App.Storage.getSettings();var drawDuration=(settings.drawDuration||3)*1000;var card=document.getElementById('drawing-card');var avatar=document.getElementById('drawing-avatar');var nameEl=document.getElementById('drawing-name');var avMap=buildAvatarCharMap(students);card.classList.add('spinning');card.classList.remove('revealed');App.Effects.playDrumRoll();var self=this,startTime=Date.now(),stopped=false;var finalStudent=this.currentExam.currentStudent;function animate(){var rs=students[Math.floor(Math.random()*students.length)];nameEl.textContent=rs.name;if(rs.avatar){avatar.innerHTML='<img src="'+rs.avatar+'">'}else{avatar.innerHTML='';avatar.textContent=avMap[rs.id]||rs.name.charAt(0)}var elapsed=Date.now()-startTime;var progress=Math.min(elapsed/drawDuration,1);if(progress>=1||stopped){setTimeout(function(){card.classList.remove('spinning');card.classList.add('revealed');nameEl.textContent=finalStudent.name;if(finalStudent.avatar){avatar.innerHTML='<img src="'+finalStudent.avatar+'">'}else{avatar.innerHTML='';avatar.textContent=avMap[finalStudent.id]||finalStudent.name.charAt(0)}App.Effects.playFanfare();App.Effects.spawnConfetti(window.innerWidth/2,window.innerHeight/3,80);setTimeout(function(){self.showQuestion()},1800)},300);return}var delay=50+progress*200;setTimeout(animate,delay)}animate();this._drawingStop=function(){stopped=true}},
         stopDrawing:function(){if(this._drawingStop){this._drawingStop();this._drawingStop=null}},
         showQuestion:function(){
             document.getElementById('exam-drawing').classList.add('hidden');
@@ -671,8 +695,8 @@
             var label=(labels[exam.participationType]&&labels[exam.participationType][exam.mode])||exam.mode;
             var navMode=document.getElementById('nav-exam-mode');if(navMode){navMode.textContent=label;navMode.classList.remove('hidden')}
             var navEnd=document.getElementById('nav-exam-end');if(navEnd)navEnd.classList.remove('hidden');
-            var student=exam.currentStudent;var question=exam.questions[exam.currentIndex];var st=getStudentStats(student.id);var level=getLevel(st.totalPoints);
-            document.getElementById('exam-avatar').innerHTML=student.avatar?'<img src="'+student.avatar+'">':student.name.charAt(0);
+            var student=exam.currentStudent;var question=exam.questions[exam.currentIndex];var st=getStudentStats(student.id);var level=getLevel(st.totalPoints);var avMap=buildAvatarCharMap(exam.students);
+            document.getElementById('exam-avatar').innerHTML=student.avatar?'<img src="'+student.avatar+'">':(avMap[student.id]||student.name.charAt(0));
             document.getElementById('exam-student-name').textContent=student.name;
             document.getElementById('exam-student-group').textContent=student.group?'('+student.group+')':'';
             document.getElementById('exam-student-level').textContent=level.name;
@@ -1033,6 +1057,7 @@
             var groupMembers=Object.keys(srs).filter(function(sid){return srs[sid].group===topGroup}).map(function(k){return srs[k]}).sort(function(a,b){
                 var sa=pScores[a.id]||a.pointsEarned||0;var sb=pScores[b.id]||b.pointsEarned||0;return sb-sa;
             });
+            var avMap=buildAvatarCharMap(groupMembers);
             var medals=['🥇','🥈','🥉'];
             var podiumOrder=[5,3,1,0,2,4,6];
             if(groupMembers.length===0){
@@ -1060,7 +1085,7 @@
                 var rankLabel=idx<3?medals[idx]:'#'+rank;
                 var pts=pScores[s.id]||s.pointsEarned||0;
                 podiumHTML+='<div class="podium-slot rank-'+rank+'">';
-                podiumHTML+='<div class="podium-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':s.name.charAt(0))+'</div>';
+                podiumHTML+='<div class="podium-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div>';
                 podiumHTML+='<div class="podium-name">'+s.name+'</div>';
                 podiumHTML+='<div class="podium-level">'+topGroup+'</div>';
                 podiumHTML+='<div class="podium-points">⭐ '+pts+'</div>';
@@ -1076,7 +1101,7 @@
                 remaining.forEach(function(s,i){
                     var rank=podiumCount+i+1;
                     var pts=pScores[s.id]||s.pointsEarned||0;
-                    listHTML+='<div class="flb-item"><div class="flb-rank">#'+rank+'</div><div class="flb-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':s.name.charAt(0))+'</div><div class="flb-name">'+s.name+'</div><div class="flb-level">'+topGroup+'</div><div class="flb-pts">⭐ '+pts+'</div></div>';
+                    listHTML+='<div class="flb-item"><div class="flb-rank">#'+rank+'</div><div class="flb-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div><div class="flb-name">'+s.name+'</div><div class="flb-level">'+topGroup+'</div><div class="flb-pts">⭐ '+pts+'</div></div>';
                 });
                 listHTML+='</div></div>';
             }
@@ -1103,6 +1128,7 @@
             var sorted=Object.keys(srs).map(function(k){return srs[k]}).sort(function(a,b){
                 var sa=pScores[a.id]||a.pointsEarned||0;var sb=pScores[b.id]||b.pointsEarned||0;return sb-sa;
             });
+            var avMap=buildAvatarCharMap(sorted);
             var medals=['🥇','🥈','🥉'];
             var podiumOrder=[5,3,1,0,2,4,6];
             if(sorted.length===0){
@@ -1132,7 +1158,7 @@
                 var rank=idx+1;
                 var rankLabel=idx<3?medals[idx]:'#'+rank;
                 podiumHTML+='<div class="podium-slot rank-'+rank+'">';
-                podiumHTML+='<div class="podium-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':s.name.charAt(0))+'</div>';
+                podiumHTML+='<div class="podium-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div>';
                 podiumHTML+='<div class="podium-name">'+s.name+'</div>';
                 podiumHTML+='<div class="podium-level">'+(s.group||'')+'</div>';
                 podiumHTML+='<div class="podium-points">⭐ '+score+'</div>';
@@ -1148,7 +1174,7 @@
                 remaining.forEach(function(s,i){
                     var score=pScores[s.id]||s.pointsEarned||0;
                     var rank=podiumCount+i+1;
-                    listHTML+='<div class="flb-item"><div class="flb-rank">#'+rank+'</div><div class="flb-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':s.name.charAt(0))+'</div><div class="flb-name">'+s.name+'</div><div class="flb-level">'+(s.group||'')+'</div><div class="flb-pts">⭐ '+score+'</div></div>';
+                    listHTML+='<div class="flb-item"><div class="flb-rank">#'+rank+'</div><div class="flb-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div><div class="flb-name">'+s.name+'</div><div class="flb-level">'+(s.group||'')+'</div><div class="flb-pts">⭐ '+score+'</div></div>';
                 });
                 listHTML+='</div></div>';
             }
@@ -1254,6 +1280,7 @@
                 return{id:s.id,name:s.name,avatar:s.avatar,totalPoints:st.totalPoints};
             });
             var sorted=enriched.slice().sort(function(a,b){return b.totalPoints-a.totalPoints});
+            var avMap=buildAvatarCharMap(sorted);
             var podiumCount=Math.min(sorted.length,7);
             var topN=sorted.slice(0,podiumCount);
             var remaining=sorted.slice(podiumCount);
@@ -1277,7 +1304,7 @@
                 var rankLabel=idx<3?medals[idx]:'#'+rank;
                 var rankClass='rank-'+rank;
                 podiumHTML+='<div class="podium-slot '+rankClass+'">';
-                podiumHTML+='<div class="podium-avatar" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看详情">'+(s.avatar?'<img src="'+s.avatar+'">':s.name.charAt(0))+'</div>';
+                podiumHTML+='<div class="podium-avatar" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看详情">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div>';
                 podiumHTML+='<div class="podium-name">'+s.name+'</div>';
                 podiumHTML+='<div class="podium-level">'+lv.name+'</div>';
                 podiumHTML+='<div class="podium-points">⭐ '+s.totalPoints+'</div>';
@@ -1295,7 +1322,7 @@
                     var rank=podiumCount+i+1;
                     listHTML+='<div class="flb-item" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看详情">';
                     listHTML+='<div class="flb-rank">#'+rank+'</div>';
-                    listHTML+='<div class="flb-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':s.name.charAt(0))+'</div>';
+                    listHTML+='<div class="flb-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div>';
                     listHTML+='<div class="flb-name">'+s.name+'</div>';
                     listHTML+='<div class="flb-level">'+lv.name+'</div>';
                     listHTML+='<div class="flb-pts">⭐ '+s.totalPoints+'</div>';
@@ -1587,13 +1614,14 @@
                 empty.classList.remove('show');
                 var groups=App.Storage.getGroups();
                 var groupOptions='';
+                var avMap=buildAvatarCharMap(students);
                 groups.forEach(function(g){groupOptions+='<option value="'+g+'">'});
                 var html='<table class="student-table editable"><thead><tr>';
                 html+='<th>头像</th><th>姓名</th><th>性别</th><th>小组</th><th>操作</th>';
                 html+='</tr></thead><tbody>';
                 students.forEach(function(s){
                     html+='<tr data-id="'+s.id+'">';
-                    html+='<td><div class="st-avatar-cell" onclick="App.Settings.StudentMgmt.triggerAvatarUpload(\''+s.id+'\')" title="点击更换头像">'+(s.avatar?'<img src="'+s.avatar+'">':s.name.charAt(0))+'<input type="file" class="hidden-avatar-input" data-id="'+s.id+'" accept="image/*" onchange="App.Settings.StudentMgmt.onAvatarChange(this)"></div></td>';
+                    html+='<td><div class="st-avatar-cell" onclick="App.Settings.StudentMgmt.triggerAvatarUpload(\''+s.id+'\')" title="点击更换头像">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'<input type="file" class="hidden-avatar-input" data-id="'+s.id+'" accept="image/*" onchange="App.Settings.StudentMgmt.onAvatarChange(this)"></div></td>';
                     html+='<td><input type="text" class="inline-input inline-name" data-id="'+s.id+'" data-field="name" value="'+s.name.replace(/"/g,'&quot;')+'" onchange="App.Settings.StudentMgmt._markDirty()"></td>';
                     html+='<td><select class="inline-select inline-gender" data-id="'+s.id+'" data-field="gender" onchange="App.Settings.StudentMgmt._markDirty()"><option value=""'+(s.gender===''?' selected':'')+'>-</option><option value="男"'+(s.gender==='男'?' selected':'')+'>男</option><option value="女"'+(s.gender==='女'?' selected':'')+'>女</option></select></td>';
                     html+='<td><input type="text" class="inline-input inline-group" data-id="'+s.id+'" data-field="group" value="'+(s.group||'').replace(/"/g,'&quot;')+'" list="group-dl-'+s.id+'" onchange="App.Settings.StudentMgmt._markDirty()"><datalist id="group-dl-'+s.id+'">'+groupOptions+'</datalist></td>';
