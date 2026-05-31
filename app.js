@@ -64,6 +64,11 @@
         getExamProgress:function(){return this.get('examProgress',null)},
         setExamProgress:function(p){this.set('examProgress',p)},
         clearExamProgress:function(){localStorage.removeItem('exam_examProgress')},
+        getWrongSets:function(){return this.get('wrongSets',{})},
+        setWrongSets:function(w){this.set('wrongSets',w)},
+        getWrongSet:function(studentId,bankId){var all=this.getWrongSets();return all[studentId+'_'+bankId]||null},
+        setWrongSet:function(studentId,bankId,data){var all=this.getWrongSets();all[studentId+'_'+bankId]=data;this.setWrongSets(all)},
+        clearWrongSet:function(studentId,bankId){var all=this.getWrongSets();delete all[studentId+'_'+bankId];this.setWrongSets(all)},
         getSettings:function(){
             return this.get('settings',{
                 levels:[
@@ -154,7 +159,7 @@
         initBgCanvas:function(){var canvas=document.getElementById('bg-canvas');if(!canvas)return;var ctx=canvas.getContext('2d'),self=this;function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight}resize();window.addEventListener('resize',resize);self.bgParticles=[];for(var i=0;i<60;i++){self.bgParticles.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*2+0.5,dx:(Math.random()-0.5)*0.5,dy:(Math.random()-0.5)*0.5,alpha:Math.random()*0.5+0.1,color:['108,92,231','168,85,247','6,182,212','244,114,182'][Math.floor(Math.random()*4)]})}function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);var grad=ctx.createRadialGradient(canvas.width/2,canvas.height/2,0,canvas.width/2,canvas.height/2,canvas.width*0.7);grad.addColorStop(0,'rgba(20,20,50,0.3)');grad.addColorStop(1,'rgba(10,10,26,0.1)');ctx.fillStyle=grad;ctx.fillRect(0,0,canvas.width,canvas.height);self.bgParticles.forEach(function(p){p.x+=p.dx;p.y+=p.dy;if(p.x<0)p.x=canvas.width;if(p.x>canvas.width)p.x=0;if(p.y<0)p.y=canvas.height;if(p.y>canvas.height)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba('+p.color+','+p.alpha+')';ctx.fill();ctx.beginPath();ctx.arc(p.x,p.y,p.r*3,0,Math.PI*2);ctx.fillStyle='rgba('+p.color+','+(p.alpha*0.15)+')';ctx.fill()});for(var i=0;i<self.bgParticles.length;i++){for(var j=i+1;j<self.bgParticles.length;j++){var dx=self.bgParticles[i].x-self.bgParticles[j].x;var dy=self.bgParticles[i].y-self.bgParticles[j].y;var dist=Math.sqrt(dx*dx+dy*dy);if(dist<150){ctx.beginPath();ctx.moveTo(self.bgParticles[i].x,self.bgParticles[i].y);ctx.lineTo(self.bgParticles[j].x,self.bgParticles[j].y);ctx.strokeStyle='rgba(108,92,231,'+(0.08*(1-dist/150))+')';ctx.lineWidth=0.5;ctx.stroke()}}}requestAnimationFrame(animate)}animate()},
         initFxCanvas:function(){var canvas=document.getElementById('fx-canvas');if(!canvas)return;var ctx=canvas.getContext('2d'),self=this;function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight}resize();window.addEventListener('resize',resize);self.confetti=[];function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);self.confetti=self.confetti.filter(function(c){return c.life>0});self.confetti.forEach(function(c){c.x+=c.vx;c.y+=c.vy;c.vy+=0.15;c.rotation+=c.rotSpeed;c.life-=1;var alpha=Math.min(1,c.life/30);ctx.save();ctx.translate(c.x,c.y);ctx.rotate(c.rotation*Math.PI/180);ctx.fillStyle=c.color.replace('1)',alpha+')');ctx.fillRect(-c.w/2,-c.h/2,c.w,c.h);ctx.restore()});requestAnimationFrame(animate)}animate()},
         spawnConfetti:function(x,y,count){count=count||50;var colors=['rgba(108,92,231,1)','rgba(168,85,247,1)','rgba(6,182,212,1)','rgba(244,114,182,1)','rgba(251,191,36,1)','rgba(34,197,94,1)','rgba(239,68,68,1)','rgba(59,130,246,1)'];for(var i=0;i<count;i++){this.confetti.push({x:x||window.innerWidth/2,y:y||window.innerHeight/3,vx:(Math.random()-0.5)*12,vy:-Math.random()*10-3,w:Math.random()*8+4,h:Math.random()*6+2,rotation:Math.random()*360,rotSpeed:(Math.random()-0.5)*10,color:colors[Math.floor(Math.random()*colors.length)],life:Math.random()*60+60})}},
-        showScorePopup:function(pts,isCorrect){var el=document.createElement('div');el.className='score-popup '+(isCorrect?'positive':'negative');el.textContent=isCorrect?'+'+pts:'✗';document.body.appendChild(el);setTimeout(function(){el.remove()},1200)}
+        showScorePopup:function(pts,isCorrect,label){var el=document.createElement('div');el.className='score-popup '+(isCorrect?'positive':'negative');el.textContent=isCorrect?'+'+pts+(label?' '+label:''):'✗';document.body.appendChild(el);setTimeout(function(){el.remove()},1200)}
     };
 
     App.Modal = {
@@ -288,12 +293,18 @@
         deleteQuestion:function(bankId,qId){if(!confirm('确定要删除这道题目吗？'))return;var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;bank.questions=bank.questions.filter(function(q){return q.id!==qId});App.Storage.setBanks(banks);App.Modal.close();this.openBankManager(bankId);this.render();App.Toast.show('题目已删除','info')},
         showAddQuestionDialog:function(bankId){var body='<div class="form-group"><label>题目内容</label><textarea id="inp-q-text" placeholder="请输入题目内容" rows="3"></textarea></div><div class="form-group"><label>选项A</label><input type="text" id="inp-q-a" placeholder="选项A内容"></div><div class="form-group"><label>选项B</label><input type="text" id="inp-q-b" placeholder="选项B内容"></div><div class="form-group"><label>选项C</label><input type="text" id="inp-q-c" placeholder="选项C内容"></div><div class="form-group"><label>选项D</label><input type="text" id="inp-q-d" placeholder="选项D内容"></div><div class="form-group"><label>正确答案</label><select id="inp-q-answer"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div><div class="form-group"><label>分值</label><input type="number" id="inp-q-points" value="10" min="1" max="100" style="width:80px"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.addQuestion(\''+bankId+'\')">添加</button>';App.Modal.open('添加题目',body,footer)},
         addQuestion:function(bankId){var text=document.getElementById('inp-q-text').value.trim();if(!text){App.Toast.show('请输入题目内容','warning');return}var a=document.getElementById('inp-q-a').value.trim();var b=document.getElementById('inp-q-b').value.trim();var c=document.getElementById('inp-q-c').value.trim();var d=document.getElementById('inp-q-d').value.trim();if(!a||!b){App.Toast.show('至少填写选项A和B','warning');return}var answer=document.getElementById('inp-q-answer').value;var points=parseInt(document.getElementById('inp-q-points').value)||10;var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;bank.questions.push({id:genId(),text:text,options:{A:a,B:b,C:c||'',D:d||''},answer:answer,points:points});App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题目添加成功','success')},
-        showImportQuestionsDialog:function(bankId){var body='<div class="import-format-hint">导入格式说明：每行一道题<br>格式：<code>题目|选项A|选项B|选项C|选项D|正确答案|分值</code><br>示例：<code>1+1=?|1|2|3|4|B|10</code></div><div class="form-group"><label>粘贴题目数据</label><textarea id="inp-import-questions" placeholder="每行一道题" rows="8"></textarea></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.doImportQuestions(\''+bankId+'\')">导入</button>';App.Modal.open('导入题目',body,footer)},
-        doImportQuestions:function(bankId){var text=document.getElementById('inp-import-questions').value.trim();if(!text){App.Toast.show('请输入题目数据','warning');return}var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;var lines=text.split('\n'),count=0;lines.forEach(function(line){line=line.trim();if(!line)return;var p=line.split('|');if(p.length>=6){bank.questions.push({id:genId(),text:p[0].trim(),options:{A:p[1].trim(),B:p[2].trim(),C:p[3].trim(),D:p[4].trim()},answer:p[5].trim().toUpperCase(),points:parseInt(p[6])||10});count++}});App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('成功导入 '+count+' 道题目','success')},
+        showImportQuestionsDialog:function(bankId){var body='<div class="import-format-hint">导入格式说明：第一行可为题库名（不含|则视为题库名），后续每行一道题<br>格式：<code>题库名称</code>（可选）<br>题目格式：<code>题目|选项A|选项B|选项C|选项D|正确答案|分值</code><br>示例：<br><code>数学基础</code><br><code>1+1=?|1|2|3|4|B|10</code><br><code>中国的首都是?|上海|北京|广州|深圳|B|10</code></div><div class="form-group"><label>粘贴题目数据</label><textarea id="inp-import-questions" placeholder="第一行：题库名称（可选）&#10;后续每行一道题" rows="8"></textarea></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.doImportQuestions(\''+bankId+'\')">导入</button>';App.Modal.open('📥 导入题目',body,footer)},
+        doImportQuestions:function(bankId){var text=document.getElementById('inp-import-questions').value.trim();if(!text){App.Toast.show('请输入题目数据','warning');return}var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;var lines=text.split('\n'),count=0,startIdx=0;if(lines.length>0&&lines[0].trim().indexOf('|')===-1&&lines[0].trim()){bank.name=lines[0].trim();startIdx=1}for(var i=startIdx;i<lines.length;i++){var line=lines[i].trim();if(!line)continue;var p=line.split('|');if(p.length>=6){bank.questions.push({id:genId(),text:p[0].trim(),options:{A:p[1].trim(),B:p[2].trim(),C:p[3].trim(),D:p[4].trim()},answer:p[5].trim().toUpperCase(),points:parseInt(p[6])||10});count++}}App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('成功导入 '+count+' 道题目'+(startIdx===1?'，题库已重命名为「'+bank.name+'」':''),'success')},
+        copyTemplateForAI:function(){
+            var tpl='请按以下格式生成选择题，每行一道题，用|分隔字段：\n\n题库名称\n题目|选项A|选项B|选项C|选项D|正确答案|分值\n\n示例：\n\n数学基础\n1+1=?|1|2|3|4|B|10\n中国的首都是?|上海|北京|广州|深圳|B|10\n\n请生成10道关于【在此填写主题】的选择题，每题4个选项，分值10分。直接输出题目数据，不要其他解释。';
+            if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(tpl).then(function(){App.Toast.show('模板已复制，粘贴给AI即可','success')}).catch(function(){App.Questions._fallbackCopy(tpl)})}
+            else{this._fallbackCopy(tpl)}
+        },
+        _fallbackCopy:function(text){var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');App.Toast.show('模板已复制，粘贴给AI即可','success')}catch(e){App.Toast.show('复制失败，请手动复制','warning')}document.body.removeChild(ta)},
         showAIDialog:function(){var body='<div class="form-group"><label>题目主题/知识点</label><textarea id="inp-ai-topic" placeholder="请描述要生成的题目主题，越详细越好" rows="4" maxlength="2000"></textarea><div style="text-align:right;font-size:11px;color:#666;margin-top:2px"><span id="ai-topic-count">0</span>/2000</div></div><div class="form-group"><label>题目数量</label><input type="number" id="inp-ai-count" value="5" min="1" max="30" style="width:80px"> <span class="form-hint">1~30题</span></div><div class="form-group"><label>题库名称 <span style="color:#888;font-weight:normal">（留空则AI自动命名）</span></label><input type="text" id="inp-ai-bank-name" placeholder="AI将根据主题自动生成名称"></div><div id="ai-status" class="ai-status" style="display:none"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" id="btn-ai-gen" onclick="App.Questions.generateAIQuestions()">🤖 生成</button>';App.Modal.open('🤖 AI生成题目',body,footer);var ta=document.getElementById('inp-ai-topic');if(ta){ta.addEventListener('input',function(){var c=document.getElementById('ai-topic-count');if(c)c.textContent=ta.value.length})}},
         generateAIQuestions:function(){var s=App.Storage.getSettings();if(!s.aiApiKey||!s.aiApiUrl){App.Toast.show('请先在设置中配置AI API','warning');return}var topic=document.getElementById('inp-ai-topic').value.trim();if(!topic){App.Toast.show('请输入题目主题','warning');return}var count=parseInt(document.getElementById('inp-ai-count').value)||5;if(count<1)count=1;if(count>30)count=30;var userBankName=document.getElementById('inp-ai-bank-name').value.trim();var statusEl=document.getElementById('ai-status');statusEl.style.display='block';statusEl.className='ai-status processing';statusEl.textContent='⏳ 正在生成题目，请稍候...';document.getElementById('btn-ai-gen').disabled=true;var prompt='你是一个专业的考试出题专家。请根据以下要求生成选择题：\n\n主题：'+topic+'\n数量：'+count+'道\n\n要求：\n1. 每道题必须有4个选项(A/B/C/D)，且只有一个正确答案\n2. 题目内容要准确、专业，选项要有迷惑性\n3. 分值默认10分，可根据难度调整(5/10/15/20)\n4. 如果用户没有指定题库名称，请根据主题生成一个简短贴切的题库名称\n\n请严格按照以下JSON格式返回，不要添加任何其他文字：\n{"bankName":"题库名称","questions":[{"text":"题目内容","options":{"A":"选项A","B":"选项B","C":"选项C","D":"选项D"},"answer":"B","points":10}]}\n\n注意：只返回这个JSON对象，不要返回任何解释或额外内容。';try{fetch(s.aiApiUrl,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.aiApiKey},body:JSON.stringify({model:s.aiModel||'glm-4.7-flash',messages:[{role:'user',content:prompt}],temperature:0.7})}).then(function(res){if(!res.ok)throw new Error('HTTP '+res.status);return res.json()}).then(function(data){var content='';if(data.choices&&data.choices[0]&&data.choices[0].message){content=data.choices[0].message.content||''}else if(data.output){content=data.output.text||data.output||''}else if(typeof data==='string'){content=data}content=content.trim();if(content.startsWith('```')){content=content.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')}var jsonMatch=content.match(/\{[\s\S]*\}/);if(!jsonMatch)throw new Error('AI返回内容无法解析为JSON');var result=JSON.parse(jsonMatch[0]);var questions=result.questions||result;var bankName=userBankName||result.bankName||'AI生成题库';if(!Array.isArray(questions))throw new Error('AI返回的题目格式不正确');var banks=App.Storage.getBanks();var newBank={id:genId(),name:bankName,description:'AI生成 - '+topic,questions:[],createdAt:Date.now(),_newFile:true};var validCount=0;questions.forEach(function(q){if(!q.text||!q.options||!q.answer)return;var opts={};if(typeof q.options==='object'){opts=q.options}else if(Array.isArray(q.options)){var keys=['A','B','C','D'];for(var oi=0;oi<Math.min(q.options.length,4);oi++){opts[keys[oi]]=String(q.options[oi])}}newBank.questions.push({id:genId(),text:q.text,options:opts,answer:String(q.answer).toUpperCase().charAt(0),points:parseInt(q.points)||10});validCount++});if(validCount===0)throw new Error('AI未生成有效题目');banks.push(newBank);App.Storage.setBanks(banks);App.Modal.close();App.Questions.render();App.Toast.show('成功生成 '+validCount+' 道题目 → '+bankName,'success')}).catch(function(err){statusEl.className='ai-status error';statusEl.textContent='❌ 生成失败：'+err.message;document.getElementById('btn-ai-gen').disabled=false})}catch(e){statusEl.className='ai-status error';statusEl.textContent='❌ 请求失败：'+e.message;document.getElementById('btn-ai-gen').disabled=false}},
         showImportBankDialog:function(){
-            var body='<div class="import-format-hint">导入格式说明：第一行为题库名称，后续每行一道题<br>格式：<code>题库名称</code><br>题目格式：<code>题目|选项A|选项B|选项C|选项D|正确答案|分值</code></div>';
+            var body='<div class="import-format-hint">导入格式说明：第一行为题库名称，后续每行一道题<br>格式：<code>题库名称</code><br>题目格式：<code>题目|选项A|选项B|选项C|选项D|正确答案|分值</code><br>示例：<br><code>数学基础</code><br><code>1+1=?|1|2|3|4|B|10</code><br><code>中国的首都是?|上海|北京|广州|深圳|B|10</code></div>';
             body+='<div class="form-group"><label>粘贴题库数据</label><textarea id="inp-import-bank" placeholder="第一行：题库名称&#10;后续每行一道题" rows="8"></textarea></div>';
             var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.doImportBank()">导入</button>';
             App.Modal.open('📥 导入题库',body,footer);
@@ -320,7 +331,9 @@
             App.Modal.close();this.render();
             App.Toast.show('成功导入题库「'+bankName+'」，共 '+count+' 道题目','success');
         },
-        exportTemplate:function(){var template='题目|选项A|选项B|选项C|选项D|正确答案|分值\n1+1=?|1|2|3|4|B|10\n中国的首都是?|上海|北京|广州|深圳|B|10';var blob=new Blob([template],{type:'text/plain;charset=utf-8'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='题目导入模板.txt';a.click();URL.revokeObjectURL(url);App.Toast.show('模板已导出','success')}
+        exportTemplate:function(){var template='题目|选项A|选项B|选项C|选项D|正确答案|分值\n1+1=?|1|2|3|4|B|10\n中国的首都是?|上海|北京|广州|深圳|B|10';var blob=new Blob([template],{type:'text/plain;charset=utf-8'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='题目导入模板.txt';a.click();URL.revokeObjectURL(url);App.Toast.show('模板已导出','success')},
+        importTemplateFile:function(){var input=document.getElementById('inp-template-file');if(input){input.value='';input.click()}},
+        handleTemplateFile:function(input){if(!input.files||!input.files[0])return;var file=input.files[0];var reader=new FileReader();reader.onload=function(e){var text=e.target.result;if(!text||!text.trim()){App.Toast.show('文件内容为空','warning');return}var lines=text.trim().split('\n');var bankName='导入题库';var startIdx=0;if(lines.length>0&&lines[0].trim().indexOf('|')===-1&&lines[0].trim()){bankName=lines[0].trim();startIdx=1}var banks=App.Storage.getBanks();var newBank={id:genId(),name:bankName,description:'从文件导入',questions:[],createdAt:Date.now(),_newFile:true};var count=0;for(var i=startIdx;i<lines.length;i++){var line=lines[i].trim();if(!line)continue;var p=line.split('|');if(p.length>=6){newBank.questions.push({id:genId(),text:p[0].trim(),options:{A:p[1].trim(),B:p[2].trim(),C:p[3].trim(),D:p[4].trim()},answer:p[5].trim().toUpperCase(),points:parseInt(p[6])||10});count++}}if(count===0){App.Toast.show('未识别到有效题目，请检查文件格式','warning');return}banks.push(newBank);App.Storage.setBanks(banks);App.Questions.render();App.Toast.show('成功导入 '+count+' 道题目 → '+bankName,'success')};reader.readAsText(file,'utf-8')}
     };
 
     App.Exam = {
@@ -387,7 +400,9 @@
                 groupNames:progress.groupNames||[],
                 groupRotation:progress.groupRotation||'alternate',
                 groupMap:progress.groupMap||null,
-                groupScores:progress.groupScores||null
+                groupScores:progress.groupScores||null,
+                _pointsPerQ:progress._pointsPerQ||null,
+                _isRetry:progress._isRetry||false
             };
             if(progress.currentStudentId){
                 var cs=exam.students.find(function(s){return s.id===progress.currentStudentId});
@@ -414,7 +429,9 @@
         },
         enterMode:function(mode){
             this.currentMode=mode;
-            this.participationType='personal';
+            var settings=App.Storage.getSettings();
+            var lastPT=settings.lastParticipationType||'personal';
+            this.participationType=lastPT;
             document.getElementById('exam-mode-select').classList.add('hidden');
             document.getElementById('exam-setup').classList.remove('hidden');
             var titleEl=document.getElementById('setup-mode-title');
@@ -423,20 +440,46 @@
             var groupArea=document.getElementById('exam-group-select-area');
             var studentArea=document.getElementById('exam-student-select-area');
             var rotationOpt=document.getElementById('opt-group-rotation');
-            if(groupArea)groupArea.style.display='none';
-            if(studentArea)studentArea.style.display='';
-            if(rotationOpt)rotationOpt.style.display='none';
+            var ptabPersonal=document.getElementById('ptab-personal');
+            var ptabGroup=document.getElementById('ptab-group');
+            var isPractice=mode==='practice';
+            if(lastPT==='group'){
+                if(groupArea)groupArea.style.display='';
+                if(studentArea)studentArea.style.display='none';
+                if(rotationOpt)rotationOpt.style.display='';
+                if(ptabPersonal)ptabPersonal.classList.remove('active');
+                if(ptabGroup){ptabGroup.classList.add('active');ptabGroup.style.display=isPractice?'none':''}
+            }else{
+                if(groupArea)groupArea.style.display='none';
+                if(studentArea)studentArea.style.display='';
+                if(rotationOpt)rotationOpt.style.display='none';
+                if(ptabPersonal)ptabPersonal.classList.add('active');
+                if(ptabGroup){ptabGroup.classList.remove('active');ptabGroup.style.display=isPractice?'none':''}
+            }
             this._updateModeTitle();
             btnText.textContent='开始';
-            document.getElementById('ptab-personal').classList.add('active');
-            document.getElementById('ptab-group').classList.remove('active');
-            this.renderRulesPanel(mode,'personal');
-            this.renderStudentSelect();App.Questions.renderBankSelect();
-            var settings=App.Storage.getSettings();
+            this.renderRulesPanel(mode,lastPT);
+            if(lastPT==='group')this.renderGroupSelect();
+            else this.renderStudentSelect();
+            App.Questions.renderBankSelect();
             var baseInput=document.getElementById('exam-base-timeout-inline');
             var charInput=document.getElementById('exam-char-timeout-inline');
             if(baseInput)baseInput.value=settings.baseTimeout!==undefined?settings.baseTimeout:30;
             if(charInput)charInput.value=settings.charTimeoutCompensation!==undefined?settings.charTimeoutCompensation:0.2;
+            var playerOrderEl=document.getElementById('exam-player-order');
+            var questionOrderEl=document.getElementById('exam-question-order');
+            var avgQEl=document.getElementById('exam-avg-questions');
+            var groupRotEl=document.getElementById('exam-group-rotation');
+            if(playerOrderEl&&settings.lastPlayerOrder)playerOrderEl.value=settings.lastPlayerOrder;
+            if(questionOrderEl&&settings.lastQuestionOrder)questionOrderEl.value=settings.lastQuestionOrder;
+            if(avgQEl&&settings.lastAvgQuestions)avgQEl.value=settings.lastAvgQuestions;
+            if(groupRotEl&&settings.lastGroupRotation)groupRotEl.value=settings.lastGroupRotation;
+            var playerOrderGroup=playerOrderEl?playerOrderEl.closest('.option-group'):null;
+            var questionOrderGroup=questionOrderEl?questionOrderEl.closest('.option-group'):null;
+            var avgQGroup=avgQEl?avgQEl.closest('.option-group'):null;
+            if(playerOrderGroup)playerOrderGroup.style.display=isPractice?'none':'';
+            if(questionOrderGroup)questionOrderGroup.style.display=isPractice?'none':'';
+            if(avgQGroup)avgQGroup.style.display=isPractice?'none':'';
             App.Effects.playClick();
         },
         switchParticipation:function(type){
@@ -470,11 +513,11 @@
             var studentTitleEl=document.getElementById('student-select-title');
             if(titleEl)titleEl.textContent=label;
             if(btnIcon){
-                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️'};
+                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝'};
                 btnIcon.textContent=icons[mode]||'🎮';
             }
             if(pType==='personal'){
-                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）'};
+                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 选择练习学生（仅限1人）'};
                 if(studentTitleEl)studentTitleEl.textContent=titles[mode]||'👥 参与人员';
             }
         },
@@ -489,7 +532,7 @@
             rule.rules.forEach(function(r){html+='<li>'+r+'</li>'});
             if(pType==='group'&&rule.groupExtra){html+='<li class="rules-group-extra">🏆 '+rule.groupExtra+'</li>'}
             html+='</ul>';
-            if(window.CommonRules){
+            if(window.CommonRules&&mode!=='practice'){
                 html+='<h4 class="rules-title" style="margin-top:16px">通用规则</h4>';
                 html+='<ul class="rules-list">';
                 CommonRules.forEach(function(r){html+='<li>'+r+'</li>'});
@@ -505,6 +548,13 @@
             document.getElementById('exam-playing').classList.add('hidden');
             document.getElementById('exam-play-sidebar').classList.add('hidden');
             var hc=document.querySelector('.home-container');if(hc)hc.classList.remove('in-exam');
+            var ptabGroup=document.getElementById('ptab-group');if(ptabGroup)ptabGroup.style.display='';
+            var playerOrderGroup=document.getElementById('exam-player-order').closest('.option-group');
+            var questionOrderGroup=document.getElementById('exam-question-order').closest('.option-group');
+            var avgQGroup=document.getElementById('exam-avg-questions').closest('.option-group');
+            if(playerOrderGroup)playerOrderGroup.style.display='';
+            if(questionOrderGroup)questionOrderGroup.style.display='';
+            if(avgQGroup)avgQGroup.style.display='';
             App.Effects.playClick();
         },
         renderGroupSelect:function(){
@@ -525,9 +575,9 @@
         toggleGroupSelect:function(el){el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         getSelectedGroupNames:function(){var names=[];document.querySelectorAll('.group-select-item.selected').forEach(function(el){names.push(el.dataset.groupName)});return names},
         renderStudentSelect:function(){var students=App.Storage.getStudents();var list=document.getElementById('exam-student-list');if(students.length===0){list.innerHTML='<p style="color:var(--text-muted);text-align:center;">暂无学生，请先在设置→学生中添加</p>';return}var html='';students.forEach(function(s){html+='<div class="student-select-item" data-student-id="'+s.id+'" onclick="App.Exam.toggleStudentSelect(this)"><span>'+(s.avatar?'<img src="'+s.avatar+'" style="width:20px;height:20px;border-radius:50%;vertical-align:middle"> ':'')+' '+s.name+'</span><span class="check-mark"></span></div>'});list.innerHTML=html},
-        toggleStudentSelect:function(el){var mode=this.currentMode;if(mode==='pk'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{var count=document.querySelectorAll('.student-select-item.selected').length;if(count>=8){App.Toast.show('PK最多选择8名选手','warning');return}el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else{el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':''}App.Effects.playClick()},
+        toggleStudentSelect:function(el){var mode=this.currentMode;if(mode==='practice'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{document.querySelectorAll('.student-select-item.selected').forEach(function(other){if(other!==el){other.classList.remove('selected');other.querySelector('.check-mark').textContent=''}});el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else if(mode==='pk'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{var count=document.querySelectorAll('.student-select-item.selected').length;if(count>=8){App.Toast.show('PK最多选择8名选手','warning');return}el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else{el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':''}App.Effects.playClick()},
         getSelectedStudentIds:function(){var ids=[];document.querySelectorAll('.student-select-item.selected').forEach(function(el){ids.push(el.dataset.studentId)});return ids},
-        selectAllStudents:function(){var mode=this.currentMode;var items=document.querySelectorAll('.student-select-item');var allSelected=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSelected=false});if(allSelected){items.forEach(function(el){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''})}else if(mode==='pk'){var count=document.querySelectorAll('.student-select-item.selected').length;items.forEach(function(el){if(!el.classList.contains('selected')&&count<8){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓';count++}})}else{items.forEach(function(el){if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}})}App.Effects.playClick()},
+        selectAllStudents:function(){var mode=this.currentMode;var items=document.querySelectorAll('.student-select-item');var allSelected=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSelected=false});if(allSelected){items.forEach(function(el){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''})}else if(mode==='practice'){App.Toast.show('练习模式仅限选择1人','warning')}else if(mode==='pk'){var count=document.querySelectorAll('.student-select-item.selected').length;items.forEach(function(el){if(!el.classList.contains('selected')&&count<8){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓';count++}})}else{items.forEach(function(el){if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}})}App.Effects.playClick()},
         startExam:function(){
             var bankIds=App.Questions.getSelectedBankIds();
             if(bankIds.length===0){App.Toast.show('请至少选择一个题库','warning');return}
@@ -538,6 +588,10 @@
             var selectedIds=this.getSelectedStudentIds();
             var groupNames=[];
             var examStudents;
+            var isPractice=mode==='practice';
+            if(isPractice){
+                if(selectedIds.length!==1){App.Toast.show('练习模式请选择1名学生','warning');return}
+            }
             if(pType==='group'){
                 groupNames=this.getSelectedGroupNames();
                 if(groupNames.length<1){App.Toast.show('请至少选择1个小组','warning');return}
@@ -550,7 +604,7 @@
                 if(mode==='pk'){
                     if(selectedIds.length<2){App.Toast.show('PK请至少选择2名选手','warning');return}
                     if(selectedIds.length>8){App.Toast.show('PK最多8名选手','warning');return}
-                }else{
+                }else if(!isPractice){
                     if(selectedIds.length===0)selectedIds=students.map(function(s){return s.id});
                 }
             }
@@ -566,18 +620,38 @@
                 var s=App.Storage.getSettings();
                 if(baseInput)s.baseTimeout=parseFloat(baseInput.value)||0;
                 if(charInput)s.charTimeoutCompensation=parseFloat(charInput.value)||0;
+                s.lastMode=mode;
+                s.lastParticipationType=this.participationType;
+                s.lastPlayerOrder=document.getElementById('exam-player-order').value;
+                s.lastQuestionOrder=document.getElementById('exam-question-order').value;
+                s.lastAvgQuestions=parseInt(document.getElementById('exam-avg-questions').value)||5;
+                s.lastGroupRotation=document.getElementById('exam-group-rotation').value;
                 App.Storage.setSettings(s);
             }
             var playerOrder=document.getElementById('exam-player-order').value;
-            if(playerOrder==='fair'&&examStudents.length<3){App.Toast.show('公平随机至少需要3人','warning');return}
-            if(playerOrder==='random'&&examStudents.length<2){App.Toast.show('真随机至少需要2人','warning');return}
+            if(!isPractice){
+                if(playerOrder==='fair'&&examStudents.length<3){App.Toast.show('公平随机至少需要3人','warning');return}
+                if(playerOrder==='random'&&examStudents.length<2){App.Toast.show('真随机至少需要2人','warning');return}
+            }
             var questionOrder=document.getElementById('exam-question-order').value;
-            var avgQuestions=parseInt(document.getElementById('exam-avg-questions').value)||5;
+            var avgQuestions=isPractice?0:(parseInt(document.getElementById('exam-avg-questions').value)||5);
             var groupRotation=document.getElementById('exam-group-rotation').value;
-            var totalQuestionsNeeded=avgQuestions*examStudents.length;
-            var questionPool=this._buildQuestionPool(allQ,totalQuestionsNeeded,questionOrder);
-            var playerQueue=this._buildPlayerQueue(examStudents,playerOrder,totalQuestionsNeeded,pType,groupNames,groupRotation);
-            var exam={mode:mode,participationType:pType,questions:questionPool,timeLimit:timeLimit,autoNext:autoNext,students:examStudents,currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:playerQueue,queueIndex:0,avgQuestions:avgQuestions,groupNames:groupNames,groupRotation:groupRotation,playerOrder:playerOrder};
+            var totalQuestionsNeeded,questionPool;
+            if(isPractice){
+                questionPool=allQ.slice().sort(function(){return Math.random()-0.5});
+                totalQuestionsNeeded=questionPool.length;
+            }else{
+                totalQuestionsNeeded=avgQuestions*examStudents.length;
+                questionPool=this._buildQuestionPool(allQ,totalQuestionsNeeded,questionOrder);
+            }
+            var playerQueue;
+            if(isPractice){
+                playerQueue=[];
+                for(var pi=0;pi<totalQuestionsNeeded;pi++)playerQueue.push(examStudents[0]);
+            }else{
+                playerQueue=this._buildPlayerQueue(examStudents,playerOrder,totalQuestionsNeeded,pType,groupNames,groupRotation);
+            }
+            var exam={mode:mode,participationType:pType,questions:questionPool,timeLimit:timeLimit,autoNext:autoNext,students:examStudents,currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:playerQueue,queueIndex:0,avgQuestions:avgQuestions,groupNames:groupNames,groupRotation:groupRotation,playerOrder:isPractice?'order':playerOrder,_pointsPerQ:isPractice?this._getInitialPointsPerQ(examStudents[0].id,bankIds[0]||''):0};
             if(pType==='group'){
                 var groupMap={};examStudents.forEach(function(s){var g=s.group||'未分组';if(!groupMap[g])groupMap[g]=[];groupMap[g].push(s)});
                 exam.groupMap=groupMap;exam.groupScores={};
@@ -701,7 +775,7 @@
             document.getElementById('exam-student-group').textContent=student.group?'('+student.group+')':'';
             document.getElementById('exam-student-level').textContent=level.name;
             document.getElementById('exam-student-comment').textContent=level.comment;
-            document.getElementById('exam-student-points').textContent='本场：'+(exam.playerScores[student.id]||0)+'⭐  累计：'+st.totalPoints+'⭐';
+            document.getElementById('exam-student-points').textContent=exam.mode==='practice'?'待结算：'+(exam.playerScores[student.id]||0)+'⭐':'本场：'+(exam.playerScores[student.id]||0)+'⭐  累计：'+st.totalPoints+'⭐';
             document.getElementById('exam-progress-text').textContent='第 '+(exam.currentIndex+1)+'/'+exam.questions.length+' 题 · 人均 '+(Math.round(exam.results.length/exam.students.length*10)/10)+'/'+exam.avgQuestions;
             document.getElementById('question-text').textContent=question.text;
             document.getElementById('question-options').innerHTML=this.renderOptionsHTML(question);
@@ -805,20 +879,35 @@
             document.querySelectorAll('.option-btn').forEach(function(btn){btn.classList.add('disabled');if(btn.dataset.option===correctAnswer)btn.classList.add('correct');if(btn.dataset.option===option&&!isCorrect)btn.classList.add('wrong')});
             var pointsEarned=0;
             if(isCorrect){
-                pointsEarned=this._calcBasePoints(exam.mode);
+                pointsEarned=exam.mode==='practice'?(exam._pointsPerQ||10):this._calcBasePoints(exam.mode);
                 exam.totalEarned+=pointsEarned;
                 exam.playerScores[exam.currentStudent.id]=(exam.playerScores[exam.currentStudent.id]||0)+pointsEarned;
                 if(exam.participationType==='group'){var g=exam.currentStudent.group||'未分组';exam.groupScores[g]=(exam.groupScores[g]||0)+pointsEarned}
-                App.Effects.playCorrect();App.Effects.spawnConfetti(window.innerWidth/2,window.innerHeight/2,40);App.Effects.showScorePopup(pointsEarned,true);
-                var st=getStudentStats(exam.currentStudent.id);var tempPts=st.totalPoints+pointsEarned;var lv=getLevel(tempPts);document.getElementById('exam-student-points').textContent='本场：'+(exam.playerScores[exam.currentStudent.id]||0)+'⭐  累计：'+tempPts+'⭐';document.getElementById('exam-student-level').textContent=lv.name;document.getElementById('exam-student-comment').textContent=lv.comment
+                App.Effects.playCorrect();App.Effects.spawnConfetti(window.innerWidth/2,window.innerHeight/2,40);
+                if(exam.mode==='practice'){
+                    App.Effects.showScorePopup(pointsEarned,true,'待结算');
+                    document.getElementById('exam-student-points').textContent='待结算：'+(exam.playerScores[exam.currentStudent.id]||0)+'⭐';
+                }else{
+                    App.Effects.showScorePopup(pointsEarned,true);
+                    var st=getStudentStats(exam.currentStudent.id);var tempPts=st.totalPoints+pointsEarned;var lv=getLevel(tempPts);document.getElementById('exam-student-points').textContent='本场：'+(exam.playerScores[exam.currentStudent.id]||0)+'⭐  累计：'+tempPts+'⭐';document.getElementById('exam-student-level').textContent=lv.name;document.getElementById('exam-student-comment').textContent=lv.comment
+                }
             }else{App.Effects.playWrong();App.Effects.showScorePopup(0,false)}
             exam.results.push({studentId:exam.currentStudent.id,questionId:question.id,correct:isCorrect,pointsEarned:pointsEarned,selectedOption:option});
             this.renderWarReport(true);this._saveProgress();this.showNextButton();
+        },
+        _getInitialPointsPerQ:function(studentId,bankId){
+            var DEFAULT_PPQ=10;
+            var wrongSet=App.Storage.getWrongSet(studentId,bankId);
+            if(wrongSet&&wrongSet.lastInitialPPQ){
+                return Math.max(1,Math.floor(wrongSet.lastInitialPPQ/2));
+            }
+            return DEFAULT_PPQ;
         },
         _calcBasePoints:function(mode){
             if(mode==='farm')return 10;
             if(mode==='challenge')return 5;
             if(mode==='pk')return 5;
+            if(mode==='practice')return 10;
             return 10;
         },
         _calcGroupMemberDisplay:function(groupCount){
@@ -850,6 +939,8 @@
                 groupMap:exam.groupMap||null,
                 groupScores:exam.groupScores||null,
                 currentStudentId:exam.currentStudent?exam.currentStudent.id:null,
+                _pointsPerQ:exam._pointsPerQ||null,
+                _isRetry:exam._isRetry||false,
                 savedAt:Date.now()
             };
             App.Storage.setExamProgress(progress);
@@ -883,8 +974,73 @@
             if(exam.currentIndex>=exam.questions.length){this.showResult();return}
             this._nextPlayer();
         },
-        endExam:function(){var body='<p style="text-align:center;font-size:1.1em;padding:12px 0">确定要结束本次挑战吗？</p>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-danger" onclick="App.Modal.close();App.Exam._doEndExam()">⏹ 结束挑战</button>';App.Modal.open('⏹ 结束挑战',body,footer)},
-        _doEndExam:function(){if(this.timerInterval)clearInterval(this.timerInterval);var navMode=document.getElementById('nav-exam-mode');if(navMode)navMode.classList.add('hidden');var navEnd=document.getElementById('nav-exam-end');if(navEnd)navEnd.classList.add('hidden');this.showResult()},
+        endExam:function(){var exam=this.currentExam;var isPractice=exam&&exam.mode==='practice';var answered=exam?exam.results.length:0;var total=exam?exam.questions.length:0;var isMidway=isPractice&&answered<total;var msg=isMidway?'确定要暂停练习吗？进度将自动保存，下次可继续！':'确定要结束本次挑战吗？';var body='<p style="text-align:center;font-size:1.1em;padding:12px 0">'+msg+'</p>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="'+(isMidway?'btn-primary':'btn-danger')+'" onclick="App.Modal.close();App.Exam._doEndExam()">'+(isMidway?'💾 保存并退出':'⏹ 结束挑战')+'</button>';App.Modal.open(isMidway?'💾 暂停练习':'⏹ 结束挑战',body,footer)},
+        _doEndExam:function(){
+            if(this.timerInterval)clearInterval(this.timerInterval);
+            var navMode=document.getElementById('nav-exam-mode');if(navMode)navMode.classList.add('hidden');
+            var navEnd=document.getElementById('nav-exam-end');if(navEnd)navEnd.classList.add('hidden');
+            var exam=this.currentExam;
+            if(exam&&exam.mode==='practice'){
+                var answered=exam.results.length;
+                var total=exam.questions.length;
+                if(answered<total){
+                    this._saveProgress();
+                    var body='<p style="text-align:center;font-size:1.1em;padding:12px 0">练习进度已保存！<br>已完成 <b style="color:var(--accent-1)">'+answered+'/'+total+'</b> 题<br><span style="color:var(--text-muted);font-size:0.9em">下次进入可继续完成剩余题目</span></p>';
+                    var footer='<button class="btn-primary" onclick="App.Modal.close();App.Exam._exitToHome()">确定</button>';
+                    App.Modal.open('📝 练习已保存',body,footer);
+                    return;
+                }
+            }
+            this.showResult();
+        },
+        _exitToHome:function(){
+            var exam=this.currentExam;
+            if(exam)exam._ended=true;
+            if(this.timerInterval)clearInterval(this.timerInterval);
+            if(document.fullscreenElement)document.exitFullscreen().catch(function(){});
+            document.getElementById('exam-playing').classList.add('hidden');
+            document.getElementById('exam-play-sidebar').classList.add('hidden');
+            document.getElementById('exam-drawing').classList.add('hidden');
+            var hc=document.querySelector('.home-container');if(hc)hc.classList.remove('in-exam');
+            this.currentExam=null;
+        },
+        _startPracticeRetry:function(){
+            var record=this._lastPracticeRecord;
+            if(!record||!record.studentResults)return;
+            var sid=Object.keys(record.studentResults)[0];
+            var student=App.Storage.getStudents().find(function(s){return s.id===sid});
+            if(!student){App.Toast.show('学生不存在','warning');return}
+            var bankIds=App.Questions.getSelectedBankIds();
+            if(bankIds.length===0){App.Toast.show('题库未选择','warning');return}
+            var banks=App.Storage.getBanks(),allQ=[];
+            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b)allQ=allQ.concat(b.questions)});
+            if(allQ.length===0){App.Toast.show('题库中没有题目','warning');return}
+            var bankId=bankIds[0]||'';
+            var wrongSet=App.Storage.getWrongSet(sid,bankId);
+            var questionPool;
+            if(wrongSet&&wrongSet.wrongQuestionIds&&wrongSet.wrongQuestionIds.length>0){
+                var wrongIds=wrongSet.wrongQuestionIds;
+                var wrongQs=allQ.filter(function(q){return wrongIds.indexOf(q.id)!==-1});
+                var correctQs=allQ.filter(function(q){return wrongIds.indexOf(q.id)===-1});
+                var shuffledCorrect=correctQs.sort(function(){return Math.random()-0.5});
+                var distractors=shuffledCorrect.slice(0,Math.min(wrongQs.length,correctQs.length));
+                questionPool=wrongQs.concat(distractors).sort(function(){return Math.random()-0.5});
+            }else{
+                questionPool=allQ.slice().sort(function(){return Math.random()-0.5});
+            }
+            var nextPointsPerQ=wrongSet?wrongSet.nextPointsPerQ||5:5;
+            var examStudents=[student];
+            var retryQueue=[];for(var ri=0;ri<questionPool.length;ri++)retryQueue.push(examStudents[0]);
+            var exam={mode:'practice',participationType:'personal',questions:questionPool,timeLimit:0,autoNext:App.Storage.getSettings().autoNext!==false,students:examStudents,currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:retryQueue,queueIndex:0,avgQuestions:0,groupNames:[],groupRotation:'alternate',playerOrder:'order',_isRetry:true,_pointsPerQ:nextPointsPerQ};
+            examStudents.forEach(function(s){exam.playerScores[s.id]=0});
+            this.currentExam=exam;
+            document.getElementById('exam-setup').classList.add('hidden');
+            document.getElementById('exam-drawing').classList.add('hidden');
+            document.getElementById('exam-playing').classList.add('hidden');
+            document.getElementById('exam-play-sidebar').classList.remove('hidden');
+            if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(function(){})}
+            this._nextPlayer();
+        },
         showResult:function(){
             var exam=this.currentExam;if(!exam||exam._ended)return;exam._ended=true;
             if(this.timerInterval)clearInterval(this.timerInterval);
@@ -899,6 +1055,58 @@
             var studentResults={};
             exam.students.forEach(function(s){studentResults[s.id]={id:s.id,name:s.name,avatar:s.avatar,group:s.group||'',correctCount:0,totalCount:0,pointsEarned:0}});
             exam.results.forEach(function(r){if(studentResults[r.studentId]){studentResults[r.studentId].totalCount++;if(r.correct){studentResults[r.studentId].correctCount++;studentResults[r.studentId].pointsEarned+=r.pointsEarned}}});
+            if(exam.mode==='practice'){
+                var allCorrect=correct===exam.questions.length;
+                var sid=exam.students[0].id;
+                var bid=bankIds[0]||'';
+                var ppq=exam._pointsPerQ||10;
+                var pendingPoints=correct*ppq;
+                var currentWrongSet=App.Storage.getWrongSet(sid,bid);
+                var originalPending=currentWrongSet?currentWrongSet.pendingPoints||0:0;
+                var currentInitialPPQ=exam._isRetry?(currentWrongSet&&currentWrongSet.lastInitialPPQ?currentWrongSet.lastInitialPPQ:ppq):ppq;
+                if(allCorrect){
+                    var totalPending=originalPending+pendingPoints;
+                    exam.results.forEach(function(r){r.pointsEarned=r.correct?ppq:0});
+                    studentResults[sid].pointsEarned=totalPending;
+                    exam.playerScores[sid]=totalPending;
+                    exam.totalEarned=totalPending;
+                    App.Storage.setWrongSet(sid,bid,{wrongQuestionIds:[],lastAttempt:Date.now(),bankId:bid,pendingPoints:0,nextPointsPerQ:0,lastInitialPPQ:currentInitialPPQ});
+                }else{
+                    exam.results.forEach(function(r){r.pointsEarned=0});
+                    studentResults[sid].pointsEarned=0;
+                    exam.playerScores[sid]=0;
+                    exam.totalEarned=0;
+                    var wrongIds=[];
+                    exam.results.forEach(function(r){if(!r.correct&&r.questionId)wrongIds.push(r.questionId)});
+                    var nextPPQ=Math.max(1,Math.floor(ppq/2));
+                    App.Storage.setWrongSet(sid,bid,{wrongQuestionIds:wrongIds,lastAttempt:Date.now(),bankId:bid,pendingPoints:originalPending+pendingPoints,nextPointsPerQ:nextPPQ,lastInitialPPQ:currentInitialPPQ});
+                }
+                var questionDetails=[];
+                exam.results.forEach(function(r,i){var question=null;banks.forEach(function(b){var q=b.questions.find(function(x){return x.id===r.questionId});if(q)question=q});if(question){questionDetails.push({index:i+1,text:question.text,answer:question.answer,studentId:r.studentId,studentName:(studentResults[r.studentId]||{}).name||'未知',selectedOption:r.selectedOption||'',correct:r.correct,pointsEarned:r.pointsEarned})}});
+                var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,timeLimit:exam.timeLimit,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,playerScores:exam.playerScores||{},groupScores:exam.groupScores||{},questionDetails:questionDetails,results:exam.results,practicePassed:allCorrect};
+                var records=App.Storage.getRecords();
+                records.push(record);App.Storage.setRecords(records);
+                if(allCorrect)App.Sync.syncNow();
+                this.currentExam=null;
+                App.Storage.clearExamProgress();
+                if(allCorrect){
+                    App.Effects.playVictory();App.Effects.spawnConfetti(window.innerWidth/2,window.innerHeight/3,80);
+                    if(exam._isRetry){
+                        App.Toast.show('补考通过！获得 '+exam.totalEarned+'⭐','success');
+                    }
+                    App.Exam.showRoundLeaderboard(record);
+                }else{
+                    App.Effects.playWrong();
+                    var wrongCount=exam.questions.length-correct;
+                    var wrongSet3=App.Storage.getWrongSet(sid,bid);
+                    var totalPendingPts=wrongSet3?wrongSet3.pendingPoints||pendingPoints:pendingPoints;
+                    var body='<p style="text-align:center;font-size:1.1em;padding:12px 0">答对 <b style="color:var(--success)">'+correct+'</b>/'+exam.questions.length+' 题<br>待结算积分：<b style="color:var(--accent-1)">'+totalPendingPts+'⭐</b>（暂不计入）<br><br>补考全对即可拿回 <b>'+totalPendingPts+'⭐</b><br><span style="color:var(--text-muted);font-size:0.9em">补考将重做错题并混入等量已答对题目</span></p>';
+                    var footer='<button class="btn-secondary" onclick="App.Modal.close();App.Exam.showRoundLeaderboard(App.Exam._lastPracticeRecord)">查看详情</button><button class="btn-glow" onclick="App.Modal.close();App.Exam._startPracticeRetry()">🔄 立即补考</button>';
+                    App.Exam._lastPracticeRecord=record;
+                    App.Modal.open('📝 练习未通过',body,footer);
+                }
+                return;
+            }
             if(exam.mode==='challenge'){
                 var sIds=Object.keys(studentResults);
                 sIds.forEach(function(sid){
@@ -1575,6 +1783,14 @@
                 }
             };
             reader.readAsText(fileInput.files[0]);
+        },
+        clearRecords:function(){
+            if(!confirm('⚠️ 确定要清空所有场次数据吗？此操作不可恢复！'))return;
+            App.Storage.setRecords([]);
+            App.Records.render();
+            App.Leaderboard.render();
+            App.Sync.notifyChange('records',[]);
+            App.Toast.show('场次数据已清空','info');
         },
         resetData:function(){
             if(!confirm('⚠️ 确定要重置所有数据吗？此操作不可恢复！'))return;

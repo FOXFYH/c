@@ -558,10 +558,9 @@ body {
 }
 
 .bank-select-list {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
-    justify-content: center;
     margin-bottom: 28px;
 }
 
@@ -573,7 +572,6 @@ body {
     cursor: pointer;
     transition: var(--transition);
     user-select: none;
-    min-width: 180px;
 }
 
 .bank-select-item:hover {
