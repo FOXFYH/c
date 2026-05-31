@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>同步模块</title>
+</head>
+<body>
+<script>
+(function(){
+'use strict';
+
+var SYNC_CONFIG_KEY='exam_sync_config';
+var PRIMARY_API_URLS=['https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com'];
+var FALLBACK_API_URLS=[];
+
+var DEFAULT_SYNC_CONFIG={
+    enabled:true,
+    apiUrl:PRIMARY_API_URLS[0],
+    webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/ctRsEvOpYZky/script/V2-1cf9aRSXUlNao8Qhjk4ATb/sync_task',
+    token:'',
+    autoSaveInterval:5,
+    cloudCheckInterval:5,
+    syncThreshold:5,
+    syncDeltaInterval:5,
+    sheetName:'抽奖考试',
+    retryCount:5,
+    retryInterval:2
+};
+
+var SYSTEM_FILE_STUDENT_INFO={
+    id:'EXAM_SYS_STUDENT_INFO',
+    name:'系统-学生信息',
+    dataType:'students'
+};
+
+var SYSTEM_FILE_RECORDS={
+    id:'EXAM_SYS_RECORDS',
+    name:'系统-考试数据',
+    dataType:'records'
+};
+
+var SYSTEM_FILE_LEVELS={
+    id:'EXAM_SYS_LEVELS',
+    name:'系统-等级设置',
+    dataType:'levels'
+};
+
+var SYSTEM_FILES=[SYSTEM_FILE_STUDENT_INFO,SYSTEM_FILE_RECORDS,SYSTEM_FILE_LEVELS];
+
+var syncConfig=null;
+var syncMutex=false;
+var syncQueue=[];
+var lastSyncTime=0;
+var _networkTime=null;
+var _networkTimeFetched=0;
+var autoSyncTimer=null;
+var autoSyncCheckTimer=null;
+var lastDeltaSyncTime=0;
+var pendingUploads={};
+var debounceTimers={};
+var isOnline=true;
+var firstSyncDone=false;
+
+function getSyncConfig(){
+    if(!syncConfig){
+        try{var saved=localStorage.getItem(SYNC_CONFIG_KEY);syncConfig=saved?JSON.parse(saved):_assign({},DEFAULT_SYNC_CONFIG)}
+        catch(e){syncConfig=_assign({},DEFAULT_SYNC_CONFIG)}
+    }
+    if(!syncConfig.apiUrl||!PRIMARY_API_URLS.includes(syncConfig.apiUrl)){
+        syncConfig.apiUrl=PRIMARY_API_URLS[0];
+        saveSyncConfig(syncConfig);
+    }
+    if(syncConfig.syncDeltaInterval===undefined){syncConfig.syncDeltaInterval=DEFAULT_SYNC_CONFIG.syncDeltaInterval;saveSyncConfig(syncConfig)}
+    if(syncConfig.syncThreshold===undefined||syncConfig.syncThreshold<1){syncConfig.syncThreshold=DEFAULT_SYNC_CONFIG.syncThreshold;saveSyncConfig(syncConfig)}
+    return syncConfig;
+}
+
+function saveSyncConfig(config){syncConfig=config;try{localStorage.setItem(SYNC_CONFIG_KEY,JSON.stringify(config))}catch(e){}}
+
+function _assign(target,source){
+    for(var k in source){if(source.hasOwnProperty(k))target[k]=source[k]}
+    return target;
+}
+
+function notifyParent(type,data){
+    if(window.parent&&window.parent!==window){
+        var msg=_assign({type:type},data||{});
+        window.parent.postMessage(msg,'*');
+    }
+}
+
+function genFileId(){return Math.floor(1000000000+Math.random()*9000000000).toString()}
+
+function formatBeijingTime(ts){
+    var d=new Date(ts||Date.now());
+    var offset=d.getTimezoneOffset();
+    var bjTime=new Date(d.getTime()-offset*60000+8*3600000);
+    var pad=function(n){return String(n).padStart(2,'0')};
+    return bjTime.getFullYear()+'-'+pad(bjTime.getMonth()+1)+'-'+pad(bjTime.getDate())+' '+pad(bjTime.getHours())+':'+pad(bjTime.getMinutes())+':'+pad(bjTime.getSeconds());
+}
+
+function getBankMeta(bankId){
+    try{
+        var meta=JSON.parse(localStorage.getItem('exam_sync_bank_meta')||'{}');
+        return meta[bankId]||null;
+    }catch(e){return null}
+}
+
+function setBankMeta(bankId,meta){
+    try{
+        var all=JSON.parse(localStorage.getItem('exam_sync_bank_meta')||'{}');
+        all[bankId]=meta;
+        localStorage.setItem('exam_sync_bank_meta',JSON.stringify(all));
+    }catch(e){}
+}
+
+function getAllBankMetas(){
+    try{return JSON.parse(localStorage.getItem('exam_sync_bank_meta')||'{}')}
+    catch(e){return{}}
+}
+
+function getSystemFileMeta(dataType){
+    try{
+        var meta=JSON.parse(localStorage.getItem('exam_sync_system_meta')||'{}');
+        return meta[dataType]||null;
+    }catch(e){return null}
+}
+
+function setSystemFileMeta(dataType,meta){
+    try{
+        var all=JSON.parse(localStorage.getItem('exam_sync_system_meta')||'{}');
+        all[dataType]=meta;
+        localStorage.setItem('exam_sync_system_meta',JSON.stringify(all));
+    }catch(e){}
+}
+
+function getLastSyncTime(){try{return parseInt(localStorage.getItem('exam_sync_last_time')||'0')}catch(e){return 0}}
+function setLastSyncTimeVal(t){lastSyncTime=t;try{localStorage.setItem('exam_sync_last_time',t.toString())}catch(e){}}
+
+function _applyServerDate(dateStr){
+    if(!dateStr)return false;
+    try{
+        var t=new Date(dateStr).getTime();
+        if(!isNaN(t)&&t>1600000000000){_networkTime=t;_networkTimeFetched=Date.now();return true}
+    }catch(e){}
+    return false;
+}
+
+async function getNetworkTime(){
+    var now=Date.now();
+    if(_networkTime&&now-_networkTimeFetched<300000)return _networkTime+(now-_networkTimeFetched);
+    var tryUrls=[
+        'https://worldtimeapi.org/api/timezone/Etc/UTC',
+        'https://timeapi.io/api/time/current/zone?timeZone=UTC',
+        'https://timeapi.io/api/Time/current/zone?timeZone=UTC'
+    ];
+    for(var i=0;i<tryUrls.length;i++){
+        try{
+            var ctrl=new AbortController();
+            var tid=setTimeout(function(){ctrl.abort()},4000);
+            var res=await fetch(tryUrls[i],{signal:ctrl.signal});
+            clearTimeout(tid);
+            var dateHeader=res.headers.get('Date');
+            if(dateHeader&&_applyServerDate(dateHeader))return _networkTime+(Date.now()-_networkTimeFetched);
+            var data=await res.json();
+            var timeField=data.utc_datetime||data.dateTime||data.datetime;
+            if(timeField&&_applyServerDate(timeField+'Z'))return _networkTime+(Date.now()-_networkTimeFetched);
+            if(data.unixtime){
+                _networkTime=data.unixtime*1000;_networkTimeFetched=Date.now();
+                return _networkTime+(Date.now()-_networkTimeFetched);
+            }
+        }catch(e){}
+    }
+    return Date.now();
+}
+
+async function callCloudAPI(action,params){
+    var config=getSyncConfig();
+    if(!config.enabled)return{status:'error',message:'云同步未启用',isNetworkError:false};
+    var payload={webhookUrl:config.webhookUrl,message:{Context:{argv:{表格名:config.sheetName,操作:action}}}};
+    if(params){
+        for(var k in params){if(params.hasOwnProperty(k))payload.message.Context.argv[k]=params[k]}
+    }
+    var headers={'Content-Type':'application/json'};
+    if(config.token)headers['AirScript-Token']=config.token;
+    var allUrls=PRIMARY_API_URLS.concat(FALLBACK_API_URLS);
+    var maxRetries=config.retryCount||5;
+    var retryInterval=config.retryInterval||2;
+    var fetchTimeout=30000;
+    for(var u=0;u<allUrls.length;u++){
+        var apiUrl=allUrls[u];
+        var lastError=null;
+        var lastIsNetworkError=true;
+        for(var attempt=0;attempt<maxRetries;attempt++){
+            try{
+                var ctrl=new AbortController();
+                var tid=setTimeout(function(){ctrl.abort()},fetchTimeout);
+                var response=await fetch(apiUrl,{method:'POST',headers:headers,body:JSON.stringify(payload),signal:ctrl.signal});
+                clearTimeout(tid);
+                if(!response.ok)throw new Error('HTTP '+response.status);
+                var dateHeader=response.headers.get('Date');
+                if(dateHeader)_applyServerDate(dateHeader);
+                var result=await response.json();
+                var r=result.data&&result.data.result?result.data.result:result;
+                if(r.status==='success')return r;
+                if(r.tongzhi){
+                    var netKeywords=['网络','超时','timeout','ECONNRESET','ENOTFOUND','fetch','Failed to fetch','NetworkError','Network request'];
+                    var isNet=false;
+                    for(var ni=0;ni<netKeywords.length;ni++){if(r.tongzhi.indexOf(netKeywords[ni])!==-1){isNet=true;break}}
+                    if(!isNet)return _assign(r,{isNetworkError:false});
+                    lastError=new Error(r.tongzhi);lastIsNetworkError=true;
+                }else{
+                    lastError=new Error(r.message||JSON.stringify(r).slice(0,100)||'未知错误');lastIsNetworkError=true;
+                }
+            }catch(error){
+                if(error.name==='AbortError')lastError=new Error('请求超时('+fetchTimeout/1000+'秒)');
+                else lastError=error;
+                lastIsNetworkError=true;
+            }
+            if(attempt<maxRetries-1)await new Promise(function(r){setTimeout(r,retryInterval*1000)});
+        }
+    }
+    return{status:'error',message:lastError?lastError.message:'所有云函数地址均不可用',isNetworkError:lastIsNetworkError};
+}
+
+async function findFirstEmptyRow(){
+    var result=await callCloudAPI('获取维度');
+    if(result.status==='success'&&result.最大行)return result.最大行+1;
+    return 2;
+}
+
+async function findFileInCloudById(fileId){
+    if(!fileId)return{file:null,networkOk:false};
+    var result=await callCloudAPI('查找',{列名:'ID',关键字:fileId});
+    if(result.status==='success'){
+        if(result.匹配数>0)return{file:result.数据[0],networkOk:true};
+        return{file:null,networkOk:true};
+    }
+    if(result.isNetworkError)return{file:null,networkOk:false};
+    return{file:null,networkOk:true};
+}
+
+function enqueueSync(fn,label){
+    return new Promise(function(resolve,reject){
+        var existing=-1;
+        for(var i=0;i<syncQueue.length;i++){if(syncQueue[i].label===label){existing=i;break}}
+        if(existing!==-1){syncQueue[existing].fn=fn;syncQueue[existing].resolve=resolve;syncQueue[existing].reject=reject}
+        else syncQueue.push({fn:fn,label:label,resolve:resolve,reject:reject});
+        processSyncQueue();
+    });
+}
+
+function processSyncQueue(){
+    if(syncMutex||syncQueue.length===0)return;
+    syncMutex=true;
+    var task=syncQueue.shift();
+    task.fn().then(task.resolve).catch(task.reject).finally(function(){syncMutex=false;processSyncQueue()});
+}
+
+function readLocalStudents(){
+    try{return JSON.parse(localStorage.getItem('exam_students')||'[]')}
+    catch(e){return[]}
+}
+
+function writeLocalStudents(data){
+    try{localStorage.setItem('exam_students',JSON.stringify(data))}catch(e){}
+}
+
+function readLocalBanks(){
+    try{return JSON.parse(localStorage.getItem('exam_banks')||'[]')}
+    catch(e){return[]}
+}
+
+function writeLocalBanks(data){
+    try{localStorage.setItem('exam_banks',JSON.stringify(data))}catch(e){}
+}
+
+function readLocalRecords(){
+    try{return JSON.parse(localStorage.getItem('exam_records')||'[]')}
+    catch(e){return[]}
+}
+
+function writeLocalRecords(data){
+    try{localStorage.setItem('exam_records',JSON.stringify(data))}catch(e){}
+}
+
+function readLocalLevels(){
+    try{return JSON.parse(localStorage.getItem('exam_settings')||'{}').levels||[]}
+    catch(e){return[]}
+}
+
+function writeLocalLevels(levels){
+    try{
+        var settings=JSON.parse(localStorage.getItem('exam_settings')||'{}');
+        settings.levels=levels;
+        localStorage.setItem('exam_settings',JSON.stringify(settings));
+    }catch(e){}
+}
+
+async function initSyncSheet(){
+    var config=getSyncConfig();
+    if(!config.enabled)return;
+    try{
+        var headersResult=await callCloudAPI('获取表头');
+        if(headersResult.status==='success'){
+            var existingHeaders=headersResult.表头||[];
+            var requiredHeaders=['ID','文件名','内容','版本号','同步时间','最后上传发起时间','最后编辑时间','文件夹路径'];
+            var hasAllHeaders=true;
+            for(var i=0;i<requiredHeaders.length;i++){if(existingHeaders.indexOf(requiredHeaders[i])===-1){hasAllHeaders=false;break}}
+            if(hasAllHeaders)return;
+        }
+        var requiredHeaders2=['ID','文件名','内容','版本号','同步时间','最后上传发起时间','最后编辑时间','文件夹路径'];
+        var result=await callCloudAPI('初始化表头',{表头:requiredHeaders2});
+        if(result.status==='success'){
+            console.log('[Sync] 已初始化云端表头');
+        }else{
+            console.log('[Sync] 初始化表头失败:',result.tongzhi||result.message);
+        }
+    }catch(error){
+        console.log('[Sync] 初始化表头失败:',error);
+    }
+}
+
+async function ensureSystemFileInCloud(sysFile){
+    var meta=getSystemFileMeta(sysFile.dataType);
+    if(!meta){
+        meta={id:sysFile.id,name:sysFile.name,version:0,lastSyncVersion:0};
+        setSystemFileMeta(sysFile.dataType,meta);
+    }
+    var cloudResult=await findFileInCloudById(meta.id);
+    if(!cloudResult.networkOk){
+        console.log('[Sync] 网络异常，无法检查系统文件:',sysFile.name);
+        return{status:'network_error'};
+    }
+    if(!cloudResult.file){
+        var localData;
+        if(sysFile.dataType==='students')localData=readLocalStudents();
+        else if(sysFile.dataType==='records')localData=readLocalRecords();
+        else if(sysFile.dataType==='levels')localData=readLocalLevels();
+        else localData=[];
+
+        var content=JSON.stringify(localData);
+        var netTime=await getNetworkTime();
+        var newRow=await findFirstEmptyRow();
+        var writeResult=await callCloudAPI('批量写入',{
+            行号:newRow,
+            数据:{ID:meta.id,文件名:sysFile.name,内容:content,版本号:'1',文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+        });
+        if(writeResult.status==='success'){
+            meta.version=1;
+            meta.lastSyncVersion=1;
+            setSystemFileMeta(sysFile.dataType,meta);
+            console.log('[Sync] 首次上传系统文件:',sysFile.name,'v1');
+            return{status:'uploaded',version:1};
+        }else{
+            console.log('[Sync] 首次上传系统文件失败:',sysFile.name);
+            return{status:'error'};
+        }
+    }
+    return{status:'exists',cloudFile:cloudResult.file};
+}
+
+async function syncSystemFile(sysFile){
+    var meta=getSystemFileMeta(sysFile.dataType);
+    if(!meta){
+        meta={id:sysFile.id,name:sysFile.name,version:0,lastSyncVersion:0};
+        setSystemFileMeta(sysFile.dataType,meta);
+    }
+
+    var localData;
+    if(sysFile.dataType==='students')localData=readLocalStudents();
+    else if(sysFile.dataType==='records')localData=readLocalRecords();
+    else if(sysFile.dataType==='levels')localData=readLocalLevels();
+    else localData=[];
+
+    var localVer=meta.version||0;
+    var localContent=JSON.stringify(localData);
+
+    var cloudResult=await findFileInCloudById(meta.id);
+    if(!cloudResult.networkOk){
+        console.log('[Sync] 网络异常，跳过系统文件同步:',sysFile.name);
+        isOnline=false;
+        return;
+    }
+    isOnline=true;
+
+    if(!cloudResult.file){
+        var netTime=await getNetworkTime();
+        var newRow=await findFirstEmptyRow();
+        var newVersion=Math.max(localVer,1);
+        if(localVer===0)newVersion=1;
+        var writeResult=await callCloudAPI('批量写入',{
+            行号:newRow,
+            数据:{ID:meta.id,文件名:sysFile.name,内容:localContent,版本号:newVersion.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+        });
+        if(writeResult.status==='success'){
+            meta.version=newVersion;
+            meta.lastSyncVersion=newVersion;
+            setSystemFileMeta(sysFile.dataType,meta);
+            console.log('[Sync] 上传系统文件到云端:',sysFile.name,'v'+newVersion);
+        }
+        return;
+    }
+
+    var cloudFile=cloudResult.file;
+    var cloudVer=parseInt(cloudFile.版本号||'0');
+    var cloudContent=cloudFile.内容||'';
+
+    if(cloudVer>localVer){
+        try{
+            var cloudData=JSON.parse(cloudContent);
+            if(sysFile.dataType==='students'){
+                writeLocalStudents(cloudData);
+                notifyParent('dataUpdated',{dataType:'students',data:cloudData,version:cloudVer});
+            }else if(sysFile.dataType==='records'){
+                writeLocalRecords(cloudData);
+                notifyParent('dataUpdated',{dataType:'records',data:cloudData,version:cloudVer});
+            }else if(sysFile.dataType==='levels'){
+                writeLocalLevels(cloudData);
+                notifyParent('dataUpdated',{dataType:'levels',data:cloudData,version:cloudVer});
+            }
+            meta.version=cloudVer;
+            meta.lastSyncVersion=cloudVer;
+            setSystemFileMeta(sysFile.dataType,meta);
+            console.log('[Sync] 下载云端系统文件:',sysFile.name,'v'+cloudVer);
+        }catch(e){
+            console.log('[Sync] 解析云端数据失败:',sysFile.name,e);
+        }
+    }else if(localVer>cloudVer){
+        var netTime2=await getNetworkTime();
+        var writeResult2=await callCloudAPI('批量写入',{
+            行号:cloudFile._行号,
+            数据:{ID:meta.id,文件名:sysFile.name,内容:localContent,版本号:localVer.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime2)}
+        });
+        if(writeResult2.status==='success'){
+            meta.lastSyncVersion=localVer;
+            setSystemFileMeta(sysFile.dataType,meta);
+            console.log('[Sync] 上传本地系统文件:',sysFile.name,'v'+localVer);
+        }
+    }else{
+        console.log('[Sync] 系统文件已是最新:',sysFile.name,'v'+localVer);
+    }
+}
+
+async function syncBankFile(bank,meta){
+    var localContent=JSON.stringify(bank);
+    var localVer=meta.version||0;
+
+    var cloudResult=await findFileInCloudById(meta.id);
+    if(!cloudResult.networkOk){
+        console.log('[Sync] 网络异常，跳过题库同步:',bank.name);
+        isOnline=false;
+        return;
+    }
+    isOnline=true;
+
+    if(!cloudResult.file){
+        var netTime=await getNetworkTime();
+        var newRow=await findFirstEmptyRow();
+        var newVersion=Math.max(localVer,1);
+        if(localVer===0)newVersion=1;
+        var writeResult=await callCloudAPI('批量写入',{
+            行号:newRow,
+            数据:{ID:meta.id,文件名:bank.name,内容:localContent,版本号:newVersion.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+        });
+        if(writeResult.status==='success'){
+            meta.version=newVersion;
+            meta.lastSyncVersion=newVersion;
+            setBankMeta(bank.id||bank.name,meta);
+            console.log('[Sync] 上传题库到云端:',bank.name,'v'+newVersion);
+        }
+        return;
+    }
+
+    var cloudFile=cloudResult.file;
+    var cloudVer=parseInt(cloudFile.版本号||'0');
+    var cloudContent=cloudFile.内容||'';
+
+    if(cloudVer>localVer){
+        try{
+            var cloudData=JSON.parse(cloudContent);
+            var banks=readLocalBanks();
+            var found=false;
+            for(var i=0;i<banks.length;i++){
+                if(banks[i].id===bank.id||(banks[i].name===bank.name)){
+                    banks[i]=_assign(banks[i],cloudData);
+                    found=true;break;
+                }
+            }
+            if(!found){
+                banks.push(cloudData);
+            }
+            writeLocalBanks(banks);
+            notifyParent('dataUpdated',{dataType:'banks',data:banks,bankId:bank.id||bank.name,version:cloudVer});
+            meta.version=cloudVer;
+            meta.lastSyncVersion=cloudVer;
+            setBankMeta(bank.id||bank.name,meta);
+            console.log('[Sync] 下载云端题库:',bank.name,'v'+cloudVer);
+        }catch(e){
+            console.log('[Sync] 解析云端题库数据失败:',bank.name,e);
+        }
+    }else if(localVer>cloudVer){
+        var netTime2=await getNetworkTime();
+        var writeResult2=await callCloudAPI('批量写入',{
+            行号:cloudFile._行号,
+            数据:{ID:meta.id,文件名:bank.name,内容:localContent,版本号:localVer.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime2)}
+        });
+        if(writeResult2.status==='success'){
+            meta.lastSyncVersion=localVer;
+            setBankMeta(bank.id||bank.name,meta);
+            console.log('[Sync] 上传本地题库:',bank.name,'v'+localVer);
+        }
+    }else{
+        console.log('[Sync] 题库已是最新:',bank.name,'v'+localVer);
+    }
+}
+
+async function syncAllBanks(){
+    var banks=readLocalBanks();
+    var allMetas=getAllBankMetas();
+
+    for(var i=0;i<banks.length;i++){
+        var bank=banks[i];
+        var bankKey=bank.id||bank.name;
+        if(bank.id&&bank.id.indexOf('demo_')===0)continue;
+        if(!allMetas[bankKey]){
+            allMetas[bankKey]={id:'QB_'+genFileId(),name:bank.name,version:0,lastSyncVersion:0};
+            setBankMeta(bankKey,allMetas[bankKey]);
+        }
+        var meta=allMetas[bankKey];
+        await syncBankFile(bank,meta);
+    }
+
+    var cloudResult=await callCloudAPI('读取全部');
+    if(cloudResult.status==='success'&&cloudResult.数据){
+        var cloudFiles=cloudResult.数据;
+        var localBankIds={};
+        for(var j=0;j<banks.length;j++){localBankIds[banks[j].id||banks[j].name]=true}
+        for(var k=0;k<cloudFiles.length;k++){
+            var cf=cloudFiles[k];
+            if(!cf.ID||!cf.ID.trim())continue;
+            if(cf.ID.indexOf('QB_')!==0)continue;
+            if(!cf.文件名||!cf.文件名.trim())continue;
+            var bankId=cf.ID;
+            if(localBankIds[bankId])continue;
+            var existingMeta=getBankMeta(bankId);
+            if(existingMeta)continue;
+
+            try{
+                var cloudData=JSON.parse(cf.内容||'{}');
+                var currentBanks=readLocalBanks();
+                currentBanks.push(cloudData);
+                writeLocalBanks(currentBanks);
+                var newMeta={id:bankId,name:cf.文件名,version:parseInt(cf.版本号||'0'),lastSyncVersion:parseInt(cf.版本号||'0')};
+                setBankMeta(bankId,newMeta);
+                notifyParent('dataUpdated',{dataType:'banks',data:currentBanks,bankId:bankId,version:newMeta.version});
+                console.log('[Sync] 从云端下载新题库:',cf.文件名);
+            }catch(e){
+                console.log('[Sync] 解析云端题库失败:',cf.文件名,e);
+            }
+        }
+    }
+}
+
+async function fullSync(){
+    var config=getSyncConfig();
+    if(!config.enabled)return;
+
+    notifyParent('syncStatus',{status:'syncing',detail:'全量同步中'});
+
+    await enqueueSync(async function(){
+        try{
+            await initSyncSheet();
+
+            for(var i=0;i<SYSTEM_FILES.length;i++){
+                var checkResult=await ensureSystemFileInCloud(SYSTEM_FILES[i]);
+                if(checkResult.status==='network_error'){
+                    isOnline=false;
+                    notifyParent('syncStatus',{status:'error',detail:'网络异常'});
+                    return;
+                }
+            }
+
+            for(var j=0;j<SYSTEM_FILES.length;j++){
+                await syncSystemFile(SYSTEM_FILES[j]);
+            }
+
+            await syncAllBanks();
+
+            setLastSyncTimeVal(Date.now());
+            firstSyncDone=true;
+            isOnline=true;
+            notifyParent('syncStatus',{status:'idle',detail:'同步完成'});
+            console.log('[Sync] 全量同步完成');
+        }catch(e){
+            console.log('[Sync] 全量同步异常:',e);
+            notifyParent('syncStatus',{status:'error',detail:e.message});
+        }
+    },'全量同步');
+}
+
+async function uploadDataChange(dataType,data){
+    var config=getSyncConfig();
+    if(!config.enabled)return;
+    if(!firstSyncDone)return;
+
+    var content=JSON.stringify(data);
+
+    if(dataType==='students'){
+        var meta=getSystemFileMeta('students');
+        if(!meta){meta={id:SYSTEM_FILE_STUDENT_INFO.id,name:SYSTEM_FILE_STUDENT_INFO.name,version:0,lastSyncVersion:0};setSystemFileMeta('students',meta)}
+        meta.version=(meta.version||0)+1;
+        setSystemFileMeta('students',meta);
+        await enqueueSync(async function(){
+            var cloudResult=await findFileInCloudById(meta.id);
+            if(!cloudResult.networkOk){isOnline=false;return}
+            isOnline=true;
+            var netTime=await getNetworkTime();
+            if(cloudResult.file){
+                var cloudVer=parseInt(cloudResult.file.版本号||'0');
+                if(cloudVer>meta.version){
+                    try{
+                        var cloudData=JSON.parse(cloudResult.file.内容||'[]');
+                        writeLocalStudents(cloudData);
+                        meta.version=cloudVer;
+                        meta.lastSyncVersion=cloudVer;
+                        setSystemFileMeta('students',meta);
+                        notifyParent('dataUpdated',{dataType:'students',data:cloudData,version:cloudVer});
+                    }catch(e){}
+                    return;
+                }
+                await callCloudAPI('批量写入',{
+                    行号:cloudResult.file._行号,
+                    数据:{ID:meta.id,文件名:meta.name,内容:content,版本号:meta.version.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+                });
+            }else{
+                var newRow=await findFirstEmptyRow();
+                await callCloudAPI('批量写入',{
+                    行号:newRow,
+                    数据:{ID:meta.id,文件名:meta.name,内容:content,版本号:meta.version.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+                });
+            }
+            meta.lastSyncVersion=meta.version;
+            setSystemFileMeta('students',meta);
+            setLastSyncTimeVal(Date.now());
+            console.log('[Sync] 上传学生信息 v'+meta.version);
+        },'上传学生信息');
+
+    }else if(dataType==='records'){
+        var meta2=getSystemFileMeta('records');
+        if(!meta2){meta2={id:SYSTEM_FILE_RECORDS.id,name:SYSTEM_FILE_RECORDS.name,version:0,lastSyncVersion:0};setSystemFileMeta('records',meta2)}
+        meta2.version=(meta2.version||0)+1;
+        setSystemFileMeta('records',meta2);
+        await enqueueSync(async function(){
+            var cloudResult=await findFileInCloudById(meta2.id);
+            if(!cloudResult.networkOk){isOnline=false;return}
+            isOnline=true;
+            var netTime=await getNetworkTime();
+            if(cloudResult.file){
+                var cloudVer2=parseInt(cloudResult.file.版本号||'0');
+                if(cloudVer2>meta2.version){
+                    try{
+                        var cloudData2=JSON.parse(cloudResult.file.内容||'[]');
+                        writeLocalRecords(cloudData2);
+                        meta2.version=cloudVer2;
+                        meta2.lastSyncVersion=cloudVer2;
+                        setSystemFileMeta('records',meta2);
+                        notifyParent('dataUpdated',{dataType:'records',data:cloudData2,version:cloudVer2});
+                    }catch(e){}
+                    return;
+                }
+                await callCloudAPI('批量写入',{
+                    行号:cloudResult.file._行号,
+                    数据:{ID:meta2.id,文件名:meta2.name,内容:content,版本号:meta2.version.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+                });
+            }else{
+                var newRow2=await findFirstEmptyRow();
+                await callCloudAPI('批量写入',{
+                    行号:newRow2,
+                    数据:{ID:meta2.id,文件名:meta2.name,内容:content,版本号:meta2.version.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+                });
+            }
+            meta2.lastSyncVersion=meta2.version;
+            setSystemFileMeta('records',meta2);
+            setLastSyncTimeVal(Date.now());
+            console.log('[Sync] 上传考试数据 v'+meta2.version);
+        },'上传考试数据');
+
+    }else if(dataType==='levels'){
+        var meta3=getSystemFileMeta('levels');
+        if(!meta3){meta3={id:SYSTEM_FILE_LEVELS.id,name:SYSTEM_FILE_LEVELS.name,version:0,lastSyncVersion:0};setSystemFileMeta('levels',meta3)}
+        meta3.version=(meta3.version||0)+1;
+        setSystemFileMeta('levels',meta3);
+        await enqueueSync(async function(){
+            var cloudResult=await findFileInCloudById(meta3.id);
+            if(!cloudResult.networkOk){isOnline=false;return}
+            isOnline=true;
+            var netTime=await getNetworkTime();
+            if(cloudResult.file){
+                var cloudVer3=parseInt(cloudResult.file.版本号||'0');
+                if(cloudVer3>meta3.version){
+                    try{
+                        var cloudData3=JSON.parse(cloudResult.file.内容||'[]');
+                        writeLocalLevels(cloudData3);
+                        meta3.version=cloudVer3;
+                        meta3.lastSyncVersion=cloudVer3;
+                        setSystemFileMeta('levels',meta3);
+                        notifyParent('dataUpdated',{dataType:'levels',data:cloudData3,version:cloudVer3});
+                    }catch(e){}
+                    return;
+                }
+                await callCloudAPI('批量写入',{
+                    行号:cloudResult.file._行号,
+                    数据:{ID:meta3.id,文件名:meta3.name,内容:content,版本号:meta3.version.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+                });
+            }else{
+                var newRow3=await findFirstEmptyRow();
+                await callCloudAPI('批量写入',{
+                    行号:newRow3,
+                    数据:{ID:meta3.id,文件名:meta3.name,内容:content,版本号:meta3.version.toString(),文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}
+                });
+            }
+            meta3.lastSyncVersion=meta3.version;
+            setSystemFileMeta('levels',meta3);
+            setLastSyncTimeVal(Date.now());
+            console.log('[Sync] 上传等级设置 v'+meta3.version);
+        },'上传等级设置');
+
+    }else if(dataType==='banks'){
+        var banks=readLocalBanks();
+        var allMetas=getAllBankMetas();
+        for(var i=0;i<banks.length;i++){
+            var bank=banks[i];
+            var bankKey=bank.id||bank.name;
+            if(bank.id&&bank.id.indexOf('demo_')===0)continue;
+            if(!allMetas[bankKey]){
+                allMetas[bankKey]={id:'QB_'+genFileId(),name:bank.name,version:0,lastSyncVersion:0};
+                setBankMeta(bankKey,allMetas[bankKey]);
+            }
+            var bMeta=allMetas[bankKey];
+            bMeta.version=(bMeta.version||0)+1;
+            setBankMeta(bankKey,bMeta);
+        }
+        await enqueueSync(async function(){
+            await syncAllBanks();
+            setLastSyncTimeVal(Date.now());
+        },'上传题库');
+    }
+}
+
+function startAutoSync(){
+    stopAutoSync();
+    var config=getSyncConfig();
+    if(!config.enabled)return;
+    autoSyncCheckTimer=setInterval(function(){
+        checkAutoSyncTriggers();
+    },5000);
+}
+
+function stopAutoSync(){
+    if(autoSyncCheckTimer){clearInterval(autoSyncCheckTimer);autoSyncCheckTimer=null}
+    if(autoSyncTimer){clearTimeout(autoSyncTimer);autoSyncTimer=null}
+}
+
+function checkAutoSyncTriggers(){
+    var config=getSyncConfig();
+    if(!config.enabled)return;
+    if(syncMutex)return;
+    var now=Date.now();
+    var deltaIntervalMs=(config.syncDeltaInterval||5)*1000;
+    if(now-lastDeltaSyncTime<deltaIntervalMs)return;
+
+    var lastAny=getLastSyncTime();
+    var checkIntervalMs=(config.cloudCheckInterval||5)*60*1000;
+    if(lastAny>0&&now-lastAny>=checkIntervalMs){
+        lastDeltaSyncTime=now;
+        fullSync();
+    }
+}
+
+function debounceUpload(dataType,data,delay){
+    if(debounceTimers[dataType]){clearTimeout(debounceTimers[dataType])}
+    debounceTimers[dataType]=setTimeout(function(){
+        uploadDataChange(dataType,data);
+        delete debounceTimers[dataType];
+    },delay||3000);
+}
+
+window.addEventListener('message',function(e){
+    var data=e.data;
+    if(!data||!data.type)return;
+    if(data.target&&data.target!=='examSync')return;
+
+    switch(data.type){
+        case 'init':
+            notifyParent('syncConfig',{config:getSyncConfig()});
+            (async function(){
+                console.log('[Sync] 收到初始化指令');
+                await fullSync();
+                startAutoSync();
+            })();
+            break;
+
+        case 'dataChanged':
+            if(data.dataType&&data.data){
+                debounceUpload(data.dataType,data.data,data.debounce||3000);
+            }
+            break;
+
+        case 'syncNow':
+            (async function(){
+                await fullSync();
+            })();
+            break;
+
+        case 'getConfig':
+            notifyParent('syncConfig',{config:getSyncConfig()});
+            break;
+
+        case 'updateConfig':
+            if(data.config){
+                var newConfig=_assign(getSyncConfig(),data.config);
+                newConfig.sheetName='抽奖考试';
+                saveSyncConfig(newConfig);
+                startAutoSync();
+                notifyParent('syncConfig',{config:newConfig});
+            }
+            break;
+
+        case 'mainReady':
+            startAutoSync();
+            break;
+
+        case 'mainActivated':
+            if(firstSyncDone){
+                fullSync();
+            }
+            break;
+
+        case 'getSyncStatus':
+            notifyParent('syncStatusReport',{
+                enabled:getSyncConfig().enabled,
+                isOnline:isOnline,
+                firstSyncDone:firstSyncDone,
+                lastSyncTime:getLastSyncTime(),
+                syncing:syncMutex
+            });
+            break;
+    }
+});
+
+notifyParent('syncReady',{});
+
+})();
+</script>
+</body>
+</html>
