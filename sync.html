@@ -467,6 +467,11 @@ async function syncBankFile(bank,meta){
             meta.version=newVersion;
             meta.lastSyncVersion=newVersion;
             setBankMeta(bank.id||bank.name,meta);
+            if(bank._newFile){
+                var banks=readLocalBanks();
+                for(var ni=0;ni<banks.length;ni++){if(banks[ni].id===bank.id){delete banks[ni]._newFile;break}}
+                writeLocalBanks(banks);
+            }
             console.log('[Sync] 上传题库到云端:',bank.name,'v'+newVersion);
         }
         return;
@@ -508,6 +513,11 @@ async function syncBankFile(bank,meta){
         if(writeResult2.status==='success'){
             meta.lastSyncVersion=localVer;
             setBankMeta(bank.id||bank.name,meta);
+            if(bank._newFile){
+                var banks2=readLocalBanks();
+                for(var ni2=0;ni2<banks2.length;ni2++){if(banks2[ni2].id===bank.id){delete banks2[ni2]._newFile;break}}
+                writeLocalBanks(banks2);
+            }
             console.log('[Sync] 上传本地题库:',bank.name,'v'+localVer);
         }
     }else{
@@ -560,6 +570,27 @@ async function syncAllBanks(){
             }catch(e){
                 console.log('[Sync] 解析云端题库失败:',cf.文件名,e);
             }
+        }
+
+        var cloudBankIds={};
+        for(var ci=0;ci<cloudFiles.length;ci++){if(cloudFiles[ci].ID&&cloudFiles[ci].ID.indexOf('QB_')===0)cloudBankIds[cloudFiles[ci].ID]=true}
+        var localBanks=readLocalBanks();
+        var changed=false;
+        var surviving=[];
+        for(var li=0;li<localBanks.length;li++){
+            var lb=localBanks[li];
+            if(lb.id&&lb.id.indexOf('demo_')===0){surviving.push(lb);continue}
+            var lbKey=lb.id||lb.name;
+            var lbMeta=allMetas[lbKey];
+            if(lb._newFile){surviving.push(lb);continue}
+            if(!lbMeta){surviving.push(lb);continue}
+            if(cloudBankIds[lbMeta.id]){surviving.push(lb);continue}
+            changed=true;
+            console.log('[Sync] 删除本地题库（云端不存在）:',lb.name);
+        }
+        if(changed){
+            writeLocalBanks(surviving);
+            notifyParent('dataUpdated',{dataType:'banks',data:surviving});
         }
     }
 }
@@ -826,6 +857,26 @@ window.addEventListener('message',function(e){
                 saveSyncConfig(newConfig);
                 startAutoSync();
                 notifyParent('syncConfig',{config:newConfig});
+            }
+            break;
+
+        case 'deleteBank':
+            if(data.bankKey){
+                (async function(bankKey){
+                    var meta=getBankMeta(bankKey);
+                    if(!meta)return;
+                    var cloudResult=await findFileInCloudById(meta.id);
+                    if(cloudResult.networkOk&&cloudResult.file&&cloudResult.file._行号){
+                        await callCloudAPI('批量写入',{
+                            行号:cloudResult.file._行号,
+                            数据:{ID:'',文件名:'',内容:'',版本号:'',文件夹路径:'',最后上传发起时间:''}
+                        });
+                        console.log('[Sync] 已从云端删除题库:',meta.name);
+                    }
+                    var allMetas=getAllBankMetas();
+                    delete allMetas[bankKey];
+                    try{localStorage.setItem('exam_sync_bank_meta',JSON.stringify(allMetas))}catch(e){}
+                })(data.bankKey);
             }
             break;
 
