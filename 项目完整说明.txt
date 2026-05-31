@@ -41,38 +41,254 @@
 
 | 键名 | 内容 | 说明 |
 |------|------|------|
-| exam_students | 学生数组 | [{id, name, avatar, gender, group}] |
-| exam_banks | 题库数组 | [{id, name, description, questions, createdAt}] |
-| exam_records | 场次记录数组 | 每次结算生成一条 |
-| exam_settings | 全局设置 | 等级、AI配置、音效、挑战参数等 |
-| exam_examProgress | 考试进度 | 中途退出时保存，下次恢复 |
-| exam_wrongSets | 错题集合 | 按学生+题库索引存储 |
+| exam_students | 学生数组 | 见3.2 |
+| exam_banks | 题库数组 | 见3.3 |
+| exam_records | 场次记录数组 | 见3.4 |
+| exam_settings | 全局设置 | 见3.5 |
+| exam_examProgress | 考试进度 | 见3.6 |
+| exam_wrongSets | 错题集合 | 见3.7 |
 | exam_dataVersion | 数据版本号 | 当前版本5，控制默认数据初始化 |
+| exam_sync_* | 云同步状态 | 上次同步时间等，不参与数据重置 |
 
-### 3.2 错题集数据结构（wrongSet）
+### 3.2 学生数据结构（exam_students）
 
-以 `学生ID_题库ID` 为键，存储内容：
+数组，每个元素：
 
 ```
 {
-  wrongQuestionIds: [错题ID数组],
-  lastAttempt: 时间戳,
-  bankId: 题库ID,
-  pendingPoints: 累计未结算积分,
-  nextPointsPerQ: 下次补考每题分值,
-  lastInitialPPQ: 本轮挑战初始分值（供新一轮减半使用）
+  id: "唯一ID（时间戳+随机数）",
+  name: "姓名",
+  avatar: "头像（Base64图片或空字符串）",
+  gender: "性别（男/女/空）",
+  group: "小组名（空字符串表示未分组）"
 }
 ```
 
-### 3.3 云端同步
+- 写入时机：添加/编辑/导入/删除学生时
+- 云同步：变更后自动通知云端
 
-- 同步方式：通过 iframe（sync.html）与云端数据库通信
-- 同步数据类型：students、banks、records、levels
-- 同步时机：
-  - 数据变更时自动通知（防抖延迟可配置）
-  - 手动点击同步按钮
-  - 页面重新可见时自动同步
-- 同步配置：Webhook URL、Token、检查间隔、重试策略
+### 3.3 题库数据结构（exam_banks）
+
+数组，每个元素：
+
+```
+{
+  id: "唯一ID",
+  name: "题库名称",
+  description: "题库描述",
+  questions: [
+    {
+      id: "唯一ID",
+      text: "题目内容",
+      options: { A: "选项A", B: "选项B", C: "选项C", D: "选项D" },
+      answer: "正确答案（A/B/C/D）",
+      points: 分值（默认10）
+    }
+  ],
+  createdAt: 创建时间戳,
+  _newFile: 是否新文件标记（可选）
+}
+```
+
+- 写入时机：新建/编辑/导入/删除题库时
+- 云同步：变更后自动通知云端
+
+### 3.4 场次记录数据结构（exam_records）
+
+数组，每个元素：
+
+```
+{
+  id: "唯一ID",
+  date: 场次时间戳,
+  mode: "模式（farm/challenge/pk/practice）",
+  participationType: "参赛方式（personal/group）",
+  bankNames: [题库名称数组],
+  timeLimit: 超时设置,
+  totalQuestions: 总题数,
+  totalCorrect: 答对题数,
+  totalEarned: 本场总积分（含所有额外加分）,
+  studentResults: {
+    "学生ID": {
+      id: "学生ID",
+      name: "姓名",
+      avatar: "头像",
+      group: "小组",
+      correctCount: 答对题数,
+      totalCount: 总答题数,
+      pointsEarned: 获得积分
+    }
+  },
+  playerScores: { "学生ID": 积分 },
+  groupScores: { "小组名": 积分 },
+  questionDetails: [
+    {
+      index: 题号,
+      text: "题目内容",
+      answer: "正确答案",
+      studentId: "答题学生ID",
+      studentName: "答题学生姓名",
+      selectedOption: "所选选项",
+      correct: 是否正确,
+      pointsEarned: 本题得分
+    }
+  ],
+  results: [原始答题记录数组],
+  practicePassed: 是否通过（仅练习模式）
+}
+```
+
+- 写入时机：每次考试结算时追加一条
+- 练习模式：仅全对结算后才写入，有错题时也写入但积分记为0
+- 云同步：变更后自动通知云端
+- 清空方式：设置 → 数据管理 → 清空场次数据
+
+### 3.5 全局设置数据结构（exam_settings）
+
+```
+{
+  // 等级配置
+  levels: [
+    { name: "等级名", minPoints: 最低积分, comment: "评语" }
+  ],
+
+  // AI配置
+  aiApiUrl: "API地址",
+  aiApiKey: "API密钥",
+  aiModel: "模型名",
+
+  // 音效
+  soundEnabled: 是否开启,
+  soundVolume: 音量（0-100）,
+
+  // 挑战参数
+  shuffleOptions: 是否打乱选项（默认true）,
+  baseTimeout: 基础超时秒数（默认30，0=不限时）,
+  charTimeoutCompensation: 每字超时补偿秒数（默认0.2）,
+  autoNext: 是否自动下一题（默认true）,
+  autoNextDelay: 自动下一题间隔秒数（默认3）,
+  drawAnimation: 是否开启抽签动画（默认true）,
+  drawDuration: 抽签动画时长秒数（默认3）,
+
+  // 字号设置
+  questionFontSize: 题目字号（默认30）,
+  studentNameFontSize: 学生名字字号（默认35）,
+  studentInfoFontSize: 学生信息字号（默认20）,
+  warReportFontSize: 战报字号（默认20）,
+
+  // 上次比赛设置（记忆功能）
+  lastMode: "上次模式",
+  lastParticipationType: "上次参赛方式",
+  lastPlayerOrder: "上次出场顺序",
+  lastQuestionOrder: "上次出题方式",
+  lastAvgQuestions: 上次每生平均答题数,
+  lastGroupRotation: "上次小组轮换方式",
+  _lastBankIds: [上次选择的题库ID数组]
+}
+```
+
+- 写入时机：保存设置时 / 开始考试时（记忆上次设置）
+- 云同步：仅等级配置同步
+
+### 3.6 考试进度数据结构（exam_examProgress）
+
+中途退出考试时保存，用于下次恢复：
+
+```
+{
+  mode: "模式",
+  participationType: "参赛方式",
+  questions: [题目数组],
+  timeLimit: 超时设置,
+  autoNext: 是否自动下一题,
+  students: [学生数组],
+  currentIndex: 当前题号,
+  results: [已答结果数组],
+  playerScores: { "学生ID": 积分 },
+  totalEarned: 已获总积分,
+  playerQueue: [选手队列],
+  queueIndex: 队列指针,
+  avgQuestions: 每生平均答题数,
+  groupNames: [小组名数组],
+  groupRotation: "轮换方式",
+  groupMap: 小组映射,
+  groupScores: { "小组名": 积分 },
+  currentStudentId: "当前答题学生ID",
+  _pointsPerQ: 每题分值（练习模式专用）,
+  _isRetry: 是否补考（练习模式专用）,
+  _bankIds: [题库ID数组],
+  savedAt: 保存时间戳
+}
+```
+
+- 恢复机制（按模式区分）：
+  - 非练习模式（打野/挑战/PK）：页面加载或回到首页时自动恢复
+  - 练习模式：不自动恢复，当用户选择同一题库+同一学生并点击开始时，弹窗询问是否继续
+- 清除时机：考试结算完成后自动清除
+
+### 3.7 错题集数据结构（exam_wrongSets）
+
+以对象形式存储，键为 `学生ID_题库ID`：
+
+```
+{
+  "学生ID_题库ID": {
+    wrongQuestionIds: [错题ID数组],
+    lastAttempt: 上次作答时间戳,
+    bankId: "题库ID",
+    pendingPoints: 累计未结算积分,
+    nextPointsPerQ: 下次补考每题分值,
+    lastInitialPPQ: 本轮挑战初始分值
+  }
+}
+```
+
+各字段说明：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| wrongQuestionIds | 数组 | 本轮答错的题目ID列表，补考时从中出题 |
+| lastAttempt | 数字 | 上次作答时间，用于排序和统计 |
+| bankId | 字符串 | 所属题库ID |
+| pendingPoints | 数字 | 累计未结算积分，补考全对时一次性结算 |
+| nextPointsPerQ | 数字 | 下次补考每题分值（递减后），首轮10→补考1为5→补考2为2→补考3为1→之后固定1 |
+| lastInitialPPQ | 数字 | 本轮挑战的初始每题分值，新一轮挑战时减半使用 |
+
+生命周期：
+- 创建：首次练习某题库有错题时
+- 更新：每次补考结算时（更新错题集、累积未结算积分、计算下次分值）
+- 清空：补考全对时（wrongQuestionIds清空，pendingPoints归零，保留lastInitialPPQ供新一轮使用）
+- 不上传云端：仅保存在本地
+
+### 3.8 云端同步
+
+1. 同步方式：通过 iframe（sync.html）与云端数据库通信，使用 postMessage 双向传递数据
+2. 同步数据类型及方向：
+
+| 数据类型 | 同步方向 | 说明 |
+|----------|----------|------|
+| students | 双向 | 学生数据变更后自动推送，也接收云端更新 |
+| banks | 双向 | 题库数据变更后自动推送，也接收云端更新 |
+| records | 双向 | 场次记录变更后自动推送，也接收云端更新 |
+| levels | 双向 | 等级配置变更后自动推送，也接收云端更新 |
+
+3. 同步时机：
+   - 数据变更时自动通知（防抖延迟可配置，默认3秒）
+   - 手动点击同步按钮
+   - 页面重新可见时自动同步（visibilitychange事件）
+4. 同步配置项：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| enabled | true | 是否开启云同步 |
+| webhookUrl | - | Webhook地址 |
+| token | - | 认证令牌 |
+| cloudCheckInterval | 5秒 | 云端检查间隔 |
+| syncDeltaInterval | 3秒 | 同步防抖延迟 |
+| retryCount | 5 | 重试次数 |
+| retryInterval | 2秒 | 重试间隔 |
+
+5. 冲突处理：云端数据更新时，直接覆盖本地对应数据，并刷新页面显示
 
 
 ## 四、四种比赛模式
