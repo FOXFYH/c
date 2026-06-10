@@ -52,6 +52,11 @@
                             <div class="mode-card-name">练习</div>
                             <div class="mode-card-desc">单人练习，完成整个题库才结算积分</div>
                         </div>
+                        <div class="mode-card" data-mode="smart" onclick="App.Exam.enterMode('smart')">
+                            <div class="mode-card-icon">🧠</div>
+                            <div class="mode-card-name">智能抽查</div>
+                            <div class="mode-card-desc">正确率越低越容易被抽中，分值随概率反比调整</div>
+                        </div>
                     </div>
                 </div>
                 <div class="exam-setup hidden" id="exam-setup">
@@ -109,6 +114,14 @@
                                     <option value="alternate">交替（每组各出一人轮流）</option>
                                     <option value="sequential">顺序（一组答完再换下一组）</option>
                                 </select>
+                            </div>
+                            <div class="option-group" id="opt-group-smart" style="display:none">
+                                <label>🧠 智能强度</label>
+                                <div class="smart-intensity-row">
+                                    <input type="range" id="exam-smart-intensity" min="1" max="20" value="5" step="1" oninput="App.Exam._updateSmartPreview()">
+                                    <span id="smart-intensity-value">5</span>
+                                </div>
+                                <div class="form-hint" id="smart-preview">末名概率点数：245（30人）</div>
                             </div>
                             <div id="exam-student-select-area">
                                 <div class="sub-title-row"><h3 class="sub-title" id="student-select-title">👥 参与人员</h3><button class="btn-select-all" onclick="App.Exam.selectAllStudents()">全选</button></div>
@@ -203,18 +216,33 @@
                     <div class="settings-panel" id="stab-ai"><div class="settings-card"><div class="form-group"><label>API 地址</label><input type="text" id="ai-api-url" placeholder="https://api.openai.com/v1/chat/completions"></div><div class="form-group"><label>API Key</label><input type="password" id="ai-api-key" placeholder="sk-xxxxx"></div><div class="form-group"><label>模型名称</label><input type="text" id="ai-model" placeholder="gpt-3.5-turbo"></div><button class="btn-primary btn-sm" onclick="App.Settings.saveAISettings()">💾 保存AI设置</button></div></div>
                     <div class="settings-panel" id="stab-sound"><div class="settings-card"><div class="form-group"><label>音效</label><label class="switch"><input type="checkbox" id="sound-enabled" checked><span class="slider"></span></label></div><div class="form-group"><label>音量</label><input type="range" id="sound-volume" min="0" max="100" value="70"></div></div></div>
                     <div class="settings-panel" id="stab-students"><div class="settings-card"><div class="settings-actions"><button class="btn-primary btn-sm" onclick="App.Settings.StudentMgmt.addRow()">➕ 添加学生</button><button class="btn-primary btn-sm" onclick="App.Settings.StudentMgmt.showImportDialog()">📥 批量导入</button><button class="btn-danger btn-sm" onclick="App.Settings.StudentMgmt.clearAll()">🗑️ 清空全部</button><button class="btn-save-all" id="btn-save-students" onclick="App.Settings.StudentMgmt.saveAll()" style="display:none">💾 保存修改</button></div></div><div class="settings-card" style="margin-top:12px"><div id="student-mgmt-wrap"></div><div class="empty-state inline" id="student-mgmt-empty"><div class="empty-icon">👥</div><p>还没有学生，点击上方按钮添加</p></div></div></div>
-                    <div class="settings-panel" id="stab-records"><div class="settings-card"><div class="settings-actions"><button class="btn-primary btn-sm" onclick="App.Settings.exportData()">📤 导出数据</button><button class="btn-primary btn-sm" onclick="App.Settings.importData()">📥 导入数据</button><button class="btn-danger btn-sm" onclick="App.Settings.clearRecords()">🗑️ 清空场次数据</button><button class="btn-danger btn-sm" onclick="App.Settings.resetData()">⚠️ 重置所有数据</button></div></div><div class="settings-card" style="margin-top:12px"><div id="records-list" class="records-list"></div><div class="empty-state inline" id="records-empty"><div class="empty-icon">📝</div><p>暂无记录</p></div></div></div>
+                    <div class="settings-panel" id="stab-records">
+                        <div class="settings-card">
+                            <h3 style="margin-bottom:12px">📦 数据导入导出</h3>
+                            <div class="data-io-list">
+                                <div class="data-io-item">
+                                    <div class="data-io-info"><span class="data-io-icon">👥</span><span class="data-io-label">学生信息</span><span class="data-io-count" id="io-count-students"></span></div>
+                                    <div class="data-io-btns"><button class="btn-primary btn-sm" onclick="App.Settings.exportDataType('students')">📤 导出</button><button class="btn-secondary btn-sm" onclick="App.Settings.importDataType('students')">📥 导入</button></div>
+                                </div>
+                                <div class="data-io-item">
+                                    <div class="data-io-info"><span class="data-io-icon">📚</span><span class="data-io-label">题库文件</span><span class="data-io-count" id="io-count-banks"></span></div>
+                                    <div class="data-io-btns"><button class="btn-primary btn-sm" onclick="App.Settings.exportDataType('banks')">📤 导出</button><button class="btn-secondary btn-sm" onclick="App.Settings.importDataType('banks')">📥 导入</button></div>
+                                </div>
+                                <div class="data-io-item">
+                                    <div class="data-io-info"><span class="data-io-icon">📊</span><span class="data-io-label">考试数据</span><span class="data-io-count" id="io-count-records"></span></div>
+                                    <div class="data-io-btns"><button class="btn-primary btn-sm" onclick="App.Settings.exportDataType('records')">📤 导出</button><button class="btn-secondary btn-sm" onclick="App.Settings.importDataType('records')">📥 导入</button></div>
+                                </div>
+                            </div>
+                            <div class="form-hint" style="margin-top:8px">导入数据将强制覆盖本地及云端对应数据</div>
+                        </div>
+                        <div class="settings-card" style="margin-top:12px"><div class="settings-actions"><button class="btn-danger btn-sm" onclick="App.Settings.clearRecords()">🗑️ 清空场次数据</button><button class="btn-danger btn-sm" onclick="App.Settings.resetData()">⚠️ 重置所有数据</button></div></div>
+                        <div class="settings-card" style="margin-top:12px"><div id="records-list" class="records-list"></div><div class="empty-state inline" id="records-empty"><div class="empty-icon">📝</div><p>暂无记录</p></div></div>
+                    </div>
                     <div class="settings-panel" id="stab-sync"><div class="settings-card">
-                        <div class="form-group"><label>☁️ 云同步</label><label class="switch"><input type="checkbox" id="sync-enabled" checked><span class="slider"></span></label><div class="form-hint">开启后数据将自动同步到WPS云端表格</div></div>
-                        <div class="form-group"><label>🔗 Webhook 地址</label><input type="text" id="sync-webhook-url" placeholder="https://www.kdocs.cn/api/v3/ide/file/..." style="width:100%"></div>
-                        <div class="form-group"><label>🔑 AirScript Token</label><input type="password" id="sync-token" placeholder="可选" style="width:100%"></div>
-                        <div class="form-group"><label>⏱️ 定时检查间隔（分钟）</label><input type="number" id="sync-check-interval" value="5" min="1" max="60" style="width:100px"> <span class="form-hint">每隔多少分钟检查云端更新</span></div>
-                        <div class="form-group"><label>🔄 数据变更防抖（秒）</label><input type="number" id="sync-debounce" value="3" min="1" max="30" style="width:100px"> <span class="form-hint">数据修改后等待多少秒再上传，避免频繁请求</span></div>
-                        <div class="form-group"><label>🔁 重试次数</label><input type="number" id="sync-retry-count" value="5" min="1" max="10" style="width:100px"></div>
-                        <div class="form-group"><label>⏳ 重试间隔（秒）</label><input type="number" id="sync-retry-interval" value="2" min="1" max="10" style="width:100px"></div>
+                        <div class="form-group"><label>☁️ 云同步（文件管理器）</label><div class="form-hint">数据以文件形式同步到WPS云端表格"抽奖考试"，支持版本控制与冲突处理</div></div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-                            <button class="btn-primary btn-sm" onclick="App.Settings.saveSyncSettings()">💾 保存同步设置</button>
-                            <button class="btn-primary btn-sm" onclick="App.Settings.syncNow()" id="btn-sync-now" style="background:#27ae60;border-color:#1e8449">☁️ 立即同步</button>
+                            <button class="btn-primary btn-sm" onclick="App.Sync.openFileManager()" style="background:#4A90D9;border-color:#3a7bd5">📁 打开文件管理器</button>
+                            <button class="btn-primary btn-sm" onclick="App.Sync.syncNow()" id="btn-sync-now" style="background:#27ae60;border-color:#1e8449">☁️ 立即同步</button>
                         </div>
                         <div id="sync-status-info" style="margin-top:12px;font-size:12px;color:#888"></div>
                     </div></div>
@@ -224,7 +252,10 @@
     </main>
     <div class="modal-overlay" id="modal-overlay" onclick="App.Modal.closeOnOverlay(event)"><div class="modal" id="modal-container"><div class="modal-header"><h3 id="modal-title">标题</h3><button class="modal-close" onclick="App.Modal.close()">✕</button></div><div class="modal-body" id="modal-body"></div><div class="modal-footer" id="modal-footer"></div></div></div>
     <canvas id="fx-canvas"></canvas>
-    <iframe id="sync-frame" src="sync.html" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
+    <div id="file-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:200;justify-content:center;align-items:center" onclick="if(event.target===this)App.Sync.closeFileManager()">
+        <iframe id="fileManagerFrame" src="文件管理.HTML" style="width:780px;max-width:95vw;height:75vh;border:none;border-radius:10px;background:#fff"></iframe>
+    </div>
+    <iframe id="fileManagerBg" src="文件管理.HTML" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
     <script src="demo-data.js"></script>
     <script src="mode-rules.js"></script>
     <script src="app.js"></script>

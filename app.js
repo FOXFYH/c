@@ -215,7 +215,7 @@
             var html=filterHTML;
             var avMap=buildAvatarCharMap(filtered);
             html+='<table class="student-table readonly"><thead><tr>';
-            html+='<th>头像</th><th>姓名</th><th>积分</th><th>等级</th><th>正确率</th><th>性别</th><th>小组</th><th>场次</th>';
+            html+='<th>头像</th><th>姓名</th><th>积分</th><th>等级</th><th>正确率</th><th>正确/总题</th><th>性别</th><th>小组</th><th>场次</th>';
             html+='</tr></thead><tbody>';
             filtered.forEach(function(s){
                 var lv=getLevel(s.totalPoints);
@@ -225,6 +225,7 @@
                 html+='<td class="st-points-readonly" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看积分详情">⭐ '+s.totalPoints+'</td>';
                 html+='<td><span class="st-level-badge">'+lv.name+'</span></td>';
                 html+='<td>'+(s.totalCount>0?s.accuracy+'%':'-')+'</td>';
+                html+='<td>'+(s.totalCount>0?s.totalCorrect+'/'+s.totalCount:'-')+'</td>';
                 html+='<td>'+(s.gender||'-')+'</td>';
                 html+='<td>'+(s.group||'-')+'</td>';
                 html+='<td>'+s.sessions+'</td>';
@@ -259,11 +260,7 @@
                     body+='<div class="sh-session">';
                     body+='<div class="sh-session-header"><span class="sh-session-time">'+modeLabel+' · '+dateStr+'</span><span class="sh-session-score">+'+h.pointsEarned+' 分</span></div>';
                     body+='<div class="sh-session-detail">📚 '+bankStr+'</div>';
-                    if(h.mode==='pk'||h.mode==='group'){
-                        body+='<div class="sh-session-detail">'+(h.mode==='pk'?'PK':'小组')+'得分：'+h.pkScore+' 分</div>';
-                    }else{
-                        body+='<div class="sh-session-detail">答对 '+h.correctCount+'/'+h.totalCount+' · 正确率 '+pct+'%</div>';
-                    }
+                    body+='<div class="sh-session-detail">答对 '+h.correctCount+'/'+h.totalCount+' · 正确率 '+pct+'%</div>';
                     body+='</div>';
                 });
             }
@@ -403,7 +400,8 @@
                 groupMap:progress.groupMap||null,
                 groupScores:progress.groupScores||null,
                 _pointsPerQ:progress._pointsPerQ||null,
-                _isRetry:progress._isRetry||false
+                _isRetry:progress._isRetry||false,
+                _smartProbMap:progress._smartProbMap||null
             };
             if(progress.currentStudentId){
                 var cs=exam.students.find(function(s){return s.id===progress.currentStudentId});
@@ -444,6 +442,7 @@
             var ptabPersonal=document.getElementById('ptab-personal');
             var ptabGroup=document.getElementById('ptab-group');
             var isPractice=mode==='practice';
+            var isSmart=mode==='smart';
             if(lastPT==='group'){
                 if(groupArea)groupArea.style.display='';
                 if(studentArea)studentArea.style.display='none';
@@ -478,9 +477,17 @@
             var playerOrderGroup=playerOrderEl?playerOrderEl.closest('.option-group'):null;
             var questionOrderGroup=questionOrderEl?questionOrderEl.closest('.option-group'):null;
             var avgQGroup=avgQEl?avgQEl.closest('.option-group'):null;
-            if(playerOrderGroup)playerOrderGroup.style.display=isPractice?'none':'';
+            if(playerOrderGroup)playerOrderGroup.style.display=(isPractice||isSmart)?'none':'';
             if(questionOrderGroup)questionOrderGroup.style.display=isPractice?'none':'';
             if(avgQGroup)avgQGroup.style.display=isPractice?'none':'';
+            var smartGroup=document.getElementById('opt-group-smart');
+            if(smartGroup)smartGroup.style.display=isSmart?'':'none';
+            if(isSmart){
+                if(playerOrderEl)playerOrderEl.value='smart';
+                var intensityInput=document.getElementById('exam-smart-intensity');
+                if(intensityInput)intensityInput.value=settings.smartIntensity||5;
+                this._updateSmartPreview();
+            }
             App.Effects.playClick();
         },
         switchParticipation:function(type){
@@ -514,11 +521,11 @@
             var studentTitleEl=document.getElementById('student-select-title');
             if(titleEl)titleEl.textContent=label;
             if(btnIcon){
-                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝'};
+                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝',smart:'🧠'};
                 btnIcon.textContent=icons[mode]||'🎮';
             }
             if(pType==='personal'){
-                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 选择练习学生（仅限1人）'};
+                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 选择练习学生（仅限1人）',smart:'👥 参与人员（智能抽查）'};
                 if(studentTitleEl)studentTitleEl.textContent=titles[mode]||'👥 参与人员';
             }
         },
@@ -556,6 +563,8 @@
             if(playerOrderGroup)playerOrderGroup.style.display='';
             if(questionOrderGroup)questionOrderGroup.style.display='';
             if(avgQGroup)avgQGroup.style.display='';
+            var smartGroup=document.getElementById('opt-group-smart');
+            if(smartGroup)smartGroup.style.display='none';
             App.Effects.playClick();
         },
         renderGroupSelect:function(){
@@ -579,7 +588,7 @@
         toggleStudentSelect:function(el){var mode=this.currentMode;if(mode==='practice'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{document.querySelectorAll('.student-select-item.selected').forEach(function(other){if(other!==el){other.classList.remove('selected');other.querySelector('.check-mark').textContent=''}});el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else if(mode==='pk'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{var count=document.querySelectorAll('.student-select-item.selected').length;if(count>=8){App.Toast.show('PK最多选择8名选手','warning');return}el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else{el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':''}App.Effects.playClick()},
         getSelectedStudentIds:function(){var ids=[];document.querySelectorAll('.student-select-item.selected').forEach(function(el){ids.push(el.dataset.studentId)});return ids},
         selectAllStudents:function(){var mode=this.currentMode;var items=document.querySelectorAll('.student-select-item');var allSelected=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSelected=false});if(allSelected){items.forEach(function(el){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''})}else if(mode==='practice'){App.Toast.show('练习模式仅限选择1人','warning')}else if(mode==='pk'){var count=document.querySelectorAll('.student-select-item.selected').length;items.forEach(function(el){if(!el.classList.contains('selected')&&count<8){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓';count++}})}else{items.forEach(function(el){if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}})}App.Effects.playClick()},
-        startExam:function(){
+        startExam:async function(){
             var bankIds=App.Questions.getSelectedBankIds();
             if(bankIds.length===0){App.Toast.show('请至少选择一个题库','warning');return}
             var students=App.Storage.getStudents();
@@ -590,6 +599,7 @@
             var groupNames=[];
             var examStudents;
             var isPractice=mode==='practice';
+            var isSmart=mode==='smart';
             if(isPractice){
                 if(selectedIds.length!==1){App.Toast.show('练习模式请选择1名学生','warning');return}
                 if(bankIds.length!==1){App.Toast.show('练习模式请选择1个题库','warning');return}
@@ -625,7 +635,25 @@
             }
             examStudents=students.filter(function(s){return selectedIds.indexOf(s.id)!==-1});
             var banks=App.Storage.getBanks(),allQ=[];
-            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b)allQ=allQ.concat(b.questions)});
+            // 检查所选题库是否缺少题目内容（仅有索引），按需从云端下载
+            var missingBanks=[];
+            bankIds.forEach(function(bid){
+                var b=banks.find(function(x){return x.id===bid});
+                if(b&&(!b.questions||b.questions.length===0)){
+                    missingBanks.push(b);
+                }
+            });
+            if(missingBanks.length>0&&App.Sync&&App.Sync.ready){
+                App.Toast.show('正在下载题库内容...','info');
+                for(var mi=0;mi<missingBanks.length;mi++){
+                    var mb=missingBanks[mi];
+                    var bankMetaKey=mb.id||mb.name;
+                    App.Sync.postToFileManager({type:'downloadCloudFile',fileId:bankMetaKey});
+                }
+                await new Promise(function(resolve){setTimeout(resolve,3000)});
+                banks=App.Storage.getBanks();
+            }
+            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions)allQ=allQ.concat(b.questions)});
             if(allQ.length===0){App.Toast.show('所选题库中没有题目','warning');return}
             var timeLimit=0;
             var autoNext=App.Storage.getSettings().autoNext!==false;
@@ -644,7 +672,7 @@
                 App.Storage.setSettings(s);
             }
             var playerOrder=document.getElementById('exam-player-order').value;
-            if(!isPractice){
+            if(!isPractice&&!isSmart){
                 if(playerOrder==='fair'&&examStudents.length<3){App.Toast.show('公平随机至少需要3人','warning');return}
                 if(playerOrder==='random'&&examStudents.length<2){App.Toast.show('真随机至少需要2人','warning');return}
             }
@@ -663,10 +691,16 @@
             if(isPractice){
                 playerQueue=[];
                 for(var pi=0;pi<totalQuestionsNeeded;pi++)playerQueue.push(examStudents[0]);
+            }else if(isSmart){
+                playerOrder='smart';
+                playerQueue=this._buildSmartPlayerQueue(examStudents,totalQuestionsNeeded);
             }else{
                 playerQueue=this._buildPlayerQueue(examStudents,playerOrder,totalQuestionsNeeded,pType,groupNames,groupRotation);
             }
             var exam={mode:mode,participationType:pType,questions:questionPool,timeLimit:timeLimit,autoNext:autoNext,students:examStudents,currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:playerQueue,queueIndex:0,avgQuestions:avgQuestions,groupNames:groupNames,groupRotation:groupRotation,playerOrder:isPractice?'order':playerOrder,_pointsPerQ:isPractice?this._getInitialPointsPerQ(examStudents[0].id,bankIds[0]||''):0};
+            if(isSmart){
+                exam._smartProbMap=this._calcSmartProbPoints(examStudents);
+            }
             if(pType==='group'){
                 var groupMap={};examStudents.forEach(function(s){var g=s.group||'未分组';if(!groupMap[g])groupMap[g]=[];groupMap[g].push(s)});
                 exam.groupMap=groupMap;exam.groupScores={};
@@ -753,6 +787,70 @@
                 }
             }
         },
+        _calcSmartProbPoints:function(students){
+            var settings=App.Storage.getSettings();
+            var intensity=settings.smartIntensity||5;
+            var statsArr=[];
+            students.forEach(function(s){
+                var st=getStudentStats(s.id);
+                statsArr.push({id:s.id,accuracy:st.accuracy,totalCount:st.totalCount});
+            });
+            statsArr.sort(function(a,b){
+                if(a.totalCount===0&&b.totalCount===0)return 0;
+                if(a.totalCount===0)return 1;
+                if(b.totalCount===0)return -1;
+                return b.accuracy-a.accuracy;
+            });
+            var rankMap={};
+            for(var i=0;i<statsArr.length;i++){
+                rankMap[statsArr[i].id]=i+1;
+            }
+            var probMap={};
+            students.forEach(function(s){
+                var rank=rankMap[s.id]||students.length;
+                probMap[s.id]=100+(rank-1)*intensity;
+            });
+            return probMap;
+        },
+        _buildSmartPlayerQueue:function(students,needed){
+            var probMap=this._calcSmartProbPoints(students);
+            var totalProb=0;
+            students.forEach(function(s){totalProb+=probMap[s.id]});
+            var queue=[];
+            for(var i=0;i<needed;i++){
+                var rand=Math.random()*totalProb;
+                var cum=0;
+                for(var j=0;j<students.length;j++){
+                    cum+=probMap[students[j].id];
+                    if(rand<=cum){queue.push(students[j]);break}
+                }
+                if(queue.length<=i)queue.push(students[students.length-1]);
+            }
+            return queue;
+        },
+        _getSmartPointsPerQ:function(studentId){
+            var exam=this.currentExam;
+            if(!exam)return 1;
+            var students=exam.students;
+            var probMap=exam._smartProbMap||this._calcSmartProbPoints(students);
+            var probPoints=probMap[studentId]||100;
+            var basePoints=10;
+            return Math.max(1,Math.floor(basePoints/probPoints*100));
+        },
+        _updateSmartPreview:function(){
+            var intensityInput=document.getElementById('exam-smart-intensity');
+            var previewEl=document.getElementById('smart-preview');
+            var valueEl=document.getElementById('smart-intensity-value');
+            if(!intensityInput||!previewEl)return;
+            var intensity=parseInt(intensityInput.value)||5;
+            if(valueEl)valueEl.textContent=intensity;
+            var students=App.Storage.getStudents();
+            var lastProb=100+(students.length-1)*intensity;
+            previewEl.textContent='末名概率点数：'+lastProb+'（'+students.length+'人）';
+            var settings=App.Storage.getSettings();
+            settings.smartIntensity=intensity;
+            App.Storage.setSettings(settings);
+        },
         _nextPlayer:function(){
             var exam=this.currentExam;
             if(exam.queueIndex>=exam.playerQueue.length||exam.currentIndex>=exam.questions.length){
@@ -790,7 +888,7 @@
             document.getElementById('exam-student-group').textContent=student.group?'('+student.group+')':'';
             document.getElementById('exam-student-level').textContent=level.name;
             document.getElementById('exam-student-comment').textContent=level.comment;
-            document.getElementById('exam-student-points').textContent=exam.mode==='practice'?'待结算：'+(exam.playerScores[student.id]||0)+'⭐':'本场：'+(exam.playerScores[student.id]||0)+'⭐  累计：'+st.totalPoints+'⭐';
+            document.getElementById('exam-student-points').textContent=exam.mode==='practice'?'待结算：'+(exam.playerScores[student.id]||0)+'⭐':exam.mode==='smart'?'本场：'+(exam.playerScores[student.id]||0)+'⭐  累计：'+st.totalPoints+'⭐  概率：'+(exam._smartProbMap?exam._smartProbMap[student.id]:100)+'  分值：'+this._getSmartPointsPerQ(student.id):'本场：'+(exam.playerScores[student.id]||0)+'⭐  累计：'+st.totalPoints+'⭐';
             document.getElementById('exam-progress-text').textContent='第 '+(exam.currentIndex+1)+'/'+exam.questions.length+' 题 · 人均 '+(Math.round(exam.results.length/exam.students.length*10)/10)+'/'+exam.avgQuestions;
             document.getElementById('question-text').textContent=question.text;
             document.getElementById('question-options').innerHTML=this.renderOptionsHTML(question);
@@ -894,7 +992,13 @@
             document.querySelectorAll('.option-btn').forEach(function(btn){btn.classList.add('disabled');if(btn.dataset.option===correctAnswer)btn.classList.add('correct');if(btn.dataset.option===option&&!isCorrect)btn.classList.add('wrong')});
             var pointsEarned=0;
             if(isCorrect){
-                pointsEarned=exam.mode==='practice'?(exam._pointsPerQ||10):this._calcBasePoints(exam.mode);
+                if(exam.mode==='practice'){
+                    pointsEarned=exam._pointsPerQ||10;
+                }else if(exam.mode==='smart'){
+                    pointsEarned=this._getSmartPointsPerQ(exam.currentStudent.id);
+                }else{
+                    pointsEarned=this._calcBasePoints(exam.mode);
+                }
                 exam.totalEarned+=pointsEarned;
                 exam.playerScores[exam.currentStudent.id]=(exam.playerScores[exam.currentStudent.id]||0)+pointsEarned;
                 if(exam.participationType==='group'){var g=exam.currentStudent.group||'未分组';exam.groupScores[g]=(exam.groupScores[g]||0)+pointsEarned}
@@ -902,6 +1006,9 @@
                 if(exam.mode==='practice'){
                     App.Effects.showScorePopup(pointsEarned,true,'待结算');
                     document.getElementById('exam-student-points').textContent='待结算：'+(exam.playerScores[exam.currentStudent.id]||0)+'⭐';
+                }else if(exam.mode==='smart'){
+                    App.Effects.showScorePopup(pointsEarned,true);
+                    var st=getStudentStats(exam.currentStudent.id);var tempPts=st.totalPoints+pointsEarned;var lv=getLevel(tempPts);document.getElementById('exam-student-points').textContent='本场：'+(exam.playerScores[exam.currentStudent.id]||0)+'⭐  累计：'+tempPts+'⭐  概率：'+(exam._smartProbMap?exam._smartProbMap[exam.currentStudent.id]:100)+'  分值：'+pointsEarned;document.getElementById('exam-student-level').textContent=lv.name;document.getElementById('exam-student-comment').textContent=lv.comment
                 }else{
                     App.Effects.showScorePopup(pointsEarned,true);
                     var st=getStudentStats(exam.currentStudent.id);var tempPts=st.totalPoints+pointsEarned;var lv=getLevel(tempPts);document.getElementById('exam-student-points').textContent='本场：'+(exam.playerScores[exam.currentStudent.id]||0)+'⭐  累计：'+tempPts+'⭐';document.getElementById('exam-student-level').textContent=lv.name;document.getElementById('exam-student-comment').textContent=lv.comment
@@ -923,6 +1030,7 @@
             if(mode==='challenge')return 5;
             if(mode==='pk')return 5;
             if(mode==='practice')return 10;
+            if(mode==='smart')return 10;
             return 10;
         },
         _calcGroupMemberDisplay:function(groupCount){
@@ -958,6 +1066,7 @@
                 _pointsPerQ:exam._pointsPerQ||null,
                 _isRetry:exam._isRetry||false,
                 _bankIds:bankIds,
+                _smartProbMap:exam._smartProbMap||null,
                 savedAt:Date.now()
             };
             App.Storage.setExamProgress(progress);
@@ -1047,7 +1156,8 @@
                 groupMap:progress.groupMap||null,
                 groupScores:progress.groupScores||null,
                 _pointsPerQ:progress._pointsPerQ||null,
-                _isRetry:progress._isRetry||false
+                _isRetry:progress._isRetry||false,
+                _smartProbMap:progress._smartProbMap||null
             };
             if(progress.currentStudentId){
                 var cs=exam.students.find(function(s){return s.id===progress.currentStudentId});
@@ -1081,7 +1191,7 @@
             var bankIds=App.Questions.getSelectedBankIds();
             if(bankIds.length===0){App.Toast.show('题库未选择','warning');return}
             var banks=App.Storage.getBanks(),allQ=[];
-            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b)allQ=allQ.concat(b.questions)});
+            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions)allQ=allQ.concat(b.questions)});
             if(allQ.length===0){App.Toast.show('题库中没有题目','warning');return}
             var bankId=bankIds[0]||'';
             var wrongSet=App.Storage.getWrongSet(sid,bankId);
@@ -1149,9 +1259,7 @@
                     var nextPPQ=Math.max(1,Math.floor(ppq/2));
                     App.Storage.setWrongSet(sid,bid,{wrongQuestionIds:wrongIds,lastAttempt:Date.now(),bankId:bid,pendingPoints:originalPending+pendingPoints,nextPointsPerQ:nextPPQ,lastInitialPPQ:currentInitialPPQ});
                 }
-                var questionDetails=[];
-                exam.results.forEach(function(r,i){var question=null;banks.forEach(function(b){var q=b.questions.find(function(x){return x.id===r.questionId});if(q)question=q});if(question){questionDetails.push({index:i+1,text:question.text,answer:question.answer,studentId:r.studentId,studentName:(studentResults[r.studentId]||{}).name||'未知',selectedOption:r.selectedOption||'',correct:r.correct,pointsEarned:r.pointsEarned})}});
-                var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,timeLimit:exam.timeLimit,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,playerScores:exam.playerScores||{},groupScores:exam.groupScores||{},questionDetails:questionDetails,results:exam.results,practicePassed:allCorrect};
+                var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,practicePassed:allCorrect};
                 var records=App.Storage.getRecords();
                 records.push(record);App.Storage.setRecords(records);
                 if(allCorrect)App.Sync.syncNow();
@@ -1221,9 +1329,7 @@
                     });
                 }
             }
-            var questionDetails=[];
-            exam.results.forEach(function(r,i){var question=null;banks.forEach(function(b){var q=b.questions.find(function(x){return x.id===r.questionId});if(q)question=q});if(question){questionDetails.push({index:i+1,text:question.text,answer:question.answer,studentId:r.studentId,studentName:(studentResults[r.studentId]||{}).name||'未知',selectedOption:r.selectedOption||'',correct:r.correct,pointsEarned:r.pointsEarned})}});
-            var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,timeLimit:exam.timeLimit,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,playerScores:exam.playerScores||{},groupScores:exam.groupScores||{},questionDetails:questionDetails,results:exam.results};
+            var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults};
             var records=App.Storage.getRecords();records.push(record);App.Storage.setRecords(records);this.currentExam=null;
             App.Storage.clearExamProgress();
             App.Sync.syncNow();
@@ -1265,7 +1371,9 @@
         _renderGroupRanking:function(record){
             var podium=document.getElementById('leaderboard-podium');
             var list=document.getElementById('leaderboard-list');
-            var gScores=record.groupScores||{};
+            var srs=record.studentResults||{};
+            var gScores={};
+            Object.keys(srs).forEach(function(sid){var sr=srs[sid];if(sr.group){gScores[sr.group]=(gScores[sr.group]||0)+(sr.pointsEarned||0)}});
             var sortedGroups=Object.keys(gScores).filter(function(gn){return gScores[gn]>0}).sort(function(a,b){return gScores[b]-gScores[a]});
             var medals=['🥇','🥈','🥉'];
             var podiumOrder=[5,3,1,0,2,4,6];
@@ -1328,14 +1436,14 @@
         _renderGroupWinnerRanking:function(record){
             var podium=document.getElementById('leaderboard-podium');
             var list=document.getElementById('leaderboard-list');
-            var gScores=record.groupScores||{};
+            var srs=record.studentResults||{};
+            var gScores={};
+            Object.keys(srs).forEach(function(sid){var sr=srs[sid];if(sr.group){gScores[sr.group]=(gScores[sr.group]||0)+(sr.pointsEarned||0)}});
             var gNames=Object.keys(gScores);
             if(gNames.length===0){podium.innerHTML='';list.innerHTML='';return}
             var topGroup=gNames.sort(function(a,b){return gScores[b]-gScores[a]})[0];
-            var srs=record.studentResults||{};
-            var pScores=record.playerScores||{};
             var groupMembers=Object.keys(srs).filter(function(sid){return srs[sid].group===topGroup}).map(function(k){return srs[k]}).sort(function(a,b){
-                var sa=pScores[a.id]||a.pointsEarned||0;var sb=pScores[b.id]||b.pointsEarned||0;return sb-sa;
+                return(b.pointsEarned||0)-(a.pointsEarned||0);
             });
             var avMap=buildAvatarCharMap(groupMembers);
             var medals=['🥇','🥈','🥉'];
@@ -1351,9 +1459,7 @@
             var baseRankHeights=[140,110,95,80,60,50,35];
             var rankHeights=baseRankHeights.slice(0,podiumCount);
             for(var ri=1;ri<topN.length;ri++){
-                var sa=pScores[topN[ri].id]||topN[ri].pointsEarned||0;
-                var sb=pScores[topN[ri-1].id]||topN[ri-1].pointsEarned||0;
-                if(sa===sb){rankHeights[ri]=rankHeights[ri-1]}
+                if(topN[ri].pointsEarned===topN[ri-1].pointsEarned){rankHeights[ri]=rankHeights[ri-1]}
             }
             var podiumHTML='<div class="podium-stage">';
             for(var p=0;p<7;p++){
@@ -1363,7 +1469,7 @@
                 var h=idx<rankHeights.length?rankHeights[idx]:35;
                 var rank=idx+1;
                 var rankLabel=idx<3?medals[idx]:'#'+rank;
-                var pts=pScores[s.id]||s.pointsEarned||0;
+                var pts=s.pointsEarned||0;
                 podiumHTML+='<div class="podium-slot rank-'+rank+'">';
                 podiumHTML+='<div class="podium-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div>';
                 podiumHTML+='<div class="podium-name">'+s.name+'</div>';
@@ -1380,7 +1486,7 @@
                 listHTML+='<div class="remaining-list"><div class="remaining-grid">';
                 remaining.forEach(function(s,i){
                     var rank=podiumCount+i+1;
-                    var pts=pScores[s.id]||s.pointsEarned||0;
+                    var pts=s.pointsEarned||0;
                     listHTML+='<div class="flb-item"><div class="flb-rank">#'+rank+'</div><div class="flb-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div><div class="flb-name">'+s.name+'</div><div class="flb-level">'+topGroup+'</div><div class="flb-pts">⭐ '+pts+'</div></div>';
                 });
                 listHTML+='</div></div>';
@@ -1404,9 +1510,8 @@
             var podium=document.getElementById('leaderboard-podium');
             var list=document.getElementById('leaderboard-list');
             var srs=record.studentResults||{};
-            var pScores=record.playerScores||{};
             var sorted=Object.keys(srs).map(function(k){return srs[k]}).sort(function(a,b){
-                var sa=pScores[a.id]||a.pointsEarned||0;var sb=pScores[b.id]||b.pointsEarned||0;return sb-sa;
+                return(b.pointsEarned||0)-(a.pointsEarned||0);
             });
             var avMap=buildAvatarCharMap(sorted);
             var medals=['🥇','🥈','🥉'];
@@ -1422,9 +1527,7 @@
             var baseRankHeights=[140,110,95,80,60,50,35];
             var rankHeights=baseRankHeights.slice();
             for(var ri=1;ri<topN.length;ri++){
-                var sc_ri=pScores[topN[ri].id]||topN[ri].pointsEarned||0;
-                var sc_prev=pScores[topN[ri-1].id]||topN[ri-1].pointsEarned||0;
-                if(sc_ri===sc_prev){rankHeights[ri]=rankHeights[ri-1]}
+                if(topN[ri].pointsEarned===topN[ri-1].pointsEarned){rankHeights[ri]=rankHeights[ri-1]}
             }
             var podiumHeights=[];
             for(var pi=0;pi<7;pi++){var ridx=podiumOrder[pi];podiumHeights.push(ridx<rankHeights.length?rankHeights[ridx]:0)}
@@ -1433,7 +1536,7 @@
                 var idx=podiumOrder[p];
                 if(idx>=topN.length)continue;
                 var s=topN[idx];
-                var score=pScores[s.id]||s.pointsEarned||0;
+                var score=s.pointsEarned||0;
                 var h=podiumHeights[p];
                 var rank=idx+1;
                 var rankLabel=idx<3?medals[idx]:'#'+rank;
@@ -1452,7 +1555,7 @@
             if(remaining.length>0){
                 listHTML+='<div class="remaining-list"><div class="remaining-grid">';
                 remaining.forEach(function(s,i){
-                    var score=pScores[s.id]||s.pointsEarned||0;
+                    var score=s.pointsEarned||0;
                     var rank=podiumCount+i+1;
                     listHTML+='<div class="flb-item"><div class="flb-rank">#'+rank+'</div><div class="flb-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div><div class="flb-name">'+s.name+'</div><div class="flb-level">'+(s.group||'')+'</div><div class="flb-pts">⭐ '+score+'</div></div>';
                 });
@@ -1486,20 +1589,18 @@
                 html+='<div class="record-detail">';
                 var sKeys=Object.keys(srs);
                 if(rec.mode==='group'||rec.participationType==='group'){
-                    var gScores=rec.groupScores||{};var sortedGroups=Object.keys(gScores).sort(function(a,b){return gScores[b]-gScores[a]});
+                    var gScores={};
+                    sKeys.forEach(function(k){var sr=srs[k];if(sr.group){gScores[sr.group]=(gScores[sr.group]||0)+(sr.pointsEarned||0)}});
+                    var sortedGroups=Object.keys(gScores).sort(function(a,b){return gScores[b]-gScores[a]});
                     sortedGroups.forEach(function(gn,i){
                         var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
                         html+='<div class="record-student-row"><span class="record-student-name">'+medal+' 🏆 '+gn+'</span><span class="record-student-score">'+gScores[gn]+' 分</span></div>';
                     });
-                    sKeys.forEach(function(k){var sr=srs[k];var ps=(rec.playerScores||{})[sr.id]||0;html+='<div class="record-student-row"><span class="record-student-name">'+sr.name+(sr.group?' ('+sr.group+')':'')+'</span><span class="record-student-score">+'+ps+' 分</span></div>'});
-                }else if(rec.mode==='pk'){
-                    var pScores=rec.playerScores||{};var sorted=sKeys.map(function(k){return srs[k]}).sort(function(a,b){return(pScores[b.id]||0)-(pScores[a.id]||0)});
-                    sorted.forEach(function(sr,i){var ps=pScores[sr.id]||0;var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';html+='<div class="record-student-row"><span class="record-student-name">'+medal+' '+sr.name+'</span><span class="record-student-score">'+ps+' 分</span></div>'});
+                    sKeys.forEach(function(k){var sr=srs[k];html+='<div class="record-student-row"><span class="record-student-name">'+sr.name+(sr.group?' ('+sr.group+')':'')+'</span><span class="record-student-score">+'+sr.pointsEarned+' 分</span></div>'});
                 }else{
-                    sKeys.forEach(function(k){var sr=srs[k];var pct=sr.totalCount>0?Math.round(sr.correctCount/sr.totalCount*100):0;html+='<div class="record-student-row"><span class="record-student-name">'+sr.name+'<span class="record-student-detail">'+sr.correctCount+'/'+sr.totalCount+' 正确率 '+pct+'%</span></span><span class="record-student-score">+'+sr.pointsEarned+' 分</span></div>'});
+                    var sorted=sKeys.map(function(k){return srs[k]}).sort(function(a,b){return(b.pointsEarned||0)-(a.pointsEarned||0)});
+                    sorted.forEach(function(sr,i){var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';var pct=sr.totalCount>0?Math.round(sr.correctCount/sr.totalCount*100):0;html+='<div class="record-student-row"><span class="record-student-name">'+medal+' '+sr.name+'<span class="record-student-detail">'+sr.correctCount+'/'+sr.totalCount+' 正确率 '+pct+'%</span></span><span class="record-student-score">+'+sr.pointsEarned+' 分</span></div>'});
                 }
-                var qds=rec.questionDetails||[];
-                if(qds.length>0){html+='<div class="record-questions-list">';qds.forEach(function(qd){var cls=qd.correct?'correct':'wrong';html+='<div class="record-q-item '+cls+'">'+qd.index+'. ['+qd.studentName+'] '+qd.text+' → <strong>'+qd.answer+'</strong>'+(qd.correct?' ✅':' ❌ 你选'+qd.selectedOption)+' +'+qd.pointsEarned+'</div>'});html+='</div>'}
                 html+='</div></div>';
             });
             list.innerHTML=html;
@@ -1539,7 +1640,7 @@
         },
         getStudentHistory:function(studentId){
             var records=App.Storage.getRecords();var history=[];
-            records.forEach(function(rec){var srs=rec.studentResults||{};if(srs[studentId]){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:srs[studentId].correctCount,totalCount:srs[studentId].totalCount,pointsEarned:srs[studentId].pointsEarned,pkScore:(rec.playerScores||{})[studentId]||0})}});
+            records.forEach(function(rec){var srs=rec.studentResults||{};if(srs[studentId]){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:srs[studentId].correctCount,totalCount:srs[studentId].totalCount,pointsEarned:srs[studentId].pointsEarned})}});
             history.sort(function(a,b){return b.date-a.date});return history;
         }
     };
@@ -1622,7 +1723,7 @@
             var panel=document.getElementById('stab-'+tab);
             if(tabBtn)tabBtn.classList.add('active');
             if(panel)panel.classList.add('active');
-            if(tab==='records')App.Records.render();
+            if(tab==='records'){App.Records.render();this.updateIOCounts()}
             if(tab==='levels')this.renderLevels();
             if(tab==='sound')this.loadSoundSettings();
             if(tab==='ai')this.loadAISettings();
@@ -1760,40 +1861,10 @@
             App.Toast.show('音效设置已保存','success');
         },
         loadSyncSettings:function(){
-            var config=App.Sync._lastConfig;
-            if(!config){
-                try{config=JSON.parse(localStorage.getItem('exam_sync_config')||'null')}catch(e){config=null}
-            }
-            config=config||{};
-            var enabledEl=document.getElementById('sync-enabled');
-            var webhookEl=document.getElementById('sync-webhook-url');
-            var tokenEl=document.getElementById('sync-token');
-            var checkEl=document.getElementById('sync-check-interval');
-            var debounceEl=document.getElementById('sync-debounce');
-            var retryCountEl=document.getElementById('sync-retry-count');
-            var retryIntervalEl=document.getElementById('sync-retry-interval');
-            if(enabledEl)enabledEl.checked=config.enabled!==false;
-            if(webhookEl)webhookEl.value=config.webhookUrl||'';
-            if(tokenEl)tokenEl.value=config.token||'';
-            if(checkEl)checkEl.value=config.cloudCheckInterval||5;
-            if(debounceEl)debounceEl.value=config.syncDeltaInterval||3;
-            if(retryCountEl)retryCountEl.value=config.retryCount||5;
-            if(retryIntervalEl)retryIntervalEl.value=config.retryInterval||2;
             this.updateSyncStatus();
         },
         saveSyncSettings:function(){
-            var config={
-                enabled:document.getElementById('sync-enabled').checked,
-                webhookUrl:document.getElementById('sync-webhook-url').value.trim(),
-                token:document.getElementById('sync-token').value.trim(),
-                cloudCheckInterval:parseInt(document.getElementById('sync-check-interval').value)||5,
-                syncDeltaInterval:parseInt(document.getElementById('sync-debounce').value)||3,
-                retryCount:parseInt(document.getElementById('sync-retry-count').value)||5,
-                retryInterval:parseInt(document.getElementById('sync-retry-interval').value)||2
-            };
-            App.Sync.updateConfig(config);
-            App.Sync._lastConfig=config;
-            App.Toast.show('同步设置已保存','success');
+            App.Toast.show('同步设置请在文件管理器中修改','info');
         },
         syncNow:function(){
             var btn=document.getElementById('btn-sync-now');
@@ -1803,7 +1874,7 @@
         updateSyncStatus:function(){
             var el=document.getElementById('sync-status-info');
             if(!el)return;
-            var lastTime=parseInt(localStorage.getItem('exam_sync_last_time')||'0');
+            var lastTime=parseInt(localStorage.getItem('exam_last_sync_time')||'0');
             var statusText='未同步';
             if(lastTime>0){
                 var d=new Date(lastTime);
@@ -1811,50 +1882,57 @@
             }
             el.textContent=statusText;
         },
-        exportData:function(){
-            var data={
-                students:App.Storage.getStudents(),
-                banks:App.Storage.getBanks(),
-                records:App.Storage.getRecords(),
-                settings:App.Storage.getSettings(),
-                dataVersion:App.Storage.get('dataVersion',0)
-            };
+        exportDataType:function(type){
+            var data,label;
+            if(type==='students'){data=App.Storage.getStudents();label='学生信息'}
+            else if(type==='banks'){data=App.Storage.getBanks();label='题库文件'}
+            else if(type==='records'){data=App.Storage.getRecords();label='考试数据'}
+            else return;
             var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
             var url=URL.createObjectURL(blob);
             var a=document.createElement('a');
-            a.href=url;a.download='挑战系统数据_'+new Date().toISOString().slice(0,10)+'.json';
+            a.href=url;a.download=label+'_'+new Date().toISOString().slice(0,10)+'.json';
             a.click();URL.revokeObjectURL(url);
-            App.Toast.show('数据已导出','success');
+            App.Toast.show(label+'已导出','success');
         },
-        importData:function(){
-            var body='<div class="form-group"><label>选择备份文件</label><input type="file" id="inp-import-file" accept=".json"></div>';
-            body+='<div style="color:var(--warning);font-size:13px;margin-top:8px">⚠️ 导入将覆盖当前所有数据</div>';
-            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Settings.doImportData()">导入</button>';
-            App.Modal.open('📥 导入数据',body,footer);
+        importDataType:function(type){
+            var label=type==='students'?'学生信息':type==='banks'?'题库文件':'考试数据';
+            var body='<div class="form-group"><label>选择 '+label+' 备份文件</label><input type="file" id="inp-import-dtype-file" accept=".json"></div>';
+            body+='<div style="color:var(--warning);font-size:13px;margin-top:8px">⚠️ 导入将强制覆盖本地及云端'+label+'，此操作不可恢复！</div>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Settings.doImportDataType(\''+type+'\')">确认导入</button>';
+            App.Modal.open('📥 导入'+label,body,footer);
         },
-        doImportData:function(){
-            var fileInput=document.getElementById('inp-import-file');
+        doImportDataType:function(type){
+            var fileInput=document.getElementById('inp-import-dtype-file');
             if(!fileInput||!fileInput.files||!fileInput.files[0]){App.Toast.show('请选择文件','warning');return}
+            var label=type==='students'?'学生信息':type==='banks'?'题库文件':'考试数据';
             var reader=new FileReader();
             reader.onload=function(e){
                 try{
                     var data=JSON.parse(e.target.result);
-                    if(data.students)App.Storage.setStudents(data.students);
-                    if(data.banks)App.Storage.setBanks(data.banks);
-                    if(data.records)App.Storage.setRecords(data.records);
-                    if(data.settings)App.Storage.setSettings(data.settings);
-                    if(data.dataVersion)App.Storage.set('dataVersion',data.dataVersion);
+                    if(!Array.isArray(data)){App.Toast.show('文件格式错误：需要JSON数组','error');return}
+                    if(type==='students'){App.Storage.setStudents(data);App.Students.render()}
+                    else if(type==='banks'){App.Storage.setBanks(data);App.Questions.render()}
+                    else if(type==='records'){App.Storage.setRecords(data);App.Records.render();App.Leaderboard.render();App.Students.render()}
                     App.Modal.close();
-                    App.Students.render();
-                    App.Questions.render();
-                    App.Leaderboard.render();
-                    App.Settings.renderLevels();
-                    App.Toast.show('数据导入成功','success');
+                    App.Settings.updateIOCounts();
+                    App.Toast.show(label+'导入成功，已覆盖本地及云端','success');
                 }catch(err){
                     App.Toast.show('导入失败：文件格式错误','error');
                 }
             };
             reader.readAsText(fileInput.files[0]);
+        },
+        updateIOCounts:function(){
+            var students=App.Storage.getStudents();
+            var banks=App.Storage.getBanks();
+            var records=App.Storage.getRecords();
+            var el1=document.getElementById('io-count-students');
+            var el2=document.getElementById('io-count-banks');
+            var el3=document.getElementById('io-count-records');
+            if(el1)el1.textContent=students.length+'人';
+            if(el2)el2.textContent=banks.length+'个题库';
+            if(el3)el3.textContent=records.length+'场';
         },
         clearRecords:function(){
             if(!confirm('⚠️ 确定要清空所有场次数据吗？此操作不可恢复！'))return;
@@ -1868,7 +1946,7 @@
             if(!confirm('⚠️ 确定要重置所有数据吗？此操作不可恢复！'))return;
             if(!confirm('再次确认：所有学生、题库、记录将被删除！'))return;
             var keys=Object.keys(localStorage);
-            keys.forEach(function(k){if(k.indexOf('exam_')===0&&k.indexOf('exam_sync_')!==0)localStorage.removeItem(k)});
+            keys.forEach(function(k){if(k.indexOf('exam_')===0&&k.indexOf('exam_file_')!==0&&k.indexOf('exam_sync_config')!==0&&k.indexOf('exam_last_sync')!==0&&k.indexOf('exam_device_id')!==0&&k.indexOf('exam_auth_')!==0)localStorage.removeItem(k)});
             App.Storage.ensureDefaults();
             App.Students.render();
             App.Questions.render();
@@ -2094,96 +2172,284 @@
     App.Sync = {
         frame:null,
         ready:false,
-        pendingMessages:[],
-        _lastConfig:null,
+        _isFileManagerOpen:false,
+        _currentFileName:'',
+        _pulling:false,
         init:function(){
-            this.frame=document.getElementById('sync-frame');
+            this.frame=document.getElementById('fileManagerBg');
             if(!this.frame)return;
             var self=this;
             window.addEventListener('message',function(e){
                 if(!e.data||typeof e.data!=='object')return;
                 var msg=e.data;
+                if(!msg.type)return;
                 switch(msg.type){
-                    case 'syncReady':
-                        self.ready=true;
-                        self.sendToFrame({target:'examSync',type:'init'});
-                        for(var i=0;i<self.pendingMessages.length;i++){
-                            self.sendToFrame(self.pendingMessages[i]);
-                        }
-                        self.pendingMessages=[];
+                    case 'openFile':
+                        self._onOpenFile(msg);
                         break;
-                    case 'dataUpdated':
-                        App.Storage._syncSilent=true;
-                        try{
-                            if(msg.dataType==='students'){
-                                App.Storage.set('students',msg.data);
-                                App.Students.render();
-                                if(App.Settings&&App.Settings.StudentMgmt&&App.Settings.StudentMgmt.render)App.Settings.StudentMgmt.render();
-                            }else if(msg.dataType==='records'){
-                                App.Storage.set('records',msg.data);
-                                if(App.Settings&&App.Settings.renderRecords)App.Settings.renderRecords();
-                            }else if(msg.dataType==='banks'){
-                                App.Storage.set('banks',msg.data);
-                                App.Questions.render();
-                            }else if(msg.dataType==='levels'){
-                                var curSettings=App.Storage.getSettings();
-                                curSettings.levels=msg.data;
-                                App.Storage.set('settings',curSettings);
-                                if(App.Settings&&App.Settings.renderLevels)App.Settings.renderLevels();
-                            }
-                        }finally{
-                            App.Storage._syncSilent=false;
-                        }
+                    case 'fileContentUpdated':
+                        self._onFileContentUpdated(msg);
                         break;
-                    case 'syncStatus':
+                    case 'fileDeleted':
+                        self._onFileDeleted(msg);
+                        break;
+                    case 'fileRenamed':
+                        self._onFileRenamed(msg);
+                        break;
+                    case 'closeFileManager':
+                        self._isFileManagerOpen=false;
+                        var modal=document.getElementById('file-modal');
+                        if(modal)modal.style.display='none';
+                        break;
+                    case 'syncStatusChanged':
                         var btn=document.getElementById('btn-sync-now');
-                        if(msg.status==='syncing'){
-                            if(btn){btn.disabled=true;btn.textContent='⏳ 同步中...'}
-                        }else{
-                            if(btn){btn.disabled=false;btn.textContent='☁️ 立即同步'}
+                        if(btn){
+                            if(msg.icon==='🔄'||msg.icon==='⏳'){btn.disabled=true;btn.textContent='⏳ 同步中...'}
+                            else{btn.disabled=false;btn.textContent='☁️ 立即同步'}
                         }
                         if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
                         break;
-                    case 'syncConfig':
-                        if(msg.config)self._lastConfig=msg.config;
+                    case 'syncToast':
+                        if(!self._isFileManagerOpen)App.Toast.show(msg.message||'','info');
+                        break;
+                    case 'registerResult':
+                        console.log('[Sync] 注册结果:',msg.success,msg.name,msg.id);
+                        break;
+                    case 'importResult':
+                        console.log('[Sync] 导入结果:',msg.success,msg.name,msg.id);
+                        break;
+                    case 'syncComplete':
+                        if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
+                        if(!self._pulling)self.pullAllCloudContent();
                         break;
                 }
             });
             document.addEventListener('visibilitychange',function(){
                 if(!document.hidden&&self.ready){
-                    self.sendToFrame({target:'examSync',type:'syncNow'});
+                    self.postToFileManager({type:'mainActivated'});
                 }
             });
             setTimeout(function(){
-                if(!self.ready&&self.frame&&self.frame.contentWindow){
-                    self.sendToFrame({target:'examSync',type:'ping'});
-                }
-            },2000);
+                self.migrateOldData();
+                self.postToFileManager({type:'initConfig',appPrefix:'exam'});
+                self.postToFileManager({type:'mainReady'});
+                self.ready=true;
+                self.syncAll();
+            },1500);
         },
-        sendToFrame:function(msg){
-            if(this.frame&&this.frame.contentWindow){
-                try{this.frame.contentWindow.postMessage(msg,'*')}catch(e){}
+        getFrame:function(){
+            if(this._isFileManagerOpen)return document.getElementById('fileManagerFrame');
+            return document.getElementById('fileManagerBg');
+        },
+        postToFileManager:function(msg){
+            var frame=this.getFrame();
+            if(frame&&frame.contentWindow){
+                try{frame.contentWindow.postMessage(Object.assign({target:'fileManager'},msg),'*')}catch(e){}
             }
+        },
+        _getFileNameForDataType:function(dataType,bankName){
+            if(dataType==='students')return '系统-学生信息';
+            if(dataType==='records')return '系统-考试数据';
+            if(dataType==='levels')return '系统-等级设置';
+            if(dataType==='bank'&&bankName)return bankName;
+            return null;
+        },
+        _getDataTypeForFileName:function(fileName){
+            if(fileName==='系统-学生信息')return 'students';
+            if(fileName==='系统-考试数据')return 'records';
+            if(fileName==='系统-等级设置')return 'levels';
+            if(fileName!=='')return 'bank';
+            return null;
+        },
+        _getContentForDataType:function(dataType){
+            if(dataType==='students')return JSON.stringify(App.Storage.getStudents());
+            if(dataType==='records')return JSON.stringify(App.Storage.getRecords());
+            if(dataType==='levels')return JSON.stringify(App.Storage.getSettings().levels||[]);
+            return null;
+        },
+        _getFileIdForDataType:function(dataType){
+            if(dataType==='students')return 'EXAM_SYS_STUDENT_INFO';
+            if(dataType==='records')return 'EXAM_SYS_RECORDS';
+            if(dataType==='levels')return 'EXAM_SYS_LEVELS';
+            return null;
+        },
+        _applyContentToApp:function(dataType,content){
+            try{
+                var data=JSON.parse(content);
+                App.Storage._syncSilent=true;
+                try{
+                    if(dataType==='students'){
+                        App.Storage.set('students',data);
+                        App.Students.render();
+                        if(App.Settings&&App.Settings.StudentMgmt&&App.Settings.StudentMgmt.render)App.Settings.StudentMgmt.render();
+                    }else if(dataType==='records'){
+                        App.Storage.set('records',data);
+                        if(App.Settings&&App.Settings.renderRecords)App.Settings.renderRecords();
+                    }else if(dataType==='levels'){
+                        var curSettings=App.Storage.getSettings();
+                        curSettings.levels=data;
+                        App.Storage.set('settings',curSettings);
+                        if(App.Settings&&App.Settings.renderLevels)App.Settings.renderLevels();
+                    }else if(dataType==='bank'){
+                        if(data&&data.id){
+                            var existingBanks=App.Storage.getBanks();
+                            var bankId=data.id;
+                            var idx=existingBanks.findIndex(function(b){return b.id===bankId});
+                            if(idx>=0){existingBanks[idx]=data}
+                            else{existingBanks.push(data)}
+                            App.Storage.set('banks',existingBanks);
+                            App.Questions.render();
+                        }
+                    }
+                }finally{
+                    App.Storage._syncSilent=false;
+                }
+            }catch(e){console.error('[Sync] 应用内容失败:',e)}
+        },
+        _onOpenFile:function(msg){
+            if(!msg.name)return;
+            var dataType=this._getDataTypeForFileName(msg.name);
+            if(dataType&&msg.content!==undefined){
+                this._applyContentToApp(dataType,msg.content);
+            }
+        },
+        _onFileContentUpdated:function(msg){
+            if(!msg.name)return;
+            var dataType=this._getDataTypeForFileName(msg.name);
+            if(dataType&&msg.content!==undefined){
+                this._applyContentToApp(dataType,msg.content);
+            }
+        },
+        _onFileDeleted:function(msg){
+            if(!msg.name)return;
+            var dataType=this._getDataTypeForFileName(msg.name);
+            if(dataType==='bank'){
+                var bankId=msg.name.replace('题库-','');
+                var banks=App.Storage.getBanks().filter(function(b){return b.id!==bankId&&b.name!==bankId});
+                App.Storage._syncSilent=true;
+                try{App.Storage.set('banks',banks);App.Questions.render()}finally{App.Storage._syncSilent=false}
+            }
+        },
+        _onFileRenamed:function(msg){
+            // 文件重命名暂不处理
         },
         notifyChange:function(dataType,data){
-            var delay=(this._lastConfig&&this._lastConfig.syncDeltaInterval||3)*1000;
-            if(!this.ready){
-                this.pendingMessages.push({target:'examSync',type:'dataChanged',dataType:dataType,data:data,debounce:delay});
-                return;
+            if(!this.ready)return;
+            var prefix='exam';
+            if(dataType==='banks'){
+                var banks=App.Storage.getBanks();
+                var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                banks.forEach(function(b){
+                    var bankId=b.id||b.name;
+                    var fileName=b.name||bankId;
+                    var content=JSON.stringify(b);
+                    var existing=fileIndex.find(function(x){return x.id===bankId});
+                    if(existing){
+                        existing.version=(existing.version||0)+1;
+                        existing.contentLength=content.length;
+                        existing.lastEditTime=new Date().toLocaleString('zh-CN');
+                        try{localStorage.setItem(prefix+'_file_id_'+existing.id,JSON.stringify({data:content,view:null}))}catch(e){}
+                    }else{
+                        fileIndex.push({name:fileName,id:bankId,version:0,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:'',contentLength:content.length});
+                        try{localStorage.setItem(prefix+'_file_id_'+bankId,JSON.stringify({data:content,view:null}))}catch(e){}
+                    }
+                });
+                try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}
+                this.postToFileManager({type:'contentChanged'});
+            }else{
+                var fileName=this._getFileNameForDataType(dataType);
+                var content=this._getContentForDataType(dataType);
+                if(fileName&&content){
+                    var fileIndex2=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                    var existing2=fileIndex2.find(function(x){return x.name===fileName});
+                    if(existing2){
+                        existing2.contentLength=content.length;
+                        existing2.lastEditTime=new Date().toLocaleString('zh-CN');
+                        try{localStorage.setItem(prefix+'_file_id_'+existing2.id,JSON.stringify({data:content,view:null}))}catch(e){}
+                    }else{
+                        var id=this._getFileIdForDataType(dataType);
+                        fileIndex2.push({name:fileName,id:id,version:0,lastSyncVersion:0,isNewFile:true,folder:'系统',owner:'',createTime:'',lastUploadTime:'',lastEditTime:'',contentLength:content.length});
+                        try{localStorage.setItem(prefix+'_file_id_'+id,JSON.stringify({data:content,view:null}))}catch(e){}
+                    }
+                    try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex2))}catch(e){}
+                    this.postToFileManager({type:'contentChanged'});
+                }
             }
-            this.sendToFrame({target:'examSync',type:'dataChanged',dataType:dataType,data:data,debounce:delay});
         },
         syncNow:function(){
-            this.sendToFrame({target:'examSync',type:'syncNow'});
+            this.postToFileManager({type:'syncAllFiles'});
         },
-        getConfig:function(){
-            this.sendToFrame({target:'examSync',type:'getConfig'});
+        syncAll:function(){
+            this.postToFileManager({type:'syncAllFiles'});
         },
         updateConfig:function(config){
-            this.sendToFrame({target:'examSync',type:'updateConfig',config:config});
+            this.postToFileManager({type:'initConfig',config:config});
         },
         deleteBank:function(bankKey){
-            this.sendToFrame({target:'examSync',type:'deleteBank',bankKey:bankKey});
+            var banks=App.Storage.getBanks();
+            var bank=banks.find(function(b){return b.id===bankKey||b.name===bankKey});
+            var fileName=bank?bank.name:bankKey;
+            var fileId=bank?bank.id:bankKey;
+            this.postToFileManager({type:'fileDeleted_local',fileId:fileId});
+        },
+        openFileManager:function(){
+            this._isFileManagerOpen=true;
+            var modal=document.getElementById('file-modal');
+            if(modal)modal.style.display='flex';
+            var frame=document.getElementById('fileManagerFrame');
+            if(frame&&frame.contentWindow){
+                frame.contentWindow.postMessage({target:'fileManager',type:'open'},'*');
+            }
+        },
+        closeFileManager:function(){
+            this._isFileManagerOpen=false;
+            var modal=document.getElementById('file-modal');
+            if(modal)modal.style.display='none';
+        },
+        pullAllCloudContent:function(){
+            var prefix='exam';
+            var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+            var self=this;
+            var needPull=fileIndex.filter(function(f){return f.cloudOnly||f.contentLength===0||f.isNewFile});
+            if(needPull.length===0)return;
+            console.log('[Sync] 需要拉取内容的文件：'+needPull.length+'个');
+            self._pulling=true;
+            needPull.forEach(function(f){
+                self.postToFileManager({type:'downloadCloudFile',fileId:f.id,fileName:f.name});
+            });
+            setTimeout(function(){self._pulling=false},15000);
+        },
+        migrateOldData:function(){
+            try{
+                var migrated=localStorage.getItem('exam_sync_migrated_v2');
+                if(migrated)return;
+                var banks=App.Storage.getBanks();
+                var students=App.Storage.getStudents();
+                var records=App.Storage.getRecords();
+                var levels=App.Storage.getSettings().levels||[];
+                var fileIndex=[];
+                var prefix='exam';
+                banks.forEach(function(b){
+                    var id=b.id||('QB_'+Math.floor(1000000000+Math.random()*9000000000));
+                    var name=b.name||id;
+                    var content=JSON.stringify(b);
+                    var fileId=id;
+                    fileIndex.push({name:name,id:fileId,version:0,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:'',contentLength:content.length});
+                    try{localStorage.setItem(prefix+'_file_id_'+fileId,JSON.stringify({data:content,view:null}))}catch(e){}
+                });
+                var sysFiles=[
+                    {key:'EXAM_SYS_STUDENT_INFO',name:'系统-学生信息',content:JSON.stringify(students),folder:'系统'},
+                    {key:'EXAM_SYS_RECORDS',name:'系统-考试数据',content:JSON.stringify(records),folder:'系统'},
+                    {key:'EXAM_SYS_LEVELS',name:'系统-等级设置',content:JSON.stringify(levels),folder:'系统'}
+                ];
+                sysFiles.forEach(function(f){
+                    fileIndex.push({name:f.name,id:f.key,version:0,lastSyncVersion:0,isNewFile:true,folder:f.folder,owner:'',createTime:'',lastUploadTime:'',lastEditTime:'',contentLength:f.content.length});
+                    try{localStorage.setItem(prefix+'_file_id_'+f.key,JSON.stringify({data:f.content,view:null}))}catch(e){}
+                });
+                try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}
+                localStorage.setItem('exam_sync_migrated_v2','1');
+                console.log('[Sync] 旧数据迁移完成，共'+fileIndex.length+'个文件');
+            }catch(e){console.error('[Sync] 迁移失败:',e)}
         }
     };
 
