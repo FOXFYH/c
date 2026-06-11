@@ -69,6 +69,11 @@
         getWrongSet:function(studentId,bankId){var all=this.getWrongSets();return all[studentId+'_'+bankId]||null},
         setWrongSet:function(studentId,bankId,data){var all=this.getWrongSets();all[studentId+'_'+bankId]=data;this.setWrongSets(all)},
         clearWrongSet:function(studentId,bankId){var all=this.getWrongSets();delete all[studentId+'_'+bankId];this.setWrongSets(all)},
+        getAbsences:function(){return this.get('absences',{})},
+        setAbsences:function(a){this.set('absences',a)},
+        getAbsence:function(studentId){var all=this.getAbsences();return all[studentId]||null},
+        setAbsence:function(studentId,data){var all=this.getAbsences();all[studentId]=data;this.setAbsences(all)},
+        clearAbsence:function(studentId){var all=this.getAbsences();delete all[studentId];this.setAbsences(all)},
         getSettings:function(){
             return this.get('settings',{
                 levels:[
@@ -83,7 +88,22 @@
                 shuffleOptions:true,baseTimeout:30,charTimeoutCompensation:0.2,autoNext:true,drawAnimation:true,drawDuration:3
             });
         },
-        setSettings:function(s){this.set('settings',s);if(s&&s.levels&&!this._syncSilent)App.Sync.notifyChange('levels',s.levels)},
+        setSettings:function(s){
+            var oldSettings=this.getSettings();
+            var oldLevels=oldSettings.levels;
+            var oldAiConfig={aiApiUrl:oldSettings.aiApiUrl,aiApiKey:oldSettings.aiApiKey,aiModel:oldSettings.aiModel};
+            this.set('settings',s);
+            if(!this._syncSilent){
+                var newLevels=s&&s.levels;
+                var newAiConfig=s?{aiApiUrl:s.aiApiUrl,aiApiKey:s.aiApiKey,aiModel:s.aiModel}:null;
+                if(JSON.stringify(oldLevels)!==JSON.stringify(newLevels)&&newLevels){
+                    App.Sync.notifyChange('levels',newLevels);
+                }
+                if(JSON.stringify(oldAiConfig)!==JSON.stringify(newAiConfig)&&newAiConfig){
+                    App.Sync.notifyChange('aiConfig',newAiConfig);
+                }
+            }
+        },
         getGroups:function(){
             var students=this.getStudents();
             var groups={};
@@ -270,7 +290,7 @@
     };
 
     App.Questions = {
-        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');if(banks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var html='';banks.forEach(function(b){html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+b.name+'</div><div class="bc-count">('+b.questions.length+'道题)</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});grid.innerHTML=html},
+        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');if(banks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var html='';banks.forEach(function(b){var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'';var fi=fileIndex.find(function(x){return x.id===b.id||x.id===b.name});if(!hasContent&&fi){countText=fi.cloudOnly?'☁️ 未下载':'已缓存'}else if(!hasContent){countText='空题库'}html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+b.name+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});grid.innerHTML=html},
         renderBankSelect:function(){var banks=App.Storage.getBanks();var info=document.getElementById('exam-bank-info');if(!info)return;if(banks.length===0){info.textContent='暂无题库，请先创建';return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var matched=banks.filter(function(b){return lastIds.indexOf(b.id)>=0});if(matched.length>0){info.textContent=matched.map(function(b){return b.name}).join('、')+'（'+matched.reduce(function(s,b){return s+b.questions.length},0)+' 题）'}else{info.textContent='点击选择题库'}},
         showBankSelectModal:function(){var banks=App.Storage.getBanks();if(banks.length===0){App.Toast.show('暂无题库，请先在题库中创建','warning');return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var isPractice=App.Exam.currentMode==='practice';var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';body+='</div>'});body+='</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
         toggleModalBank:function(el,single){if(single){document.querySelectorAll('.bank-modal-item.selected').forEach(function(item){if(item!==el){item.classList.remove('selected');item.querySelector('.bank-modal-check').textContent=''}})}el.classList.toggle('selected');el.querySelector('.bank-modal-check').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
@@ -283,7 +303,22 @@
         showEditBankDialog:function(id){var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" value="'+b.name+'"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" value="'+(b.description||'')+'"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.updateBank(\''+id+'\')">保存</button>';App.Modal.open('编辑题库',body,footer)},
         updateBank:function(id){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;b.name=name;b.description=desc;App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库信息已更新','success')},
         removeBank:function(id){if(!confirm('确定要删除该题库及其所有题目吗？'))return;var banks=App.Storage.getBanks();var deleted=banks.find(function(x){return x.id===id});var remaining=banks.filter(function(x){return x.id!==id});App.Storage.setBanks(remaining);if(deleted)App.Sync.deleteBank(deleted.id||deleted.name);this.render();App.Toast.show('题库已删除','info')},
-        openBankManager:function(id){var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" value="'+b.name.replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" value="'+(b.description||'').replace(/"/g,'&quot;')+'"></div><hr style="border-color:rgba(108,92,231,0.2);margin:12px 0"><div class="question-preview-list">';b.questions.forEach(function(q,i){body+='<div class="qp-item"><div class="qp-text">'+(i+1)+'. '+q.text+'</div><div class="qp-options">';['A','B','C','D'].forEach(function(l){if(q.options[l])body+='<span style="margin-right:12px">'+l+'. '+q.options[l]+'</span>'});body+='</div><div class="qp-answer">正确答案：'+q.answer+' | 分值：'+q.points+'分</div><div class="qp-actions"><button class="btn-sm" onclick="App.Questions.editQuestion(\''+id+'\',\''+q.id+'\')">✏️ 编辑</button><button class="btn-sm btn-del" onclick="App.Questions.deleteQuestion(\''+id+'\',\''+q.id+'\')">🗑️ 删除</button></div></div>'});body+='</div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">关闭</button><button class="btn-primary" onclick="App.Questions.updateBankFromManager(\''+id+'\')">💾 保存题库信息</button>';App.Modal.open('📋 '+b.name+' ('+b.questions.length+'道题)',body,footer)},
+        openBankManager:async function(id){
+            var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;
+            // 题库内容为空（仅有索引），按需从云端下载
+            if((!b.questions||b.questions.length===0)&&App.Sync&&App.Sync.ready){
+                App.Toast.show('正在下载题库内容...','info');
+                App.Sync.postToFileManager({type:'downloadCloudFile',fileId:b.id||b.name});
+                var waitStart=Date.now();
+                while(Date.now()-waitStart<10000){
+                    await new Promise(function(r){setTimeout(r,500)});
+                    var freshBanks=App.Storage.getBanks();
+                    var freshBank=freshBanks.find(function(x){return x.id===id});
+                    if(freshBank&&freshBank.questions&&freshBank.questions.length>0){b=freshBank;break}
+                }
+                if(!b.questions||b.questions.length===0){App.Toast.show('题库下载失败，请检查网络','warning');return}
+            }
+            var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" value="'+b.name.replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" value="'+(b.description||'').replace(/"/g,'&quot;')+'"></div><hr style="border-color:rgba(108,92,231,0.2);margin:12px 0"><div class="question-preview-list">';b.questions.forEach(function(q,i){body+='<div class="qp-item"><div class="qp-text">'+(i+1)+'. '+q.text+'</div><div class="qp-options">';['A','B','C','D'].forEach(function(l){if(q.options[l])body+='<span style="margin-right:12px">'+l+'. '+q.options[l]+'</span>'});body+='</div><div class="qp-answer">正确答案：'+q.answer+' | 分值：'+q.points+'分</div><div class="qp-actions"><button class="btn-sm" onclick="App.Questions.editQuestion(\''+id+'\',\''+q.id+'\')">✏️ 编辑</button><button class="btn-sm btn-del" onclick="App.Questions.deleteQuestion(\''+id+'\',\''+q.id+'\')">🗑️ 删除</button></div></div>'});body+='</div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">关闭</button><button class="btn-primary" onclick="App.Questions.updateBankFromManager(\''+id+'\')">💾 保存题库信息</button>';App.Modal.open('📋 '+b.name+' ('+b.questions.length+'道题)',body,footer)},
         updateBankFromManager:function(id){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;b.name=name;b.description=desc;App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库信息已更新','success')},
         editQuestion:function(bankId,qId){var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;var q=bank.questions.find(function(x){return x.id===qId});if(!q)return;var body='<div class="form-group"><label>题目内容</label><textarea id="inp-eq-text" rows="3">'+q.text+'</textarea></div><div class="form-group"><label>选项A</label><input type="text" id="inp-eq-a" value="'+(q.options.A||'').replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>选项B</label><input type="text" id="inp-eq-b" value="'+(q.options.B||'').replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>选项C</label><input type="text" id="inp-eq-c" value="'+(q.options.C||'').replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>选项D</label><input type="text" id="inp-eq-d" value="'+(q.options.D||'').replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>正确答案</label><select id="inp-eq-answer"><option value="A"'+(q.answer==='A'?' selected':'')+'>A</option><option value="B"'+(q.answer==='B'?' selected':'')+'>B</option><option value="C"'+(q.answer==='C'?' selected':'')+'>C</option><option value="D"'+(q.answer==='D'?' selected':'')+'>D</option></select></div><div class="form-group"><label>分值</label><input type="number" id="inp-eq-points" value="'+q.points+'" min="1" max="100" style="width:80px"></div>';var footer='<button class="btn-secondary" onclick="App.Questions.openBankManager(\''+bankId+'\')">取消</button><button class="btn-primary" onclick="App.Questions.saveEditQuestion(\''+bankId+'\',\''+qId+'\')">保存</button>';App.Modal.open('✏️ 编辑题目',body,footer)},
         saveEditQuestion:function(bankId,qId){var text=document.getElementById('inp-eq-text').value.trim();if(!text){App.Toast.show('请输入题目内容','warning');return}var a=document.getElementById('inp-eq-a').value.trim();var b=document.getElementById('inp-eq-b').value.trim();if(!a||!b){App.Toast.show('至少填写选项A和B','warning');return}var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;var q=bank.questions.find(function(x){return x.id===qId});if(!q)return;q.text=text;q.options={A:a,B:b,C:document.getElementById('inp-eq-c').value.trim(),D:document.getElementById('inp-eq-d').value.trim()};q.answer=document.getElementById('inp-eq-answer').value;q.points=parseInt(document.getElementById('inp-eq-points').value)||10;App.Storage.setBanks(banks);App.Modal.close();this.openBankManager(bankId);App.Toast.show('题目已更新','success')},
@@ -644,13 +679,21 @@
                 }
             });
             if(missingBanks.length>0&&App.Sync&&App.Sync.ready){
-                App.Toast.show('正在下载题库内容...','info');
+                App.Toast.show('正在下载题库内容（'+missingBanks.length+'个）...','info');
                 for(var mi=0;mi<missingBanks.length;mi++){
                     var mb=missingBanks[mi];
                     var bankMetaKey=mb.id||mb.name;
+                    // 串行下载，每个等待完成
                     App.Sync.postToFileManager({type:'downloadCloudFile',fileId:bankMetaKey});
+                    // 等待题库内容下载到本地（轮询检查，最多等10秒）
+                    var waitStart=Date.now();
+                    while(Date.now()-waitStart<10000){
+                        await new Promise(function(r){setTimeout(r,500)});
+                        var freshBanks=App.Storage.getBanks();
+                        var freshBank=freshBanks.find(function(x){return x.id===mb.id});
+                        if(freshBank&&freshBank.questions&&freshBank.questions.length>0)break;
+                    }
                 }
-                await new Promise(function(resolve){setTimeout(resolve,3000)});
                 banks=App.Storage.getBanks();
             }
             bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions)allQ=allQ.concat(b.questions)});
@@ -688,14 +731,27 @@
                 questionPool=this._buildQuestionPool(allQ,totalQuestionsNeeded,questionOrder);
             }
             var playerQueue;
+            // 过滤今日缺勤的学生（所有模式通用）
+            var settings=App.Storage.getSettings();
+            var absenceEnabled=settings.absenceCompensation!==false;
+            var today=new Date();var todayStr=today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+            var availableStudents=examStudents;
+            if(absenceEnabled&&!isPractice){
+                availableStudents=examStudents.filter(function(s){
+                    var absence=App.Storage.getAbsence(s.id);
+                    if(!absence)return true;
+                    return absence.lastAbsentDate!==todayStr;
+                });
+                if(availableStudents.length===0)availableStudents=examStudents;  // 全部缺勤则不过滤
+            }
             if(isPractice){
                 playerQueue=[];
-                for(var pi=0;pi<totalQuestionsNeeded;pi++)playerQueue.push(examStudents[0]);
+                for(var pi=0;pi<totalQuestionsNeeded;pi++)playerQueue.push(availableStudents[0]);
             }else if(isSmart){
                 playerOrder='smart';
-                playerQueue=this._buildSmartPlayerQueue(examStudents,totalQuestionsNeeded);
+                playerQueue=this._buildSmartPlayerQueue(availableStudents,totalQuestionsNeeded);
             }else{
-                playerQueue=this._buildPlayerQueue(examStudents,playerOrder,totalQuestionsNeeded,pType,groupNames,groupRotation);
+                playerQueue=this._buildPlayerQueue(availableStudents,playerOrder,totalQuestionsNeeded,pType,groupNames,groupRotation);
             }
             var exam={mode:mode,participationType:pType,questions:questionPool,timeLimit:timeLimit,autoNext:autoNext,students:examStudents,currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:playerQueue,queueIndex:0,avgQuestions:avgQuestions,groupNames:groupNames,groupRotation:groupRotation,playerOrder:isPractice?'order':playerOrder,_pointsPerQ:isPractice?this._getInitialPointsPerQ(examStudents[0].id,bankIds[0]||''):0};
             if(isSmart){
@@ -790,6 +846,10 @@
         _calcSmartProbPoints:function(students){
             var settings=App.Storage.getSettings();
             var intensity=settings.smartIntensity||5;
+            var absenceEnabled=settings.absenceCompensation!==false;
+            var today=new Date();var todayStr=today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+            var yesterday=new Date(today);yesterday.setDate(yesterday.getDate()-1);
+            var yesterdayStr=yesterday.getFullYear()+'-'+(yesterday.getMonth()+1)+'-'+yesterday.getDate();
             var statsArr=[];
             students.forEach(function(s){
                 var st=getStudentStats(s.id);
@@ -808,23 +868,76 @@
             var probMap={};
             students.forEach(function(s){
                 var rank=rankMap[s.id]||students.length;
-                probMap[s.id]=100+(rank-1)*intensity;
-            });
+                var baseProb=100+(rank-1)*intensity;
+                // 缺勤补偿：昨日缺勤的学生概率翻倍（线性增长）
+                if(absenceEnabled){
+                    var absence=App.Storage.getAbsence(s.id);
+                    if(absence&&absence.consecutiveDays>0){
+                        var lastDate=absence.lastAbsentDate||'';
+                        var attendedDate=absence.attendedDate||'';
+                        if(lastDate===todayStr){
+                            // 今日缺勤，后面会被过滤，不调整概率
+                        }else if(attendedDate===todayStr){
+                            // 今日已出勤，当日维持高概率
+                            baseProb=baseProb*(absence.consecutiveDays||1);
+                        }else if(lastDate===yesterdayStr){
+                            // 昨日缺勤，今日首次抽取必中 + 概率倍增
+                            baseProb=baseProb*(absence.consecutiveDays||1);
+                        }
+                        // 其他情况（缺勤更早且今日未出勤）→ 正常概率
+                    }
+                }
+                probMap[s.id]=baseProb;
+            }.bind(this));
             return probMap;
         },
         _buildSmartPlayerQueue:function(students,needed){
-            var probMap=this._calcSmartProbPoints(students);
-            var totalProb=0;
-            students.forEach(function(s){totalProb+=probMap[s.id]});
+            var settings=App.Storage.getSettings();
+            var absenceEnabled=settings.absenceCompensation!==false;
+            var today=new Date();var todayStr=today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+            var yesterday=new Date(today);yesterday.setDate(yesterday.getDate()-1);
+            var yesterdayStr=yesterday.getFullYear()+'-'+(yesterday.getMonth()+1)+'-'+yesterday.getDate();
+            // 过滤今日缺勤的学生
+            var availableStudents=students;
+            if(absenceEnabled){
+                availableStudents=students.filter(function(s){
+                    var absence=App.Storage.getAbsence(s.id);
+                    if(!absence)return true;
+                    return absence.lastAbsentDate!==todayStr;
+                });
+                if(availableStudents.length===0)availableStudents=students;  // 全部缺勤则不过滤
+            }
+            var probMap=this._calcSmartProbPoints(availableStudents);
+            // 检查是否有昨日缺勤的学生需要"首次必中"
+            var mustPick=null;
+            if(absenceEnabled){
+                for(var i=0;i<availableStudents.length;i++){
+                    var s=availableStudents[i];
+                    var absence=App.Storage.getAbsence(s.id);
+                    if(absence&&absence.lastAbsentDate===yesterdayStr){
+                        // 检查今日是否已被抽取过（非缺勤）
+                        var todayAnswered=this.currentExam?this.currentExam.results.filter(function(r){return r.studentId===s.id&&!r.isAbsent}):[];
+                        if(todayAnswered.length===0){
+                            mustPick=s;break;  // 首个昨日缺勤且今日未答题的学生必中
+                        }
+                    }
+                }
+            }
             var queue=[];
+            if(mustPick){
+                queue.push(mustPick);
+                needed--;
+            }
+            var totalProb=0;
+            availableStudents.forEach(function(s){totalProb+=probMap[s.id]||100});
             for(var i=0;i<needed;i++){
                 var rand=Math.random()*totalProb;
                 var cum=0;
-                for(var j=0;j<students.length;j++){
-                    cum+=probMap[students[j].id];
-                    if(rand<=cum){queue.push(students[j]);break}
+                for(var j=0;j<availableStudents.length;j++){
+                    cum+=probMap[availableStudents[j].id]||100;
+                    if(rand<=cum){queue.push(availableStudents[j]);break}
                 }
-                if(queue.length<=i)queue.push(students[students.length-1]);
+                if(queue.length<=i+ (mustPick?1:0))queue.push(availableStudents[availableStudents.length-1]);
             }
             return queue;
         },
@@ -905,7 +1018,10 @@
             if(commentEl&&settings.studentInfoFontSize)commentEl.style.fontSize=settings.studentInfoFontSize+'px';
             var pointsEl=document.getElementById('exam-student-points');
             if(pointsEl&&settings.studentInfoFontSize)pointsEl.style.fontSize=settings.studentInfoFontSize+'px';
-            document.getElementById('btn-next-question').style.display='none';this.startTimer(question.text);
+            document.getElementById('btn-next-question').style.display='none';
+            var undoBtn2=document.getElementById('btn-undo-answer');if(undoBtn2)undoBtn2.style.display='none';
+            var absentBtn2=document.getElementById('btn-absent');if(absentBtn2&&exam.students.length>1)absentBtn2.style.display='';
+            this.startTimer(question.text);
         },
         toggleFullscreen:function(){
             if(!document.fullscreenElement){
@@ -1015,6 +1131,17 @@
                 }
             }else{App.Effects.playWrong();App.Effects.showScorePopup(0,false)}
             exam.results.push({studentId:exam.currentStudent.id,questionId:question.id,correct:isCorrect,pointsEarned:pointsEarned,selectedOption:option});
+            // 学生出勤答题，清除缺勤连续计数（次日恢复正常概率）
+            var absence=App.Storage.getAbsence(exam.currentStudent.id);
+            if(absence&&absence.consecutiveDays>0){
+                var today=new Date();var todayStr=today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+                absence.attendedDate=todayStr;  // 标记今日已出勤
+                App.Storage.setAbsence(exam.currentStudent.id,absence);
+            }
+            // 智能模式：每5人答题后更新概率映射
+            if(exam.mode==='smart'&&exam._smartProbMap&&exam.results.length%5===0){
+                exam._smartProbMap=this._calcSmartProbPoints(exam.students);
+            }
             this.renderWarReport(true);this._saveProgress();this.showNextButton();
         },
         _getInitialPointsPerQ:function(studentId,bankId){
@@ -1071,7 +1198,7 @@
             };
             App.Storage.setExamProgress(progress);
         },
-        showNextButton:function(){var exam=this.currentExam;var btn=document.getElementById('btn-next-question');var undoBtn=document.getElementById('btn-undo-answer');btn.style.display='';undoBtn.style.display='';var isLast=exam.currentIndex>=exam.questions.length-1;btn.textContent=isLast?'查看结果 →':'下一题 →';btn.onclick=isLast?function(){App.Exam.showResult()}:function(){App.Exam.nextQuestion()};if(exam.autoNext){var delay=(App.Storage.getSettings().autoNextDelay||3)*1000;exam._autoNextTimer=setTimeout(isLast?function(){App.Exam.showResult()}:function(){App.Exam.nextQuestion()},delay)}},
+        showNextButton:function(){var exam=this.currentExam;var btn=document.getElementById('btn-next-question');var undoBtn=document.getElementById('btn-undo-answer');var absentBtn=document.getElementById('btn-absent');btn.style.display='';undoBtn.style.display='';if(absentBtn&&exam.students.length>1)absentBtn.style.display='';var isLast=exam.currentIndex>=exam.questions.length-1;btn.textContent=isLast?'查看结果 →':'下一题 →';btn.onclick=isLast?function(){App.Exam.showResult()}:function(){App.Exam.nextQuestion()};if(exam.autoNext){var delay=(App.Storage.getSettings().autoNextDelay||3)*1000;exam._autoNextTimer=setTimeout(isLast?function(){App.Exam.showResult()}:function(){App.Exam.nextQuestion()},delay)}},
         undoAnswer:function(){
             var exam=this.currentExam;if(!exam||!exam.answered)return;
             if(exam._autoNextTimer){clearTimeout(exam._autoNextTimer);exam._autoNextTimer=null}
@@ -1082,9 +1209,19 @@
                 exam.playerScores[lastResult.studentId]=(exam.playerScores[lastResult.studentId]||0)-lastResult.pointsEarned;
                 if(exam.participationType==='group'){var g=exam.currentStudent.group||'未分组';exam.groupScores[g]=(exam.groupScores[g]||0)-lastResult.pointsEarned}
             }
+            // 撤销出勤标记
+            if(!lastResult.isAbsent){
+                var absence=App.Storage.getAbsence(lastResult.studentId);
+                if(absence&&absence.attendedDate){
+                    var today=new Date();var todayStr=today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+                    if(absence.attendedDate===todayStr)delete absence.attendedDate;
+                    App.Storage.setAbsence(lastResult.studentId,absence);
+                }
+            }
             exam.answered=false;
             document.querySelectorAll('.option-btn').forEach(function(btn){btn.classList.remove('disabled','correct','wrong')});
             var undoBtn=document.getElementById('btn-undo-answer');undoBtn.style.display='none';
+            var absentBtn=document.getElementById('btn-absent');if(absentBtn)absentBtn.style.display='none';
             var nextBtn=document.getElementById('btn-next-question');nextBtn.style.display='none';
             if(exam.mode==='practice'){
                 document.getElementById('exam-student-points').textContent='待结算：'+(exam.playerScores[exam.currentStudent.id]||0)+'⭐';
@@ -1098,6 +1235,52 @@
             var question=exam.questions[exam.currentIndex];
             this.startTimer(question.text);
             App.Toast.show('已撤销，请重新作答','info');
+        },
+        markAbsent:function(){
+            var exam=this.currentExam;if(!exam||!exam.currentStudent)return;
+            if(exam._autoNextTimer){clearTimeout(exam._autoNextTimer);exam._autoNextTimer=null}
+            if(this.timerInterval){clearInterval(this.timerInterval);this.timerInterval=null}
+            var student=exam.currentStudent;
+            var settings=App.Storage.getSettings();
+            if(settings.absenceCompensation===false){
+                App.Toast.show('缺勤补偿未启用','warning');return;
+            }
+            // 隐藏按钮
+            var absentBtn=document.getElementById('btn-absent');if(absentBtn)absentBtn.style.display='none';
+            var undoBtn=document.getElementById('btn-undo-answer');if(undoBtn)undoBtn.style.display='none';
+            var nextBtn=document.getElementById('btn-next-question');if(nextBtn)nextBtn.style.display='none';
+            // 记录缺勤
+            var today=new Date();var todayStr=today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+            var absence=App.Storage.getAbsence(student.id);
+            // 如果今日已出勤答题，不允许再标记缺勤
+            if(absence&&absence.attendedDate===todayStr){
+                App.Toast.show(student.name+' 今日已出勤，无法标记缺勤','warning');return;
+            }
+            if(absence){
+                var lastDate=absence.lastAbsentDate||'';
+                // 判断是否连续缺勤（上次缺勤是昨天）
+                var yesterday=new Date(today);yesterday.setDate(yesterday.getDate()-1);
+                var yesterdayStr=yesterday.getFullYear()+'-'+(yesterday.getMonth()+1)+'-'+yesterday.getDate();
+                if(lastDate===yesterdayStr){
+                    absence.consecutiveDays=(absence.consecutiveDays||1)+1;
+                }else if(lastDate!==todayStr){
+                    absence.consecutiveDays=1;
+                }
+                absence.lastAbsentDate=todayStr;
+                absence.absentDates=absence.absentDates||[];
+                if(absence.absentDates.indexOf(todayStr)===-1)absence.absentDates.push(todayStr);
+            }else{
+                absence={lastAbsentDate:todayStr,consecutiveDays:1,absentDates:[todayStr]};
+            }
+            App.Storage.setAbsence(student.id,absence);
+            // 记录缺勤结果（0分，不计入正确率）
+            exam.results.push({studentId:student.id,questionId:exam.questions[exam.currentIndex]?exam.questions[exam.currentIndex].id:'',correct:false,pointsEarned:0,selectedOption:'缺勤',isAbsent:true});
+            this.renderWarReport(true);this._saveProgress();
+            App.Toast.show(student.name+' 已标记缺勤（连续'+absence.consecutiveDays+'天）','warning');
+            // 跳到下一题
+            exam.currentIndex++;
+            if(exam.currentIndex>=exam.questions.length){this.showResult();return}
+            this._nextPlayer();
         },
         nextQuestion:function(){
             var exam=this.currentExam;if(exam._autoNextTimer){clearTimeout(exam._autoNextTimer);exam._autoNextTimer=null}exam.currentIndex++;
@@ -1232,7 +1415,7 @@
             bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b)bankNames.push(b.name)});
             var studentResults={};
             exam.students.forEach(function(s){studentResults[s.id]={id:s.id,name:s.name,avatar:s.avatar,group:s.group||'',correctCount:0,totalCount:0,pointsEarned:0}});
-            exam.results.forEach(function(r){if(studentResults[r.studentId]){studentResults[r.studentId].totalCount++;if(r.correct){studentResults[r.studentId].correctCount++;studentResults[r.studentId].pointsEarned+=r.pointsEarned}}});
+            exam.results.forEach(function(r){if(studentResults[r.studentId]&&!r.isAbsent){studentResults[r.studentId].totalCount++;if(r.correct){studentResults[r.studentId].correctCount++;studentResults[r.studentId].pointsEarned+=r.pointsEarned}}});
             if(exam.mode==='practice'){
                 var allCorrect=correct===exam.questions.length;
                 var sid=exam.students[0].id;
@@ -1785,6 +1968,8 @@
             var siFontEl=document.getElementById('exam-student-info-fontsize');
             var wrFontEl=document.getElementById('exam-warreport-fontsize');
             if(shuffleEl)shuffleEl.checked=settings.shuffleOptions!==false;
+            var absenceEl=document.getElementById('exam-absence-compensation');
+            if(absenceEl)absenceEl.checked=settings.absenceCompensation!==false;
             if(baseEl)baseEl.value=settings.baseTimeout!==undefined?settings.baseTimeout:30;
             if(charEl)charEl.value=settings.charTimeoutCompensation!==undefined?settings.charTimeoutCompensation:0.2;
             if(autoNextEl)autoNextEl.checked=settings.autoNext!==false;
@@ -1804,6 +1989,7 @@
         saveExamSettings:function(){
             var settings=App.Storage.getSettings();
             settings.shuffleOptions=document.getElementById('exam-shuffle-options').checked;
+            settings.absenceCompensation=document.getElementById('exam-absence-compensation').checked;
             settings.baseTimeout=parseFloat(document.getElementById('exam-base-timeout').value)||0;
             settings.charTimeoutCompensation=parseFloat(document.getElementById('exam-char-timeout').value)||0;
             settings.autoNext=document.getElementById('exam-auto-next').checked;
@@ -2235,6 +2421,7 @@
                 self.postToFileManager({type:'mainReady'});
                 self.ready=true;
                 self.syncAll();
+                setTimeout(function(){self.pullAllCloudContent()},8000);
             },1500);
         },
         getFrame:function(){
@@ -2247,10 +2434,18 @@
                 try{frame.contentWindow.postMessage(Object.assign({target:'fileManager'},msg),'*')}catch(e){}
             }
         },
+        _formatTime:function(){
+            var d=new Date();
+            var offset=d.getTimezoneOffset();
+            var bjTime=new Date(d.getTime()-offset*60000+8*3600000);
+            var pad=function(n){return String(n).padStart(2,'0')};
+            return bjTime.getFullYear()+'-'+pad(bjTime.getMonth()+1)+'-'+pad(bjTime.getDate())+' '+pad(bjTime.getHours())+':'+pad(bjTime.getMinutes())+':'+pad(bjTime.getSeconds());
+        },
         _getFileNameForDataType:function(dataType,bankName){
             if(dataType==='students')return '系统-学生信息';
             if(dataType==='records')return '系统-考试数据';
             if(dataType==='levels')return '系统-等级设置';
+            if(dataType==='aiConfig')return '系统-AI配置';
             if(dataType==='bank'&&bankName)return bankName;
             return null;
         },
@@ -2258,6 +2453,7 @@
             if(fileName==='系统-学生信息')return 'students';
             if(fileName==='系统-考试数据')return 'records';
             if(fileName==='系统-等级设置')return 'levels';
+            if(fileName==='系统-AI配置')return 'aiConfig';
             if(fileName!=='')return 'bank';
             return null;
         },
@@ -2265,12 +2461,14 @@
             if(dataType==='students')return JSON.stringify(App.Storage.getStudents());
             if(dataType==='records')return JSON.stringify(App.Storage.getRecords());
             if(dataType==='levels')return JSON.stringify(App.Storage.getSettings().levels||[]);
+            if(dataType==='aiConfig')return JSON.stringify({aiApiUrl:App.Storage.getSettings().aiApiUrl||'',aiApiKey:App.Storage.getSettings().aiApiKey||'',aiModel:App.Storage.getSettings().aiModel||''});
             return null;
         },
         _getFileIdForDataType:function(dataType){
             if(dataType==='students')return 'EXAM_SYS_STUDENT_INFO';
             if(dataType==='records')return 'EXAM_SYS_RECORDS';
             if(dataType==='levels')return 'EXAM_SYS_LEVELS';
+            if(dataType==='aiConfig')return 'EXAM_SYS_AI_CONFIG';
             return null;
         },
         _applyContentToApp:function(dataType,content){
@@ -2290,6 +2488,13 @@
                         curSettings.levels=data;
                         App.Storage.set('settings',curSettings);
                         if(App.Settings&&App.Settings.renderLevels)App.Settings.renderLevels();
+                    }else if(dataType==='aiConfig'){
+                        var curSettings2=App.Storage.getSettings();
+                        curSettings2.aiApiUrl=data.aiApiUrl||'';
+                        curSettings2.aiApiKey=data.aiApiKey||'';
+                        curSettings2.aiModel=data.aiModel||'';
+                        App.Storage.set('settings',curSettings2);
+                        if(App.Settings&&App.Settings.loadAISettings)App.Settings.loadAISettings();
                     }else if(dataType==='bank'){
                         if(data&&data.id){
                             var existingBanks=App.Storage.getBanks();
@@ -2339,6 +2544,7 @@
             if(dataType==='banks'){
                 var banks=App.Storage.getBanks();
                 var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                var self=this;
                 banks.forEach(function(b){
                     var bankId=b.id||b.name;
                     var fileName=b.name||bankId;
@@ -2346,16 +2552,16 @@
                     var existing=fileIndex.find(function(x){return x.id===bankId});
                     if(existing){
                         existing.version=(existing.version||0)+1;
-                        existing.contentLength=content.length;
-                        existing.lastEditTime=new Date().toLocaleString('zh-CN');
+                        existing.contentLength=[...content].length;
+                        existing.lastEditTime=self._formatTime();
                         try{localStorage.setItem(prefix+'_file_id_'+existing.id,JSON.stringify({data:content,view:null}))}catch(e){}
                     }else{
-                        fileIndex.push({name:fileName,id:bankId,version:0,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:'',contentLength:content.length});
+                        fileIndex.push({name:fileName,id:bankId,version:1,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length});
                         try{localStorage.setItem(prefix+'_file_id_'+bankId,JSON.stringify({data:content,view:null}))}catch(e){}
                     }
                 });
                 try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}
-                this.postToFileManager({type:'contentChanged'});
+                this.postToFileManager({type:'syncAllFiles'});
             }else{
                 var fileName=this._getFileNameForDataType(dataType);
                 var content=this._getContentForDataType(dataType);
@@ -2363,16 +2569,17 @@
                     var fileIndex2=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
                     var existing2=fileIndex2.find(function(x){return x.name===fileName});
                     if(existing2){
-                        existing2.contentLength=content.length;
-                        existing2.lastEditTime=new Date().toLocaleString('zh-CN');
+                        existing2.version=(existing2.version||0)+1;
+                        existing2.contentLength=[...content].length;
+                        existing2.lastEditTime=this._formatTime();
                         try{localStorage.setItem(prefix+'_file_id_'+existing2.id,JSON.stringify({data:content,view:null}))}catch(e){}
                     }else{
                         var id=this._getFileIdForDataType(dataType);
-                        fileIndex2.push({name:fileName,id:id,version:0,lastSyncVersion:0,isNewFile:true,folder:'系统',owner:'',createTime:'',lastUploadTime:'',lastEditTime:'',contentLength:content.length});
+                        fileIndex2.push({name:fileName,id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'系统',owner:'',createTime:'',lastUploadTime:'',lastEditTime:this._formatTime(),contentLength:[...content].length});
                         try{localStorage.setItem(prefix+'_file_id_'+id,JSON.stringify({data:content,view:null}))}catch(e){}
                     }
                     try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex2))}catch(e){}
-                    this.postToFileManager({type:'contentChanged'});
+                    this.postToFileManager({type:'syncAllFiles'});
                 }
             }
         },
@@ -2410,23 +2617,44 @@
             var prefix='exam';
             var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
             var self=this;
-            var needPull=fileIndex.filter(function(f){return f.cloudOnly||f.contentLength===0||f.isNewFile});
-            if(needPull.length===0)return;
-            console.log('[Sync] 需要拉取内容的文件：'+needPull.length+'个');
-            self._pulling=true;
-            needPull.forEach(function(f){
-                self.postToFileManager({type:'downloadCloudFile',fileId:f.id,fileName:f.name});
+            // 题库文件不自动下载，只下载系统文件（学生信息、考试数据、等级设置、AI配置）
+            var needPull=fileIndex.filter(function(f){
+                if(f.folder==='题库')return false;  // 题库按需下载，不自动拉取
+                return f.cloudOnly||f.contentLength===0||f.isNewFile;
             });
-            setTimeout(function(){self._pulling=false},15000);
+            if(needPull.length===0)return;
+            console.log('[Sync] 需要拉取内容的系统文件：'+needPull.length+'个（题库按需下载，不自动拉取）');
+            self._pulling=true;
+            var i=0;
+            function pullNext(){
+                if(i>=needPull.length){self._pulling=false;return}
+                var f=needPull[i];
+                i++;
+                self.postToFileManager({type:'downloadCloudFile',fileId:f.id,fileName:f.name});
+                setTimeout(pullNext,3000);
+            }
+            pullNext();
         },
         migrateOldData:function(){
             try{
                 var migrated=localStorage.getItem('exam_sync_migrated_v2');
                 if(migrated)return;
+                // 如果文件索引已存在（由syncAllFiles创建），说明已初始化，跳过
+                var existingIndex=localStorage.getItem('exam_file_index');
+                if(existingIndex){localStorage.setItem('exam_sync_migrated_v2','1');return}
                 var banks=App.Storage.getBanks();
                 var students=App.Storage.getStudents();
                 var records=App.Storage.getRecords();
                 var levels=App.Storage.getSettings().levels||[];
+                // 检查是否有非默认的用户数据（有云端ID的题库说明是旧同步数据）
+                var hasRealData=banks.some(function(b){return b.id&&b.id.indexOf('QB_')===0})||
+                    students.length>0||
+                    Object.keys(records).length>0;
+                if(!hasRealData){
+                    localStorage.setItem('exam_sync_migrated_v2','1');
+                    console.log('[Sync] 无旧同步数据，跳过迁移，等待云端拉取');
+                    return;
+                }
                 var fileIndex=[];
                 var prefix='exam';
                 banks.forEach(function(b){
@@ -2434,16 +2662,18 @@
                     var name=b.name||id;
                     var content=JSON.stringify(b);
                     var fileId=id;
-                    fileIndex.push({name:name,id:fileId,version:0,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:'',contentLength:content.length});
+                    fileIndex.push({name:name,id:fileId,version:1,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length});
                     try{localStorage.setItem(prefix+'_file_id_'+fileId,JSON.stringify({data:content,view:null}))}catch(e){}
                 });
+                var aiConfig={aiApiUrl:App.Storage.getSettings().aiApiUrl||'',aiApiKey:App.Storage.getSettings().aiApiKey||'',aiModel:App.Storage.getSettings().aiModel||''};
                 var sysFiles=[
                     {key:'EXAM_SYS_STUDENT_INFO',name:'系统-学生信息',content:JSON.stringify(students),folder:'系统'},
                     {key:'EXAM_SYS_RECORDS',name:'系统-考试数据',content:JSON.stringify(records),folder:'系统'},
-                    {key:'EXAM_SYS_LEVELS',name:'系统-等级设置',content:JSON.stringify(levels),folder:'系统'}
+                    {key:'EXAM_SYS_LEVELS',name:'系统-等级设置',content:JSON.stringify(levels),folder:'系统'},
+                    {key:'EXAM_SYS_AI_CONFIG',name:'系统-AI配置',content:JSON.stringify(aiConfig),folder:'系统'}
                 ];
                 sysFiles.forEach(function(f){
-                    fileIndex.push({name:f.name,id:f.key,version:0,lastSyncVersion:0,isNewFile:true,folder:f.folder,owner:'',createTime:'',lastUploadTime:'',lastEditTime:'',contentLength:f.content.length});
+                    fileIndex.push({name:f.name,id:f.key,version:1,lastSyncVersion:0,isNewFile:true,folder:f.folder,owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...f.content].length});
                     try{localStorage.setItem(prefix+'_file_id_'+f.key,JSON.stringify({data:f.content,view:null}))}catch(e){}
                 });
                 try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}

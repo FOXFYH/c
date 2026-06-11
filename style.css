@@ -1047,6 +1047,22 @@ body {
     box-shadow: 0 0 12px rgba(108, 92, 231, 0.3);
 }
 
+.btn-absent {
+    background: transparent;
+    border: 2px solid #e17055;
+    color: #e17055;
+    box-shadow: none;
+    font-size: 14px;
+    padding: 10px 24px;
+    margin-right: 12px;
+}
+
+.btn-absent:hover {
+    background: #e17055;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(225, 112, 85, 0.4);
+}
+
 .btn-end {
     background: transparent;
     border: 1px solid var(--border-color);

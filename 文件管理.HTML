@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -6,7 +6,8 @@
 <title>文件管理</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:32px}
+body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#mainUI{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;padding-bottom:32px}
 .file-item{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;border-radius:4px;margin-bottom:2px;background:#f8f9fa;cursor:pointer;transition:background .15s}
 .file-item:hover{background:#e8f0fe}
 .file-item .file-name{font-size:11px;color:#333;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -25,7 +26,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 .btn-row button.primary,.btn-row2 button.primary{background:#4A90D9;color:#fff;border-color:#4A90D9}
 .btn-row2{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .btn-row2 .spacer{flex:1}
-#fileList{flex:1;overflow-y:auto;min-height:100px}
+#fileList{flex:1;overflow-y:auto;min-height:0}
 </style>
 </head>
 <body>
@@ -2965,6 +2966,7 @@ async function syncAllFiles(){
     btn.disabled=false;btn.textContent='全部同步';
     setLastSyncTime(Date.now());
     refreshCloudList();
+    notifyParent('syncComplete',{});
   },'全部同步');
 }
 
@@ -2993,13 +2995,14 @@ async function syncAllFilesInternal(){
     const cfP=parseCharCountStr(cf.内容字符数);
     if(cfP&&cfP.part>1)continue;
     const localFile=idx.find(f=>f.id===cf.ID);
+    const isBank=(cf.文件夹路径||'')==='题库';  // 题库文件按需下载，同步时不下载内容
     if(!localFile){
       // 本地无此文件 → 只记录索引，不下载内容
       const cloudVer=parseInt(cf.版本号||'0');
       idx.push({name:cf.文件名,time:Date.now(),id:cf.ID,version:cloudVer,lastSyncVersion:cloudVer,folder:cf.文件夹路径||'',contentLength:(()=>{const p=parseCharCountStr(cf.内容字符数);return p?p.total:0})(),cloudOnly:true});
       setFileIndex(idx);
-      // 仅当此文件是当前编辑的文件时才下载内容
-      if(cf.文件名===currentFileName){
+      // 系统文件且是当前编辑文件时才下载内容；题库一律不下载
+      if(!isBank&&cf.文件名===currentFileName){
         const merged=await mergeCloudFragments(cf.ID,cf);
         const fullContent=typeof merged==='string'?merged:(cf.内容||'');
         if(fullContent){
@@ -3017,8 +3020,8 @@ async function syncAllFilesInternal(){
         if(localVer===cloudVer){
           localFile.lastSyncVersion=cloudVer;
           setFileIndex(idx);
-        }else if(localFile.name===currentFileName){
-          // 当前编辑文件 → 下载内容
+        }else if(!isBank&&localFile.name===currentFileName){
+          // 系统文件且当前编辑 → 下载内容；题库一律只更新索引
           if(localVer<=syncVer){
             const merged=await mergeCloudFragments(cf.ID,cf);
             const fullContent=typeof merged==='string'?merged:(cf.内容||'');
@@ -3039,7 +3042,7 @@ async function syncAllFilesInternal(){
             }
           }
         }else{
-          // 非当前编辑文件 → 只更新索引
+          // 非当前编辑文件 或 题库文件 → 只更新索引
           localFile.version=cloudVer;
           localFile.lastSyncVersion=cloudVer;
           localFile.cloudOnly=true;
@@ -3061,14 +3064,27 @@ async function syncAllFilesInternal(){
       if(!cloudFile){
         const netTime=await getNetworkTime();
         const wr=await writeFileToCloudWithSplit({baseId:f.id,baseRow:0,fileName:f.name,content:fd.data,version:f.version||0,folder:f.folder,owner:f.owner,createTime:f.createTime,lastUploadTime:formatBeijingTime(netTime),lastEditTime:f.lastEditTime||getLastEditTime()});
-        if(wr.success){setLastSyncVersion(f.name,f.version||0);clearNewFileFlag(f.id);f.cloudOnly=false}
+        if(wr.success){
+          setLastSyncVersion(f.name,f.version||0);
+          // 统一更新文件索引，避免clearNewFileFlag覆盖cloudOnly修改
+          const idx2=getFileIndex();
+          const f2=idx2.find(x=>x.id===f.id);
+          if(f2){f2.isNewFile=false;f2.cloudOnly=false;f2.lastSyncVersion=f.version||0}
+          setFileIndex(idx2);
+        }
       }else{
         const cloudVer=parseInt(cloudFile.版本号||'0');
         const syncVer=f.lastSyncVersion||0;
         if((f.version||0)>cloudVer&&cloudVer===syncVer){
           const netTime=await getNetworkTime();
           const wr=await writeFileToCloudWithSplit({baseId:f.id,baseRow:cloudFile._行号,fileName:f.name,content:fd.data,version:f.version||0,folder:f.folder,owner:f.owner,createTime:f.createTime,lastUploadTime:formatBeijingTime(netTime),lastEditTime:f.lastEditTime||getLastEditTime()});
-          if(wr.success){setLastSyncVersion(f.name,f.version||0);clearNewFileFlag(f.id);f.cloudOnly=false}
+          if(wr.success){
+            setLastSyncVersion(f.name,f.version||0);
+            const idx3=getFileIndex();
+            const f3=idx3.find(x=>x.id===f.id);
+            if(f3){f3.isNewFile=false;f3.cloudOnly=false;f3.lastSyncVersion=f.version||0}
+            setFileIndex(idx3);
+          }
         }
       }
     }catch(e){}
