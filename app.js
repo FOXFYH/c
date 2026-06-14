@@ -2,6 +2,8 @@
     'use strict';
     var App = window.App = {};
     function genId(){return Date.now().toString(36)+Math.random().toString(36).substr(2,6)}
+    // 题库专用ID：QB_ + 10位数字，与云端格式一致
+    function genBankId(){return 'QB_'+Math.floor(Math.random()*9000000000+1000000000)}
     function shuffle(arr){var a=arr.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
     function getAvatarChar(name,usedChars){
         if(!name)return'?';
@@ -56,9 +58,9 @@
             }
         },
         getStudents:function(){return this.get('students',[])},
-        setStudents:function(s){this.set('students',s);if(!this._syncSilent)App.Sync.notifyChange('students',s)},
+        setStudents:function(s){var hasReal=s.some(function(x){return!x._demo});if(hasReal){s=s.filter(function(x){return!x._demo})}this.set('students',s);if(!this._syncSilent)App.Sync.notifyChange('students',s)},
         getBanks:function(){return this.get('banks',[])},
-        setBanks:function(b){this.set('banks',b);if(!this._syncSilent)App.Sync.notifyChange('banks',b)},
+        setBanks:function(b){var hasReal=b.some(function(x){return!x._demo});if(hasReal){b=b.filter(function(x){return!x._demo})}this.set('banks',b);if(!this._syncSilent)App.Sync.notifyChange('banks',b)},
         getRecords:function(){return this.get('records',[])},
         setRecords:function(r){this.set('records',r);if(!this._syncSilent)App.Sync.notifyChange('records',r)},
         getExamProgress:function(){return this.get('examProgress',null)},
@@ -130,6 +132,9 @@
                 totalCorrect+=sr.correctCount||0;
                 totalCount+=sr.totalCount||0;
                 sessions++;
+            }else if(rec.allParticipants){
+                // 全员参与但不在studentResults中 = 参与了但未被抽中答题
+                sessions++;
             }
         });
         return{totalPoints:totalPoints,totalCorrect:totalCorrect,totalCount:totalCount,sessions:sessions,accuracy:totalCount>0?Math.round(totalCorrect/totalCount*100):0};
@@ -150,6 +155,14 @@
                     statsMap[sid].sessions++;
                 }
             });
+            // 全员参与时，不在studentResults中的学生也算参与了1场
+            if(rec.allParticipants){
+                students.forEach(function(s){
+                    if(!srs[s.id]&&statsMap[s.id]){
+                        statsMap[s.id].sessions++;
+                    }
+                });
+            }
         });
         Object.keys(statsMap).forEach(function(sid){
             var st=statsMap[sid];
@@ -276,11 +289,17 @@
                     var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':'🎮 未知';
                     var dateStr=new Date(h.date).toLocaleString('zh-CN');
                     var bankStr=h.bankNames.join('、')||'未知题库';
-                    var pct=h.totalCount>0?Math.round(h.correctCount/h.totalCount*100):0;
                     body+='<div class="sh-session">';
-                    body+='<div class="sh-session-header"><span class="sh-session-time">'+modeLabel+' · '+dateStr+'</span><span class="sh-session-score">+'+h.pointsEarned+' 分</span></div>';
-                    body+='<div class="sh-session-detail">📚 '+bankStr+'</div>';
-                    body+='<div class="sh-session-detail">答对 '+h.correctCount+'/'+h.totalCount+' · 正确率 '+pct+'%</div>';
+                    if(h.notDrawn){
+                        body+='<div class="sh-session-header"><span class="sh-session-time">'+modeLabel+' · '+dateStr+'</span><span class="sh-session-score" style="color:var(--text-muted)">未抽中</span></div>';
+                        body+='<div class="sh-session-detail">📚 '+bankStr+'</div>';
+                        body+='<div class="sh-session-detail" style="color:var(--text-muted)">全员参与，本场未被抽中答题</div>';
+                    }else{
+                        var pct=h.totalCount>0?Math.round(h.correctCount/h.totalCount*100):0;
+                        body+='<div class="sh-session-header"><span class="sh-session-time">'+modeLabel+' · '+dateStr+'</span><span class="sh-session-score">+'+h.pointsEarned+' 分</span></div>';
+                        body+='<div class="sh-session-detail">📚 '+bankStr+'</div>';
+                        body+='<div class="sh-session-detail">答对 '+h.correctCount+'/'+h.totalCount+' · 正确率 '+pct+'%</div>';
+                    }
                     body+='</div>';
                 });
             }
@@ -290,19 +309,48 @@
     };
 
     App.Questions = {
-        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');if(banks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var html='';banks.forEach(function(b){var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'';var fi=fileIndex.find(function(x){return x.id===b.id||x.id===b.name});if(!hasContent&&fi){countText=fi.cloudOnly?'☁️ 未下载':'已缓存'}else if(!hasContent){countText='空题库'}html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+b.name+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});grid.innerHTML=html},
-        renderBankSelect:function(){var banks=App.Storage.getBanks();var info=document.getElementById('exam-bank-info');if(!info)return;if(banks.length===0){info.textContent='暂无题库，请先创建';return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var matched=banks.filter(function(b){return lastIds.indexOf(b.id)>=0});if(matched.length>0){info.textContent=matched.map(function(b){return b.name}).join('、')+'（'+matched.reduce(function(s,b){return s+b.questions.length},0)+' 题）'}else{info.textContent='点击选择题库'}},
-        showBankSelectModal:function(){var banks=App.Storage.getBanks();if(banks.length===0){App.Toast.show('暂无题库，请先在题库中创建','warning');return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var isPractice=App.Exam.currentMode==='practice';var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';body+='</div>'});body+='</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
+        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.folder==='题库'&&!localBankIds.has(f.id)&&!localBankIds.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var html='';banks.forEach(function(b){var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'';var fi=fileIndex.find(function(x){return x.id===b.id||x.id===b.name});if(!hasContent&&fi){countText=fi.cloudOnly?'☁️ 未下载':'已缓存'}else if(!hasContent){countText='空题库'}html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+b.name+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});if(cloudOnlyBanks.length>0){html+='<div style="padding:8px 0 4px;font-size:12px;color:#9b59b6;border-top:1px solid #eee;margin-top:8px">☁️ 以下题库仅存于云端，点击可下载</div>';cloudOnlyBanks.forEach(function(f){var charInfo=f.contentLength?(' ('+f.contentLength+'字)'):'';html+='<div class="bank-card" style="animation:slide-up 0.3s ease both;opacity:0.85;border:1px dashed #9b59b6"><div class="bc-header"><div><div class="bc-name">☁️ '+f.name+'</div><div class="bc-count">(☁️ 未下载'+charInfo+')</div></div></div><div class="bc-desc">仅存于云端，点击下载后可使用</div><div class="bc-actions"><button onclick="App.Questions.downloadCloudBank(\''+f.id+'\',\''+f.name.replace(/'/g,"\\'")+'\')">⬇️ 下载到本地</button><button class="btn-del" onclick="App.Questions.removeCloudBankIndex(\''+f.id+'\')">🗑️ 移除</button></div></div>'})}grid.innerHTML=html},
+        renderBankSelect:function(){var banks=App.Storage.getBanks();var info=document.getElementById('exam-bank-info');if(!info)return;var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.folder==='题库'&&!localBankIds.has(f.id)&&!localBankIds.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){info.textContent='暂无题库，请先创建';return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var matched=banks.filter(function(b){return lastIds.indexOf(b.id)>=0});var cloudMatched=cloudOnlyBanks.filter(function(f){return lastIds.indexOf(f.id)>=0});if(matched.length>0||cloudMatched.length>0){var names=[];var totalQ=0;matched.forEach(function(b){names.push(b.name);totalQ+=b.questions.length});cloudMatched.forEach(function(f){names.push('☁️'+f.name)});info.textContent=names.join('、')+'（'+(cloudMatched.length>0?'含云端题库':totalQ+' 题')+'）'}else{info.textContent='点击选择题库'}},
+        showBankSelectModal:function(){var banks=App.Storage.getBanks();var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.folder==='题库'&&!localBankIds.has(f.id)&&!localBankIds.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){App.Toast.show('暂无题库，请先在题库中创建','warning');return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var isPractice=App.Exam.currentMode==='practice';var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';body+='</div>'});if(cloudOnlyBanks.length>0){body+='<div style="grid-column:1/-1;padding:4px 0;font-size:11px;color:#9b59b6;border-top:1px solid #eee">☁️ 云端题库（选择后自动下载）</div>';cloudOnlyBanks.forEach(function(f){var sel=lastIds.indexOf(f.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+f.id+'" data-cloud-only="true" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')" style="border:1px dashed #9b59b6">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">☁️ '+f.name+'</span>';body+='<span class="bank-modal-count">云端</span>';body+='</div>'})}body+='</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
         toggleModalBank:function(el,single){if(single){document.querySelectorAll('.bank-modal-item.selected').forEach(function(item){if(item!==el){item.classList.remove('selected');item.querySelector('.bank-modal-check').textContent=''}})}el.classList.toggle('selected');el.querySelector('.bank-modal-check').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         selectAllModalBanks:function(){var items=document.querySelectorAll('.bank-modal-item');var allSel=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSel=false});items.forEach(function(el){if(allSel){el.classList.remove('selected');el.querySelector('.bank-modal-check').textContent=''}else{if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.bank-modal-check').textContent='✓'}}});App.Effects.playClick()},
         confirmBankSelect:function(){var ids=[];document.querySelectorAll('.bank-modal-item.selected').forEach(function(el){ids.push(el.dataset.bankId)});if(ids.length===0){App.Toast.show('请至少选择一个题库','warning');return}if(App.Exam.currentMode==='practice'&&ids.length>1){App.Toast.show('练习模式只能选择1个题库','warning');return}var settings=App.Storage.getSettings();settings._lastBankIds=ids;App.Storage.setSettings(settings);App.Modal.close();this.renderBankSelect();App.Effects.playClick()},
         getSelectedBankIds:function(){var lastIds=App.Storage.getSettings()._lastBankIds||[];return lastIds},
         toggleBankSelect:function(el){el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         showAddBankDialog:function(){var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" placeholder="请输入题库名称"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" placeholder="简要描述（可选）"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.addBank()">创建</button>';App.Modal.open('新建题库',body,footer)},
-        addBank:function(){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();banks.push({id:genId(),name:name,description:desc,questions:[],createdAt:Date.now(),_newFile:true});App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库 '+name+' 创建成功','success')},
+        addBank:function(){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();banks.push({id:genBankId(),name:name,description:desc,questions:[],createdAt:Date.now(),_newFile:true});App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库 '+name+' 创建成功','success')},
         showEditBankDialog:function(id){var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" value="'+b.name+'"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" value="'+(b.description||'')+'"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.updateBank(\''+id+'\')">保存</button>';App.Modal.open('编辑题库',body,footer)},
         updateBank:function(id){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;b.name=name;b.description=desc;App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库信息已更新','success')},
         removeBank:function(id){if(!confirm('确定要删除该题库及其所有题目吗？'))return;var banks=App.Storage.getBanks();var deleted=banks.find(function(x){return x.id===id});var remaining=banks.filter(function(x){return x.id!==id});App.Storage.setBanks(remaining);if(deleted)App.Sync.deleteBank(deleted.id||deleted.name);this.render();App.Toast.show('题库已删除','info')},
+        downloadCloudBank:async function(id,name){
+            App.Toast.show('正在从云端下载题库...','info');
+            if(App.Sync&&App.Sync.ready){
+                App.Sync.postToFileManager({type:'downloadCloudFile',fileId:id});
+                var waitStart=Date.now();
+                while(Date.now()-waitStart<15000){
+                    await new Promise(function(r){setTimeout(r,500)});
+                    var freshBanks=App.Storage.getBanks();
+                    var freshBank=freshBanks.find(function(x){return x.id===id});
+                    if(freshBank&&freshBank.questions&&freshBank.questions.length>0){
+                        App.Questions.render();
+                        App.Toast.show('题库「'+name+'」下载完成','success');
+                        return;
+                    }
+                }
+                App.Toast.show('题库下载超时，请检查网络','warning');
+            }else{
+                App.Toast.show('同步功能未就绪','warning');
+            }
+        },
+        removeCloudBankIndex:function(id){
+            if(!confirm('确定要移除该云端题库索引吗？（云端数据不会删除）'))return;
+            var prefix='exam';
+            var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+            fileIndex=fileIndex.filter(function(f){return f.id!==id});
+            try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}
+            this.render();
+            App.Toast.show('已移除云端题库索引','info');
+        },
         openBankManager:async function(id){
             var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;
             // 题库内容为空（仅有索引），按需从云端下载
@@ -334,7 +382,7 @@
         },
         _fallbackCopy:function(text){var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');App.Toast.show('模板已复制，粘贴给AI即可','success')}catch(e){App.Toast.show('复制失败，请手动复制','warning')}document.body.removeChild(ta)},
         showAIDialog:function(){var body='<div class="form-group"><label>题目主题/知识点</label><textarea id="inp-ai-topic" placeholder="请描述要生成的题目主题，越详细越好" rows="4" maxlength="2000"></textarea><div style="text-align:right;font-size:11px;color:#666;margin-top:2px"><span id="ai-topic-count">0</span>/2000</div></div><div class="form-group"><label>题目数量</label><input type="number" id="inp-ai-count" value="5" min="1" max="30" style="width:80px"> <span class="form-hint">1~30题</span></div><div class="form-group"><label>题库名称 <span style="color:#888;font-weight:normal">（留空则AI自动命名）</span></label><input type="text" id="inp-ai-bank-name" placeholder="AI将根据主题自动生成名称"></div><div id="ai-status" class="ai-status" style="display:none"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" id="btn-ai-gen" onclick="App.Questions.generateAIQuestions()">🤖 生成</button>';App.Modal.open('🤖 AI生成题目',body,footer);var ta=document.getElementById('inp-ai-topic');if(ta){ta.addEventListener('input',function(){var c=document.getElementById('ai-topic-count');if(c)c.textContent=ta.value.length})}},
-        generateAIQuestions:function(){var s=App.Storage.getSettings();if(!s.aiApiKey||!s.aiApiUrl){App.Toast.show('请先在设置中配置AI API','warning');return}var topic=document.getElementById('inp-ai-topic').value.trim();if(!topic){App.Toast.show('请输入题目主题','warning');return}var count=parseInt(document.getElementById('inp-ai-count').value)||5;if(count<1)count=1;if(count>30)count=30;var userBankName=document.getElementById('inp-ai-bank-name').value.trim();var statusEl=document.getElementById('ai-status');statusEl.style.display='block';statusEl.className='ai-status processing';statusEl.textContent='⏳ 正在生成题目，请稍候...';document.getElementById('btn-ai-gen').disabled=true;var prompt='你是一个专业的考试出题专家。请根据以下要求生成选择题：\n\n主题：'+topic+'\n数量：'+count+'道\n\n要求：\n1. 每道题必须有4个选项(A/B/C/D)，且只有一个正确答案\n2. 题目内容要准确、专业，选项要有迷惑性\n3. 分值默认10分，可根据难度调整(5/10/15/20)\n4. 如果用户没有指定题库名称，请根据主题生成一个简短贴切的题库名称\n\n请严格按照以下JSON格式返回，不要添加任何其他文字：\n{"bankName":"题库名称","questions":[{"text":"题目内容","options":{"A":"选项A","B":"选项B","C":"选项C","D":"选项D"},"answer":"B","points":10}]}\n\n注意：只返回这个JSON对象，不要返回任何解释或额外内容。';try{fetch(s.aiApiUrl,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.aiApiKey},body:JSON.stringify({model:s.aiModel||'glm-4.7-flash',messages:[{role:'user',content:prompt}],temperature:0.7})}).then(function(res){if(!res.ok)throw new Error('HTTP '+res.status);return res.json()}).then(function(data){var content='';if(data.choices&&data.choices[0]&&data.choices[0].message){content=data.choices[0].message.content||''}else if(data.output){content=data.output.text||data.output||''}else if(typeof data==='string'){content=data}content=content.trim();if(content.startsWith('```')){content=content.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')}var jsonMatch=content.match(/\{[\s\S]*\}/);if(!jsonMatch)throw new Error('AI返回内容无法解析为JSON');var result=JSON.parse(jsonMatch[0]);var questions=result.questions||result;var bankName=userBankName||result.bankName||'AI生成题库';if(!Array.isArray(questions))throw new Error('AI返回的题目格式不正确');var banks=App.Storage.getBanks();var newBank={id:genId(),name:bankName,description:'AI生成 - '+topic,questions:[],createdAt:Date.now(),_newFile:true};var validCount=0;questions.forEach(function(q){if(!q.text||!q.options||!q.answer)return;var opts={};if(typeof q.options==='object'){opts=q.options}else if(Array.isArray(q.options)){var keys=['A','B','C','D'];for(var oi=0;oi<Math.min(q.options.length,4);oi++){opts[keys[oi]]=String(q.options[oi])}}newBank.questions.push({id:genId(),text:q.text,options:opts,answer:String(q.answer).toUpperCase().charAt(0),points:parseInt(q.points)||10});validCount++});if(validCount===0)throw new Error('AI未生成有效题目');banks.push(newBank);App.Storage.setBanks(banks);App.Modal.close();App.Questions.render();App.Toast.show('成功生成 '+validCount+' 道题目 → '+bankName,'success')}).catch(function(err){statusEl.className='ai-status error';statusEl.textContent='❌ 生成失败：'+err.message;document.getElementById('btn-ai-gen').disabled=false})}catch(e){statusEl.className='ai-status error';statusEl.textContent='❌ 请求失败：'+e.message;document.getElementById('btn-ai-gen').disabled=false}},
+        generateAIQuestions:function(){var s=App.Storage.getSettings();if(!s.aiApiKey||!s.aiApiUrl){App.Toast.show('请先在设置中配置AI API','warning');return}var topic=document.getElementById('inp-ai-topic').value.trim();if(!topic){App.Toast.show('请输入题目主题','warning');return}var count=parseInt(document.getElementById('inp-ai-count').value)||5;if(count<1)count=1;if(count>30)count=30;var userBankName=document.getElementById('inp-ai-bank-name').value.trim();var statusEl=document.getElementById('ai-status');statusEl.style.display='block';statusEl.className='ai-status processing';statusEl.textContent='⏳ 正在生成题目，请稍候...';document.getElementById('btn-ai-gen').disabled=true;var prompt='你是一个专业的考试出题专家。请根据以下要求生成选择题：\n\n主题：'+topic+'\n数量：'+count+'道\n\n要求：\n1. 每道题必须有4个选项(A/B/C/D)，且只有一个正确答案\n2. 题目内容要准确、专业，选项要有迷惑性\n3. 分值默认10分，可根据难度调整(5/10/15/20)\n4. 如果用户没有指定题库名称，请根据主题生成一个简短贴切的题库名称\n\n请严格按照以下JSON格式返回，不要添加任何其他文字：\n{"bankName":"题库名称","questions":[{"text":"题目内容","options":{"A":"选项A","B":"选项B","C":"选项C","D":"选项D"},"answer":"B","points":10}]}\n\n注意：只返回这个JSON对象，不要返回任何解释或额外内容。';try{fetch(s.aiApiUrl,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.aiApiKey},body:JSON.stringify({model:s.aiModel||'glm-4.7-flash',messages:[{role:'user',content:prompt}],temperature:0.7})}).then(function(res){if(!res.ok)throw new Error('HTTP '+res.status);return res.json()}).then(function(data){var content='';if(data.choices&&data.choices[0]&&data.choices[0].message){content=data.choices[0].message.content||''}else if(data.output){content=data.output.text||data.output||''}else if(typeof data==='string'){content=data}content=content.trim();if(content.startsWith('```')){content=content.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')}var jsonMatch=content.match(/\{[\s\S]*\}/);if(!jsonMatch)throw new Error('AI返回内容无法解析为JSON');var result=JSON.parse(jsonMatch[0]);var questions=result.questions||result;var bankName=userBankName||result.bankName||'AI生成题库';if(!Array.isArray(questions))throw new Error('AI返回的题目格式不正确');var banks=App.Storage.getBanks();var newBank={id:genBankId(),name:bankName,description:'AI生成 - '+topic,questions:[],createdAt:Date.now(),_newFile:true};var validCount=0;questions.forEach(function(q){if(!q.text||!q.options||!q.answer)return;var opts={};if(typeof q.options==='object'){opts=q.options}else if(Array.isArray(q.options)){var keys=['A','B','C','D'];for(var oi=0;oi<Math.min(q.options.length,4);oi++){opts[keys[oi]]=String(q.options[oi])}}newBank.questions.push({id:genId(),text:q.text,options:opts,answer:String(q.answer).toUpperCase().charAt(0),points:parseInt(q.points)||10});validCount++});if(validCount===0)throw new Error('AI未生成有效题目');banks.push(newBank);App.Storage.setBanks(banks);App.Modal.close();App.Questions.render();App.Toast.show('成功生成 '+validCount+' 道题目 → '+bankName,'success')}).catch(function(err){statusEl.className='ai-status error';statusEl.textContent='❌ 生成失败：'+err.message;document.getElementById('btn-ai-gen').disabled=false})}catch(e){statusEl.className='ai-status error';statusEl.textContent='❌ 请求失败：'+e.message;document.getElementById('btn-ai-gen').disabled=false}},
         showImportBankDialog:function(){
             var body='<div class="import-format-hint">导入格式说明：第一行为题库名称，后续每行一道题<br>格式：<code>题库名称</code><br>题目格式：<code>题目|选项A|选项B|选项C|选项D|正确答案|分值</code><br>示例：<br><code>数学基础</code><br><code>1+1=?|1|2|3|4|B|10</code><br><code>中国的首都是?|上海|北京|广州|深圳|B|10</code></div>';
             body+='<div class="form-group"><label>粘贴题库数据</label><textarea id="inp-import-bank" placeholder="第一行：题库名称&#10;后续每行一道题" rows="8"></textarea></div>';
@@ -347,7 +395,7 @@
             var lines=text.split('\n');
             var bankName=lines[0].trim()||'导入题库';
             var banks=App.Storage.getBanks();
-            var newBank={id:genId(),name:bankName,description:'导入题库',questions:[],createdAt:Date.now(),_newFile:true};
+            var newBank={id:genBankId(),name:bankName,description:'导入题库',questions:[],createdAt:Date.now(),_newFile:true};
             var count=0;
             for(var i=1;i<lines.length;i++){
                 var line=lines[i].trim();
@@ -365,7 +413,7 @@
         },
         exportTemplate:function(){var template='题目|选项A|选项B|选项C|选项D|正确答案|分值\n1+1=?|1|2|3|4|B|10\n中国的首都是?|上海|北京|广州|深圳|B|10';var blob=new Blob([template],{type:'text/plain;charset=utf-8'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='题目导入模板.txt';a.click();URL.revokeObjectURL(url);App.Toast.show('模板已导出','success')},
         importTemplateFile:function(){var input=document.getElementById('inp-template-file');if(input){input.value='';input.click()}},
-        handleTemplateFile:function(input){if(!input.files||!input.files[0])return;var file=input.files[0];var reader=new FileReader();reader.onload=function(e){var text=e.target.result;if(!text||!text.trim()){App.Toast.show('文件内容为空','warning');return}var lines=text.trim().split('\n');var bankName='导入题库';var startIdx=0;if(lines.length>0&&lines[0].trim().indexOf('|')===-1&&lines[0].trim()){bankName=lines[0].trim();startIdx=1}var banks=App.Storage.getBanks();var newBank={id:genId(),name:bankName,description:'从文件导入',questions:[],createdAt:Date.now(),_newFile:true};var count=0;for(var i=startIdx;i<lines.length;i++){var line=lines[i].trim();if(!line)continue;var p=line.split('|');if(p.length>=6){newBank.questions.push({id:genId(),text:p[0].trim(),options:{A:p[1].trim(),B:p[2].trim(),C:p[3].trim(),D:p[4].trim()},answer:p[5].trim().toUpperCase(),points:parseInt(p[6])||10});count++}}if(count===0){App.Toast.show('未识别到有效题目，请检查文件格式','warning');return}banks.push(newBank);App.Storage.setBanks(banks);App.Questions.render();App.Toast.show('成功导入 '+count+' 道题目 → '+bankName,'success')};reader.readAsText(file,'utf-8')}
+        handleTemplateFile:function(input){if(!input.files||!input.files[0])return;var file=input.files[0];var reader=new FileReader();reader.onload=function(e){var text=e.target.result;if(!text||!text.trim()){App.Toast.show('文件内容为空','warning');return}var lines=text.trim().split('\n');var bankName='导入题库';var startIdx=0;if(lines.length>0&&lines[0].trim().indexOf('|')===-1&&lines[0].trim()){bankName=lines[0].trim();startIdx=1}var banks=App.Storage.getBanks();var newBank={id:genBankId(),name:bankName,description:'从文件导入',questions:[],createdAt:Date.now(),_newFile:true};var count=0;for(var i=startIdx;i<lines.length;i++){var line=lines[i].trim();if(!line)continue;var p=line.split('|');if(p.length>=6){newBank.questions.push({id:genId(),text:p[0].trim(),options:{A:p[1].trim(),B:p[2].trim(),C:p[3].trim(),D:p[4].trim()},answer:p[5].trim().toUpperCase(),points:parseInt(p[6])||10});count++}}if(count===0){App.Toast.show('未识别到有效题目，请检查文件格式','warning');return}banks.push(newBank);App.Storage.setBanks(banks);App.Questions.render();App.Toast.show('成功导入 '+count+' 道题目 → '+bankName,'success')};reader.readAsText(file,'utf-8')}
     };
 
     App.Exam = {
@@ -1416,6 +1464,22 @@
             var studentResults={};
             exam.students.forEach(function(s){studentResults[s.id]={id:s.id,name:s.name,avatar:s.avatar,group:s.group||'',correctCount:0,totalCount:0,pointsEarned:0}});
             exam.results.forEach(function(r){if(studentResults[r.studentId]&&!r.isAbsent){studentResults[r.studentId].totalCount++;if(r.correct){studentResults[r.studentId].correctCount++;studentResults[r.studentId].pointsEarned+=r.pointsEarned}}});
+            // 判断是否全员参与：个人模式下所有学生都参与，或小组模式下所有小组都参与
+            var allParticipants=false;
+            if(exam.participationType!=='group'){
+                var allStudents=App.Storage.getStudents();
+                if(exam.students.length===allStudents.length)allParticipants=true;
+            }else if(exam.groupNames&&exam.groupNames.length>0){
+                var allGroups=App.Storage.getGroups();
+                if(exam.groupNames.length===allGroups.length)allParticipants=true;
+            }
+            // 全员参与时，移除未答题（totalCount===0）的人的数据，节省存储
+            if(allParticipants){
+                var sids=Object.keys(studentResults);
+                for(var ri=0;ri<sids.length;ri++){
+                    if(studentResults[sids[ri]].totalCount===0)delete studentResults[sids[ri]];
+                }
+            }
             if(exam.mode==='practice'){
                 var allCorrect=correct===exam.questions.length;
                 var sid=exam.students[0].id;
@@ -1442,7 +1506,7 @@
                     var nextPPQ=Math.max(1,Math.floor(ppq/2));
                     App.Storage.setWrongSet(sid,bid,{wrongQuestionIds:wrongIds,lastAttempt:Date.now(),bankId:bid,pendingPoints:originalPending+pendingPoints,nextPointsPerQ:nextPPQ,lastInitialPPQ:currentInitialPPQ});
                 }
-                var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,practicePassed:allCorrect};
+                var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,practicePassed:allCorrect,allParticipants:allParticipants||undefined};
                 var records=App.Storage.getRecords();
                 records.push(record);App.Storage.setRecords(records);
                 if(allCorrect)App.Sync.syncNow();
@@ -1512,7 +1576,7 @@
                     });
                 }
             }
-            var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults};
+            var record={id:genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,allParticipants:allParticipants||undefined};
             var records=App.Storage.getRecords();records.push(record);App.Storage.setRecords(records);this.currentExam=null;
             App.Storage.clearExamProgress();
             App.Sync.syncNow();
@@ -1759,8 +1823,9 @@
                 var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':'🎮 未知';
                 var dateStr=new Date(rec.date).toLocaleString('zh-CN');
                 var srs=rec.studentResults||{};var sNames=Object.keys(srs).map(function(k){return srs[k].name});
+                var partLabel=rec.allParticipants?' 👥全员':'';
                 var nameStr=sNames.slice(0,3).join('、')+(sNames.length>3?'...':'');
-                var titleText=dateStr+' '+modeLabel+' '+nameStr;
+                var titleText=dateStr+' '+modeLabel+partLabel+' '+nameStr;
                 var totalQ=rec.totalQuestions||0;var totalC=rec.totalCorrect||0;var totalE=rec.totalEarned||0;
                 html+='<div class="record-card" data-rid="'+rec.id+'">';
                 html+='<div class="record-header"><div class="record-title" onclick="App.Records.toggleDetail(this.parentElement)">'+titleText+'</div>';
@@ -1779,10 +1844,41 @@
                         var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
                         html+='<div class="record-student-row"><span class="record-student-name">'+medal+' 🏆 '+gn+'</span><span class="record-student-score">'+gScores[gn]+' 分</span></div>';
                     });
-                    sKeys.forEach(function(k){var sr=srs[k];html+='<div class="record-student-row"><span class="record-student-name">'+sr.name+(sr.group?' ('+sr.group+')':'')+'</span><span class="record-student-score">+'+sr.pointsEarned+' 分</span></div>'});
+                    var gSorted=sKeys.map(function(k){return srs[k]}).sort(function(a,b){return(b.pointsEarned||0)-(a.pointsEarned||0)});
+                    gSorted.forEach(function(sr,i){
+                        var pct=sr.totalCount>0?Math.round(sr.correctCount/sr.totalCount*100):0;
+                        var pctColor=pct>=90?'var(--success)':pct>=60?'var(--gold)':'var(--danger)';
+                        var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+                        html+='<div class="record-student-row" style="flex-wrap:wrap;gap:4px 0">';
+                        html+='<div style="display:flex;justify-content:space-between;width:100%;align-items:center">';
+                        html+='<span class="record-student-name">'+medal+' '+sr.name+(sr.group?' <span style="font-size:12px;color:var(--text-muted)">('+sr.group+')</span>':'')+'</span>';
+                        html+='<span class="record-student-score">+'+sr.pointsEarned+' ⭐</span>';
+                        html+='</div>';
+                        html+='<div style="display:flex;gap:12px;width:100%;font-size:12px;color:var(--text-muted);padding-left:24px">';
+                        html+='<span>答题 '+sr.totalCount+' 题</span>';
+                        html+='<span>答对 '+sr.correctCount+' 题</span>';
+                        html+='<span>正确率 <b style="color:'+pctColor+'">'+pct+'%</b></span>';
+                        html+='</div>';
+                        html+='</div>';
+                    });
                 }else{
                     var sorted=sKeys.map(function(k){return srs[k]}).sort(function(a,b){return(b.pointsEarned||0)-(a.pointsEarned||0)});
-                    sorted.forEach(function(sr,i){var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';var pct=sr.totalCount>0?Math.round(sr.correctCount/sr.totalCount*100):0;html+='<div class="record-student-row"><span class="record-student-name">'+medal+' '+sr.name+'<span class="record-student-detail">'+sr.correctCount+'/'+sr.totalCount+' 正确率 '+pct+'%</span></span><span class="record-student-score">+'+sr.pointsEarned+' 分</span></div>'});
+                    sorted.forEach(function(sr,i){
+                        var pct=sr.totalCount>0?Math.round(sr.correctCount/sr.totalCount*100):0;
+                        var pctColor=pct>=90?'var(--success)':pct>=60?'var(--gold)':'var(--danger)';
+                        var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+                        html+='<div class="record-student-row" style="flex-wrap:wrap;gap:4px 0">';
+                        html+='<div style="display:flex;justify-content:space-between;width:100%;align-items:center">';
+                        html+='<span class="record-student-name">'+medal+' '+sr.name+'</span>';
+                        html+='<span class="record-student-score">+'+sr.pointsEarned+' ⭐</span>';
+                        html+='</div>';
+                        html+='<div style="display:flex;gap:12px;width:100%;font-size:12px;color:var(--text-muted);padding-left:24px">';
+                        html+='<span>答题 '+sr.totalCount+' 题</span>';
+                        html+='<span>答对 '+sr.correctCount+' 题</span>';
+                        html+='<span>正确率 <b style="color:'+pctColor+'">'+pct+'%</b></span>';
+                        html+='</div>';
+                        html+='</div>';
+                    });
                 }
                 html+='</div></div>';
             });
@@ -1823,7 +1919,7 @@
         },
         getStudentHistory:function(studentId){
             var records=App.Storage.getRecords();var history=[];
-            records.forEach(function(rec){var srs=rec.studentResults||{};if(srs[studentId]){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:srs[studentId].correctCount,totalCount:srs[studentId].totalCount,pointsEarned:srs[studentId].pointsEarned})}});
+            records.forEach(function(rec){var srs=rec.studentResults||{};if(srs[studentId]){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:srs[studentId].correctCount,totalCount:srs[studentId].totalCount,pointsEarned:srs[studentId].pointsEarned})}else if(rec.allParticipants){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:0,totalCount:0,pointsEarned:0,notDrawn:true})}});
             history.sort(function(a,b){return b.date-a.date});return history;
         }
     };
@@ -2407,6 +2503,19 @@
                     case 'syncComplete':
                         if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
                         if(!self._pulling)self.pullAllCloudContent();
+                        if(App.Questions)App.Questions.render();
+                        break;
+                    case 'bankIdMigrated':
+                        // 文件管理器通知题库ID从旧格式迁移到QB_格式
+                        if(msg.oldId&&msg.newId){
+                            var banks=App.Storage.getBanks();
+                            var bank=banks.find(function(b){return b.id===msg.oldId});
+                            if(bank){
+                                bank.id=msg.newId;
+                                App.Storage.setBanks(banks);
+                                console.log('[Sync] 题库ID迁移: '+msg.oldId+' → '+msg.newId+' ('+msg.name+')');
+                            }
+                        }
                         break;
                 }
             });
@@ -2545,26 +2654,78 @@
                 var banks=App.Storage.getBanks();
                 var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
                 var self=this;
+                var banksChanged=false;
+                // 跳过demo题库，不创建文件索引也不上传
                 banks.forEach(function(b){
+                    if(b._demo)return;
                     var bankId=b.id||b.name;
+                    // 兼容旧数据：如果题库ID不是QB_前缀，分配新的QB_ ID
+                    if(!bankId.startsWith('QB_')){
+                        // 先检查文件索引中是否有同名文件已有QB_ ID（云端已存在的）
+                        var sameNameEntry=fileIndex.find(function(x){return x.name===b.name&&x.id&&x.id.startsWith('QB_')});
+                        if(sameNameEntry){
+                            // 复用云端已有的QB_ ID
+                            b.id=sameNameEntry.id;
+                            bankId=sameNameEntry.id;
+                            banksChanged=true;
+                        }else{
+                            var newId=genBankId();
+                            // 检查文件索引中是否已有该旧ID的记录，需要迁移
+                            var oldEntry=fileIndex.find(function(x){return x.id===bankId});
+                            if(oldEntry){
+                                // 迁移旧ID到新QB_ ID
+                                var oldData=localStorage.getItem(prefix+'_file_id_'+bankId);
+                                if(oldData){
+                                    localStorage.setItem(prefix+'_file_id_'+newId,oldData);
+                                    localStorage.removeItem(prefix+'_file_id_'+bankId);
+                                }
+                                oldEntry.id=newId;
+                            }
+                            b.id=newId;
+                            bankId=newId;
+                            banksChanged=true;
+                        }
+                    }
                     var fileName=b.name||bankId;
                     var content=JSON.stringify(b);
                     var existing=fileIndex.find(function(x){return x.id===bankId});
+                    // 如果ID不匹配，再检查是否有同名文件（云端已有同名题库）
+                    if(!existing){
+                        existing=fileIndex.find(function(x){return x.name===fileName&&x.id!==bankId});
+                        if(existing){
+                            // 复用已有文件索引的ID，避免同名不同ID导致重复
+                            var oldBankData=localStorage.getItem(prefix+'_file_id_'+bankId);
+                            if(oldBankData){
+                                localStorage.setItem(prefix+'_file_id_'+existing.id,oldBankData);
+                                localStorage.removeItem(prefix+'_file_id_'+bankId);
+                            }
+                            b.id=existing.id;
+                            bankId=existing.id;
+                            banksChanged=true;
+                        }
+                    }
                     if(existing){
                         existing.version=(existing.version||0)+1;
                         existing.contentLength=[...content].length;
                         existing.lastEditTime=self._formatTime();
+                        // 确保题库文件的folder统一为'题库'
+                        if(!existing.folder||existing.folder==='')existing.folder='题库';
                         try{localStorage.setItem(prefix+'_file_id_'+existing.id,JSON.stringify({data:content,view:null}))}catch(e){}
                     }else{
-                        fileIndex.push({name:fileName,id:bankId,version:1,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length});
+                        fileIndex.push({name:fileName,id:bankId,version:1,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length,time:Date.now()});
                         try{localStorage.setItem(prefix+'_file_id_'+bankId,JSON.stringify({data:content,view:null}))}catch(e){}
                     }
                 });
+                if(banksChanged)App.Storage.setBanks(banks);
                 try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}
                 this.postToFileManager({type:'syncAllFiles'});
             }else{
                 var fileName=this._getFileNameForDataType(dataType);
                 var content=this._getContentForDataType(dataType);
+                // 如果学生全是demo数据，不上传系统-学生信息文件
+                if(dataType==='students'&&content){
+                    try{var parsed=JSON.parse(content);if(Array.isArray(parsed)&&parsed.every(function(s){return s._demo})){content=null}}catch(e){}
+                }
                 if(fileName&&content){
                     var fileIndex2=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
                     var existing2=fileIndex2.find(function(x){return x.name===fileName});
@@ -2575,7 +2736,7 @@
                         try{localStorage.setItem(prefix+'_file_id_'+existing2.id,JSON.stringify({data:content,view:null}))}catch(e){}
                     }else{
                         var id=this._getFileIdForDataType(dataType);
-                        fileIndex2.push({name:fileName,id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'系统',owner:'',createTime:'',lastUploadTime:'',lastEditTime:this._formatTime(),contentLength:[...content].length});
+                        fileIndex2.push({name:fileName,id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'系统',owner:'',createTime:'',lastUploadTime:'',lastEditTime:this._formatTime(),contentLength:[...content].length,time:Date.now()});
                         try{localStorage.setItem(prefix+'_file_id_'+id,JSON.stringify({data:content,view:null}))}catch(e){}
                     }
                     try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex2))}catch(e){}
@@ -2584,9 +2745,19 @@
             }
         },
         syncNow:function(){
+            if(App.Login && !App.Login.isLoggedIn()){
+                App.Toast.show('请先登录后再同步','warning');
+                App.Login.openModal();
+                return;
+            }
             this.postToFileManager({type:'syncAllFiles'});
         },
         syncAll:function(){
+            if(App.Login && !App.Login.isLoggedIn()){
+                App.Toast.show('请先登录后再同步','warning');
+                App.Login.openModal();
+                return;
+            }
             this.postToFileManager({type:'syncAllFiles'});
         },
         updateConfig:function(config){
@@ -2617,9 +2788,10 @@
             var prefix='exam';
             var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
             var self=this;
-            // 题库文件不自动下载，只下载系统文件（学生信息、考试数据、等级设置、AI配置）
+            // 题库文件不自动下载，只下载系统文件（学生信息、考试数据、等级设置）
             var needPull=fileIndex.filter(function(f){
                 if(f.folder==='题库')return false;  // 题库按需下载，不自动拉取
+                if(f.id&&f.id.startsWith('QB_'))return false;  // QB_前缀是题库，不自动拉取
                 return f.cloudOnly||f.contentLength===0||f.isNewFile;
             });
             if(needPull.length===0)return;
@@ -2683,8 +2855,204 @@
         }
     };
 
+    // ========== 登录系统模块 ==========
+    App.Login = {
+        _loggedIn: false,
+        _username: '',
+        _password: '',
+        LOGIN_API_URL: 'https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com',
+        LOGIN_WEBHOOK_URL: 'https://www.kdocs.cn/api/v3/ide/file/504393979179/script/V2-jCry7lblkwsPtTSmtjlWY/sync_task',
+
+        init: function(){
+            var self = this;
+            // 从localStorage恢复登录状态
+            var savedUser = localStorage.getItem('exam_auth_user') || '';
+            var savedPwd = localStorage.getItem('exam_auth_pass') || '';
+            if(savedUser && savedPwd){
+                this._loggedIn = true;
+                this._username = savedUser;
+                this._password = savedPwd;
+            }
+            this.updateUI();
+
+            // 监听denglu.html的登录成功消息
+            window.addEventListener('message', function(e){
+                if(!e.data || typeof e.data !== 'object') return;
+                var msg = e.data;
+                if(msg.type === 'loginSuccess'){
+                    self._onLoginSuccess(msg.username, msg.password);
+                } else if(msg.type === 'passwordChanged'){
+                    self._onPasswordChanged(msg.username, msg.newPassword);
+                }
+            });
+
+            // 延迟：验证已有凭据 + 通知文件管理器
+            setTimeout(function(){
+                if(self._loggedIn){
+                    self.verifyCredentials(self._username, self._password, function(ok){
+                        if(!ok){
+                            self._clearCredentials();
+                            App.Toast.show('登录已过期，请重新登录', 'warning');
+                        }
+                    });
+                    self._notifyFileManager();
+                }
+            }, 2000);
+        },
+
+        _onLoginSuccess: function(username, password){
+            this._loggedIn = true;
+            this._username = username;
+            this._password = password;
+            localStorage.setItem('exam_auth_user', username);
+            localStorage.setItem('exam_auth_pass', password);
+            this.updateUI();
+            this.closeModal();
+            App.Toast.show('登录成功，欢迎 ' + username, 'success');
+            this._notifyFileManager();
+        },
+
+        _onPasswordChanged: function(username, newPassword){
+            this._password = newPassword;
+            localStorage.setItem('exam_auth_pass', newPassword);
+            App.Toast.show('密码已更新，同步认证信息已同步', 'success');
+            this._notifyFileManager();
+        },
+
+        _notifyFileManager: function(){
+            var frames = [document.getElementById('fileManagerBg'), document.getElementById('fileManagerFrame')];
+            var self = this;
+            frames.forEach(function(frame){
+                if(frame && frame.contentWindow){
+                    try{
+                        frame.contentWindow.postMessage({
+                            target: 'fileManager',
+                            type: 'authChanged',
+                            username: self._username,
+                            password: self._password
+                        }, '*');
+                    }catch(e){}
+                }
+            });
+        },
+
+        _clearCredentials: function(){
+            this._loggedIn = false;
+            this._username = '';
+            this._password = '';
+            localStorage.removeItem('exam_auth_user');
+            localStorage.removeItem('exam_auth_pass');
+            this.updateUI();
+        },
+
+        verifyCredentials: function(username, password, callback){
+            var self = this;
+            var body = {
+                webhookUrl: self.LOGIN_WEBHOOK_URL,
+                message: { Context: { argv: { "登录行为":"登录","用户名":username,"密码":password } } }
+            };
+            fetch(self.LOGIN_API_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body)
+            }).then(function(res){ return res.text(); }).then(function(txt){
+                try{
+                    var d = JSON.parse(txt);
+                    var result = d.data && d.data.result ? d.data.result : d;
+                    if(result.TZbianhao === 501){
+                        callback(true);
+                    } else {
+                        callback(false);
+                    }
+                }catch(e){ callback(false); }
+            }).catch(function(e){
+                // 网络异常时容许离线使用
+                callback(true);
+            });
+        },
+
+        openModal: function(){
+            var modal = document.getElementById('login-modal');
+            if(modal) modal.style.display = 'flex';
+            var frame = document.getElementById('loginFrame');
+            if(frame && frame.contentWindow){
+                try{
+                    frame.contentWindow.postMessage({action: 'switchTab', tab: 'login'}, '*');
+                }catch(e){}
+            }
+        },
+
+        closeModal: function(){
+            var modal = document.getElementById('login-modal');
+            if(modal) modal.style.display = 'none';
+        },
+
+        logout: function(){
+            if(!confirm('退出登录将清空所有本地缓存数据，确定退出？')) return;
+            // 清空所有 exam_ 开头的 localStorage 缓存（保留设备标识）
+            var keysToRemove = [];
+            for(var i = 0; i < localStorage.length; i++){
+                var key = localStorage.key(i);
+                if(key && key.startsWith('exam_') && key !== 'exam_device_id'){
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(function(k){ localStorage.removeItem(k); });
+
+            this._loggedIn = false;
+            this._username = '';
+            this._password = '';
+            this.updateUI();
+            App.Toast.show('已退出登录，本地缓存已清空', 'info');
+
+            // 通知文件管理器登出
+            var frames = [document.getElementById('fileManagerBg'), document.getElementById('fileManagerFrame')];
+            frames.forEach(function(frame){
+                if(frame && frame.contentWindow){
+                    try{
+                        frame.contentWindow.postMessage({
+                            target: 'fileManager',
+                            type: 'logout'
+                        }, '*');
+                    }catch(e){}
+                }
+            });
+        },
+
+        isLoggedIn: function(){
+            return this._loggedIn;
+        },
+
+        getUsername: function(){
+            return this._username;
+        },
+
+        getCredentials: function(){
+            if(!this._loggedIn) return null;
+            return {username: this._username, password: this._password};
+        },
+
+        updateUI: function(){
+            var display = document.getElementById('login-user-display');
+            var btnLogin = document.getElementById('btn-login');
+            var btnLogout = document.getElementById('btn-logout');
+            if(display){
+                if(this._loggedIn){
+                    display.textContent = '👤 ' + this._username + '（已登录）';
+                    display.style.color = '#27ae60';
+                } else {
+                    display.textContent = '未登录';
+                    display.style.color = '#888';
+                }
+            }
+            if(btnLogin) btnLogin.style.display = this._loggedIn ? 'none' : '';
+            if(btnLogout) btnLogout.style.display = this._loggedIn ? '' : 'none';
+        }
+    };
+
     App.init = function(){
         App.Storage.ensureDefaults();
+        App.Login.init();
         App.Sync.init();
         App.Toast.init();
         App.Effects.init();

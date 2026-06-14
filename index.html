@@ -240,6 +240,12 @@
                         <div class="settings-card" style="margin-top:12px"><div id="records-list" class="records-list"></div><div class="empty-state inline" id="records-empty"><div class="empty-icon">📝</div><p>暂无记录</p></div></div>
                     </div>
                     <div class="settings-panel" id="stab-sync"><div class="settings-card">
+                        <div class="form-group"><label>🔐 账号登录</label><div class="form-hint">登录后账号密码将用于云同步认证</div></div>
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+                            <span id="login-user-display" style="font-size:14px;color:#888">未登录</span>
+                            <button class="btn-primary btn-sm" onclick="App.Login.openModal()" id="btn-login" style="background:#0071e3;border-color:#005ecb">🔑 登录</button>
+                            <button class="btn-secondary btn-sm" onclick="App.Login.logout()" id="btn-logout" style="display:none">🚪 退出</button>
+                        </div>
                         <div class="form-group"><label>☁️ 云同步（文件管理器）</label><div class="form-hint">数据以文件形式同步到WPS云端表格"抽奖考试"，支持版本控制与冲突处理</div></div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
                             <button class="btn-primary btn-sm" onclick="App.Sync.openFileManager()" style="background:#4A90D9;border-color:#3a7bd5">📁 打开文件管理器</button>
@@ -257,6 +263,11 @@
         <iframe id="fileManagerFrame" src="文件管理.HTML" style="width:780px;max-width:95vw;height:75vh;border:none;border-radius:10px;background:#fff"></iframe>
     </div>
     <iframe id="fileManagerBg" src="文件管理.HTML" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
+    <!-- 登录系统 -->
+    <iframe id="loginFrameBg" src="denglu.html" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
+    <div id="login-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:200;justify-content:center;align-items:center" onclick="if(event.target===this)App.Login.closeModal()">
+        <iframe id="loginFrame" src="denglu.html" style="width:420px;max-width:95vw;height:520px;border:none;border-radius:10px;background:#fff"></iframe>
+    </div>
     <script src="demo-data.js"></script>
     <script src="mode-rules.js"></script>
     <script src="app.js"></script>
