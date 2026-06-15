@@ -21,6 +21,11 @@
             <button class="nav-btn" data-view="settings" onclick="App.switchView('settings')"><span class="nav-icon">⚙️</span><span class="nav-text">设置</span></button>
         </div>
         <div class="nav-sound" onclick="App.Effects.toggleSound()" id="sound-toggle" title="音效开关">🔊</div>
+        <div class="nav-login" id="nav-login-area">
+            <span id="nav-login-status" style="font-size:13px;color:#888;cursor:default">未登录</span>
+            <button class="nav-login-btn" onclick="App.Login.openModal()" id="nav-btn-login" title="登录">🔑</button>
+            <button class="nav-login-btn" onclick="App.Login.logout()" id="nav-btn-logout" style="display:none" title="退出登录">🚪</button>
+        </div>
         <button class="nav-exam-ctrl hidden" id="nav-exam-mode" onclick="App.switchView('home')"></button>
         <button class="nav-exam-ctrl hidden" id="nav-exam-end" onclick="App.Exam.endExam()">⏹ 结束</button>
         <div class="nav-zoom" id="nav-zoom-controls"><button class="zoom-btn" onclick="App.zoomOut()" title="缩小">−</button><span class="zoom-level" id="zoom-level">100%</span><button class="zoom-btn" onclick="App.zoomIn()" title="放大">+</button></div>

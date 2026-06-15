@@ -2649,6 +2649,7 @@
         },
         notifyChange:function(dataType,data){
             if(!this.ready)return;
+            var isLoggedIn=App.Login&&App.Login.isLoggedIn();
             var prefix='exam';
             if(dataType==='banks'){
                 var banks=App.Storage.getBanks();
@@ -2718,7 +2719,7 @@
                 });
                 if(banksChanged)App.Storage.setBanks(banks);
                 try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}
-                this.postToFileManager({type:'syncAllFiles'});
+                if(isLoggedIn)this.postToFileManager({type:'syncAllFiles'});
             }else{
                 var fileName=this._getFileNameForDataType(dataType);
                 var content=this._getContentForDataType(dataType);
@@ -2740,7 +2741,7 @@
                         try{localStorage.setItem(prefix+'_file_id_'+id,JSON.stringify({data:content,view:null}))}catch(e){}
                     }
                     try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex2))}catch(e){}
-                    this.postToFileManager({type:'syncAllFiles'});
+                    if(isLoggedIn)this.postToFileManager({type:'syncAllFiles'});
                 }
             }
         },
@@ -3047,6 +3048,21 @@
             }
             if(btnLogin) btnLogin.style.display = this._loggedIn ? 'none' : '';
             if(btnLogout) btnLogout.style.display = this._loggedIn ? '' : 'none';
+            // 导航栏登录状态
+            var navStatus = document.getElementById('nav-login-status');
+            var navBtnLogin = document.getElementById('nav-btn-login');
+            var navBtnLogout = document.getElementById('nav-btn-logout');
+            if(navStatus){
+                if(this._loggedIn){
+                    navStatus.textContent = '👤 ' + this._username;
+                    navStatus.style.color = '#27ae60';
+                } else {
+                    navStatus.textContent = '未登录';
+                    navStatus.style.color = '#888';
+                }
+            }
+            if(navBtnLogin) navBtnLogin.style.display = this._loggedIn ? 'none' : '';
+            if(navBtnLogout) navBtnLogout.style.display = this._loggedIn ? '' : 'none';
         }
     };
 
