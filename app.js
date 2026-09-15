@@ -309,9 +309,9 @@
     };
 
     App.Questions = {
-        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.folder==='题库'&&!localBankIds.has(f.id)&&!localBankIds.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var html='';banks.forEach(function(b){var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'';var fi=fileIndex.find(function(x){return x.id===b.id||x.id===b.name});if(!hasContent&&fi){countText=fi.cloudOnly?'☁️ 未下载':'已缓存'}else if(!hasContent){countText='空题库'}html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+b.name+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});if(cloudOnlyBanks.length>0){html+='<div style="padding:8px 0 4px;font-size:12px;color:#9b59b6;border-top:1px solid #eee;margin-top:8px">☁️ 以下题库仅存于云端，点击可下载</div>';cloudOnlyBanks.forEach(function(f){var charInfo=f.contentLength?(' ('+f.contentLength+'字)'):'';html+='<div class="bank-card" style="animation:slide-up 0.3s ease both;opacity:0.85;border:1px dashed #9b59b6"><div class="bc-header"><div><div class="bc-name">☁️ '+f.name+'</div><div class="bc-count">(☁️ 未下载'+charInfo+')</div></div></div><div class="bc-desc">仅存于云端，点击下载后可使用</div><div class="bc-actions"><button onclick="App.Questions.downloadCloudBank(\''+f.id+'\',\''+f.name.replace(/'/g,"\\'")+'\')">⬇️ 下载到本地</button><button class="btn-del" onclick="App.Questions.removeCloudBankIndex(\''+f.id+'\')">🗑️ 移除</button></div></div>'})}grid.innerHTML=html},
-        renderBankSelect:function(){var banks=App.Storage.getBanks();var info=document.getElementById('exam-bank-info');if(!info)return;var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.folder==='题库'&&!localBankIds.has(f.id)&&!localBankIds.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){info.textContent='暂无题库，请先创建';return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var matched=banks.filter(function(b){return lastIds.indexOf(b.id)>=0});var cloudMatched=cloudOnlyBanks.filter(function(f){return lastIds.indexOf(f.id)>=0});if(matched.length>0||cloudMatched.length>0){var names=[];var totalQ=0;matched.forEach(function(b){names.push(b.name);totalQ+=b.questions.length});cloudMatched.forEach(function(f){names.push('☁️'+f.name)});info.textContent=names.join('、')+'（'+(cloudMatched.length>0?'含云端题库':totalQ+' 题')+'）'}else{info.textContent='点击选择题库'}},
-        showBankSelectModal:function(){var banks=App.Storage.getBanks();var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.folder==='题库'&&!localBankIds.has(f.id)&&!localBankIds.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){App.Toast.show('暂无题库，请先在题库中创建','warning');return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var isPractice=App.Exam.currentMode==='practice';var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';body+='</div>'});if(cloudOnlyBanks.length>0){body+='<div style="grid-column:1/-1;padding:4px 0;font-size:11px;color:#9b59b6;border-top:1px solid #eee">☁️ 云端题库（选择后自动下载）</div>';cloudOnlyBanks.forEach(function(f){var sel=lastIds.indexOf(f.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+f.id+'" data-cloud-only="true" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')" style="border:1px dashed #9b59b6">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">☁️ '+f.name+'</span>';body+='<span class="bank-modal-count">云端</span>';body+='</div>'})}body+='</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
+        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var html='';banks.forEach(function(b){var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'空题库';html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+b.name+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});cloudOnlyBanks.forEach(function(f){html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+f.name+'</div><div class="bc-count">(空题库)</div></div></div><div class="bc-desc">'+(f.contentLength?f.contentLength+'字':'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+f.id+'\')">📋 编辑预览</button><button class="btn-del" onclick="App.Questions.removeBank(\''+f.id+'\')">🗑️ 删除</button></div></div>'});grid.innerHTML=html},
+        renderBankSelect:function(){var banks=App.Storage.getBanks();var info=document.getElementById('exam-bank-info');if(!info)return;var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){info.textContent='暂无题库，请先创建';return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var matched=banks.filter(function(b){return lastIds.indexOf(b.id)>=0});var cloudMatched=cloudOnlyBanks.filter(function(f){return lastIds.indexOf(f.id)>=0});if(matched.length>0||cloudMatched.length>0){var names=[];var totalQ=0;matched.forEach(function(b){names.push(b.name);totalQ+=b.questions.length});cloudMatched.forEach(function(f){names.push(f.name)});info.textContent=names.join('、')+'（'+totalQ+' 题）'}else{info.textContent='点击选择题库'}},
+        showBankSelectModal:function(){var banks=App.Storage.getBanks();var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){App.Toast.show('暂无题库，请先在题库中创建','warning');return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var isPractice=App.Exam.currentMode==='practice';var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';body+='</div>'});cloudOnlyBanks.forEach(function(f){var sel=lastIds.indexOf(f.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+f.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+f.name+'</span>';body+='<span class="bank-modal-count">0 题</span>';body+='</div>'});body+='</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
         toggleModalBank:function(el,single){if(single){document.querySelectorAll('.bank-modal-item.selected').forEach(function(item){if(item!==el){item.classList.remove('selected');item.querySelector('.bank-modal-check').textContent=''}})}el.classList.toggle('selected');el.querySelector('.bank-modal-check').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         selectAllModalBanks:function(){var items=document.querySelectorAll('.bank-modal-item');var allSel=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSel=false});items.forEach(function(el){if(allSel){el.classList.remove('selected');el.querySelector('.bank-modal-check').textContent=''}else{if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.bank-modal-check').textContent='✓'}}});App.Effects.playClick()},
         confirmBankSelect:function(){var ids=[];document.querySelectorAll('.bank-modal-item.selected').forEach(function(el){ids.push(el.dataset.bankId)});if(ids.length===0){App.Toast.show('请至少选择一个题库','warning');return}if(App.Exam.currentMode==='practice'&&ids.length>1){App.Toast.show('练习模式只能选择1个题库','warning');return}var settings=App.Storage.getSettings();settings._lastBankIds=ids;App.Storage.setSettings(settings);App.Modal.close();this.renderBankSelect();App.Effects.playClick()},
@@ -321,7 +321,7 @@
         addBank:function(){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();banks.push({id:genBankId(),name:name,description:desc,questions:[],createdAt:Date.now(),_newFile:true});App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库 '+name+' 创建成功','success')},
         showEditBankDialog:function(id){var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" value="'+b.name+'"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" value="'+(b.description||'')+'"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.updateBank(\''+id+'\')">保存</button>';App.Modal.open('编辑题库',body,footer)},
         updateBank:function(id){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;b.name=name;b.description=desc;App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库信息已更新','success')},
-        removeBank:function(id){if(!confirm('确定要删除该题库及其所有题目吗？'))return;var banks=App.Storage.getBanks();var deleted=banks.find(function(x){return x.id===id});var remaining=banks.filter(function(x){return x.id!==id});App.Storage.setBanks(remaining);if(deleted)App.Sync.deleteBank(deleted.id||deleted.name);this.render();App.Toast.show('题库已删除','info')},
+        removeBank:function(id){if(!confirm('确定要删除该题库及其所有题目吗？'))return;var banks=App.Storage.getBanks();var deleted=banks.find(function(x){return x.id===id});var remaining=banks.filter(function(x){return x.id!==id});App.Storage.setBanks(remaining);if(deleted){App.Sync.deleteBank(deleted.id||deleted.name)}else{var prefix='exam';var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');fileIndex=fileIndex.filter(function(f){return f.id!==id});try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}}this.render();App.Toast.show('题库已删除','info')},
         downloadCloudBank:async function(id,name){
             App.Toast.show('正在从云端下载题库...','info');
             if(App.Sync&&App.Sync.ready){
@@ -672,6 +672,7 @@
         getSelectedStudentIds:function(){var ids=[];document.querySelectorAll('.student-select-item.selected').forEach(function(el){ids.push(el.dataset.studentId)});return ids},
         selectAllStudents:function(){var mode=this.currentMode;var items=document.querySelectorAll('.student-select-item');var allSelected=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSelected=false});if(allSelected){items.forEach(function(el){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''})}else if(mode==='practice'){App.Toast.show('练习模式仅限选择1人','warning')}else if(mode==='pk'){var count=document.querySelectorAll('.student-select-item.selected').length;items.forEach(function(el){if(!el.classList.contains('selected')&&count<8){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓';count++}})}else{items.forEach(function(el){if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}})}App.Effects.playClick()},
         startExam:async function(){
+            if(App.Login && !App.Login.isLoggedIn()){App.Toast.show('请先登录','warning');App.Login.openModal();return}
             var bankIds=App.Questions.getSelectedBankIds();
             if(bankIds.length===0){App.Toast.show('请至少选择一个题库','warning');return}
             var students=App.Storage.getStudents();
@@ -720,9 +721,21 @@
             var banks=App.Storage.getBanks(),allQ=[];
             // 检查所选题库是否缺少题目内容（仅有索引），按需从云端下载
             var missingBanks=[];
+            var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
             bankIds.forEach(function(bid){
                 var b=banks.find(function(x){return x.id===bid});
-                if(b&&(!b.questions||b.questions.length===0)){
+                if(!b){
+                    // 本地banks中无此题库，但文件索引中有（云端题库），需要下载
+                    var fi=fileIndex.find(function(x){return x.id===bid&&x.id.startsWith('QB_')});
+                    if(fi){
+                        // 先在banks中创建空壳条目，以便下载后填充（静默，不增加版本号）
+                        b={id:bid,name:fi.name,description:'',questions:[],createdAt:Date.now()};
+                        banks.push(b);
+                        App.Storage._syncSilent=true;
+                        try{App.Storage.setBanks(banks)}finally{App.Storage._syncSilent=false}
+                        missingBanks.push(b);
+                    }
+                }else if(!b.questions||b.questions.length===0){
                     missingBanks.push(b);
                 }
             });
@@ -2221,26 +2234,38 @@
             App.Storage.setRecords([]);
             App.Records.render();
             App.Leaderboard.render();
-            App.Sync.notifyChange('records',[]);
+            // 清空云端场次数据文件（整行删除）
+            var prefix='exam';
+            var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+            var recordsFile=fileIndex.find(function(f){return f.name==='系统-考试数据'});
+            if(recordsFile&&recordsFile.id){
+                App.Sync.postToFileManager({type:'fileDeleted_local',fileId:recordsFile.id});
+            }
             App.Toast.show('场次数据已清空','info');
         },
         resetData:function(){
             if(!confirm('⚠️ 确定要重置所有数据吗？此操作不可恢复！'))return;
-            if(!confirm('再次确认：所有学生、题库、记录将被删除！'))return;
+            if(!confirm('再次确认：所有学生、题库、记录将被删除！云端数据也将一并删除！'))return;
+            // 先删除云端所有文件（整行删除），再清空本地
+            var prefix='exam';
+            var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+            fileIndex.forEach(function(f){
+                if(f.id){
+                    App.Sync.postToFileManager({type:'fileDeleted_local',fileId:f.id});
+                }
+            });
+            // 清空本地数据
             var keys=Object.keys(localStorage);
             keys.forEach(function(k){if(k.indexOf('exam_')===0&&k.indexOf('exam_file_')!==0&&k.indexOf('exam_sync_config')!==0&&k.indexOf('exam_last_sync')!==0&&k.indexOf('exam_device_id')!==0&&k.indexOf('exam_auth_')!==0)localStorage.removeItem(k)});
+            // 同时清空文件索引和文件数据
+            keys.forEach(function(k){if(k.indexOf('exam_file_')===0)localStorage.removeItem(k)});
             App.Storage.ensureDefaults();
             App.Students.render();
             App.Questions.render();
             App.Leaderboard.render();
             App.Records.render();
             this.renderLevels();
-            App.Sync.notifyChange('students',App.Storage.getStudents());
-            App.Sync.notifyChange('banks',App.Storage.getBanks());
-            App.Sync.notifyChange('records',App.Storage.getRecords());
-            App.Sync.notifyChange('levels',App.Storage.getSettings().levels||[]);
-            App.Sync.syncNow();
-            App.Toast.show('数据已重置','info');
+            App.Toast.show('数据已重置，云端数据正在删除中','info');
         },
         StudentMgmt:{
             _dirty:false,
@@ -2360,6 +2385,13 @@
                 this.render();
                 App.Students.render();
                 App.Leaderboard.render();
+                // 清空云端学生信息文件（整行删除）
+                var prefix='exam';
+                var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                var studentFile=fileIndex.find(function(f){return f.name==='系统-学生信息'});
+                if(studentFile&&studentFile.id){
+                    App.Sync.postToFileManager({type:'fileDeleted_local',fileId:studentFile.id});
+                }
                 App.Toast.show('所有学生已清空','info');
             },
             showImportDialog:function(){
@@ -2517,6 +2549,10 @@
                             }
                         }
                         break;
+                    case 'cloudIndexUpdated':
+                        // 云端索引更新完成，刷新题库列表
+                        if(App.Questions)App.Questions.render();
+                        break;
                 }
             });
             document.addEventListener('visibilitychange',function(){
@@ -2609,8 +2645,17 @@
                             var existingBanks=App.Storage.getBanks();
                             var bankId=data.id;
                             var idx=existingBanks.findIndex(function(b){return b.id===bankId});
-                            if(idx>=0){existingBanks[idx]=data}
-                            else{existingBanks.push(data)}
+                            if(idx>=0){
+                                existingBanks[idx]=data;
+                            }else{
+                                // ID不匹配时，按名称查找同名空题库并替换
+                                var nameIdx=existingBanks.findIndex(function(b){return b.name===data.name&&(!b.questions||b.questions.length===0)});
+                                if(nameIdx>=0){
+                                    existingBanks[nameIdx]=data;
+                                }else{
+                                    existingBanks.push(data);
+                                }
+                            }
                             App.Storage.set('banks',existingBanks);
                             App.Questions.render();
                         }
@@ -2706,14 +2751,17 @@
                         }
                     }
                     if(existing){
-                        existing.version=(existing.version||0)+1;
+                        // 比较内容是否真正变化，只有变化时才增加版本号
+                        var oldData=null;
+                        try{var raw=localStorage.getItem(prefix+'_file_id_'+existing.id);if(raw)oldData=JSON.parse(raw).data}catch(e){}
+                        var contentChanged=!oldData||oldData!==content;
+                        if(contentChanged){existing.version=(existing.version||0)+1}
                         existing.contentLength=[...content].length;
                         existing.lastEditTime=self._formatTime();
-                        // 确保题库文件的folder统一为'题库'
-                        if(!existing.folder||existing.folder==='')existing.folder='题库';
+                        // 题库文件不设置文件夹（云端平铺）
                         try{localStorage.setItem(prefix+'_file_id_'+existing.id,JSON.stringify({data:content,view:null}))}catch(e){}
                     }else{
-                        fileIndex.push({name:fileName,id:bankId,version:1,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length,time:Date.now()});
+                        fileIndex.push({name:fileName,id:bankId,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length,time:Date.now()});
                         try{localStorage.setItem(prefix+'_file_id_'+bankId,JSON.stringify({data:content,view:null}))}catch(e){}
                     }
                 });
@@ -2731,7 +2779,10 @@
                     var fileIndex2=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
                     var existing2=fileIndex2.find(function(x){return x.name===fileName});
                     if(existing2){
-                        existing2.version=(existing2.version||0)+1;
+                        var oldData2=null;
+                        try{var raw2=localStorage.getItem(prefix+'_file_id_'+existing2.id);if(raw2)oldData2=JSON.parse(raw2).data}catch(e){}
+                        var contentChanged2=!oldData2||oldData2!==content;
+                        if(contentChanged2){existing2.version=(existing2.version||0)+1}
                         existing2.contentLength=[...content].length;
                         existing2.lastEditTime=this._formatTime();
                         try{localStorage.setItem(prefix+'_file_id_'+existing2.id,JSON.stringify({data:content,view:null}))}catch(e){}
@@ -2791,8 +2842,7 @@
             var self=this;
             // 题库文件不自动下载，只下载系统文件（学生信息、考试数据、等级设置）
             var needPull=fileIndex.filter(function(f){
-                if(f.folder==='题库')return false;  // 题库按需下载，不自动拉取
-                if(f.id&&f.id.startsWith('QB_'))return false;  // QB_前缀是题库，不自动拉取
+                if(f.id&&f.id.startsWith('QB_'))return false;  // 题库按需下载，不自动拉取
                 return f.cloudOnly||f.contentLength===0||f.isNewFile;
             });
             if(needPull.length===0)return;
@@ -2835,7 +2885,7 @@
                     var name=b.name||id;
                     var content=JSON.stringify(b);
                     var fileId=id;
-                    fileIndex.push({name:name,id:fileId,version:1,lastSyncVersion:0,isNewFile:true,folder:'题库',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length});
+                    fileIndex.push({name:name,id:fileId,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length});
                     try{localStorage.setItem(prefix+'_file_id_'+fileId,JSON.stringify({data:content,view:null}))}catch(e){}
                 });
                 var aiConfig={aiApiUrl:App.Storage.getSettings().aiApiUrl||'',aiApiKey:App.Storage.getSettings().aiApiKey||'',aiModel:App.Storage.getSettings().aiModel||''};
@@ -2876,48 +2926,46 @@
             }
             this.updateUI();
 
-            // 监听denglu.html的登录成功消息
-            window.addEventListener('message', function(e){
-                if(!e.data || typeof e.data !== 'object') return;
-                var msg = e.data;
-                if(msg.type === 'loginSuccess'){
-                    self._onLoginSuccess(msg.username, msg.password);
-                } else if(msg.type === 'passwordChanged'){
-                    self._onPasswordChanged(msg.username, msg.newPassword);
-                }
-            });
+            // 未登录：清空本地缓存并跳转到登录页
+            if(!this._loggedIn){
+                this._clearAllCache();
+                this._redirectToLogin();
+                return;
+            }
 
             // 延迟：验证已有凭据 + 通知文件管理器
             setTimeout(function(){
-                if(self._loggedIn){
-                    self.verifyCredentials(self._username, self._password, function(ok){
-                        if(!ok){
-                            self._clearCredentials();
-                            App.Toast.show('登录已过期，请重新登录', 'warning');
-                        }
-                    });
-                    self._notifyFileManager();
-                }
+                self.verifyCredentials(self._username, self._password, function(ok){
+                    if(!ok){
+                        self._clearAllCache();
+                        App.Toast.show('登录已过期，请重新登录', 'warning');
+                        self._redirectToLogin();
+                    }
+                });
+                self._notifyFileManager();
             }, 2000);
         },
 
-        _onLoginSuccess: function(username, password){
-            this._loggedIn = true;
-            this._username = username;
-            this._password = password;
-            localStorage.setItem('exam_auth_user', username);
-            localStorage.setItem('exam_auth_pass', password);
-            this.updateUI();
-            this.closeModal();
-            App.Toast.show('登录成功，欢迎 ' + username, 'success');
-            this._notifyFileManager();
+        // 清空所有 exam_ 开头的本地缓存（保留设备标识）
+        _clearAllCache: function(){
+            try{
+                var keysToRemove = [];
+                for(var i = 0; i < localStorage.length; i++){
+                    var key = localStorage.key(i);
+                    if(key && key.indexOf('exam_') === 0 && key !== 'exam_device_id'){
+                        keysToRemove.push(key);
+                    }
+                }
+                keysToRemove.forEach(function(k){ localStorage.removeItem(k); });
+            }catch(e){}
+            this._loggedIn = false;
+            this._username = '';
+            this._password = '';
         },
 
-        _onPasswordChanged: function(username, newPassword){
-            this._password = newPassword;
-            localStorage.setItem('exam_auth_pass', newPassword);
-            App.Toast.show('密码已更新，同步认证信息已同步', 'success');
-            this._notifyFileManager();
+        // 跳转到登录页
+        _redirectToLogin: function(){
+            window.location.href = 'denglu.html';
         },
 
         _notifyFileManager: function(){
@@ -2935,15 +2983,6 @@
                     }catch(e){}
                 }
             });
-        },
-
-        _clearCredentials: function(){
-            this._loggedIn = false;
-            this._username = '';
-            this._password = '';
-            localStorage.removeItem('exam_auth_user');
-            localStorage.removeItem('exam_auth_pass');
-            this.updateUI();
         },
 
         verifyCredentials: function(username, password, callback){
@@ -2973,36 +3012,17 @@
         },
 
         openModal: function(){
-            var modal = document.getElementById('login-modal');
-            if(modal) modal.style.display = 'flex';
-            var frame = document.getElementById('loginFrame');
-            if(frame && frame.contentWindow){
-                try{
-                    frame.contentWindow.postMessage({action: 'switchTab', tab: 'login'}, '*');
-                }catch(e){}
-            }
+            // 直接跳转到登录页
+            this._redirectToLogin();
         },
 
         closeModal: function(){
-            var modal = document.getElementById('login-modal');
-            if(modal) modal.style.display = 'none';
+            // 同页跳转模式下无需关闭弹窗
         },
 
         logout: function(){
             if(!confirm('退出登录将清空所有本地缓存数据，确定退出？')) return;
-            // 清空所有 exam_ 开头的 localStorage 缓存（保留设备标识）
-            var keysToRemove = [];
-            for(var i = 0; i < localStorage.length; i++){
-                var key = localStorage.key(i);
-                if(key && key.startsWith('exam_') && key !== 'exam_device_id'){
-                    keysToRemove.push(key);
-                }
-            }
-            keysToRemove.forEach(function(k){ localStorage.removeItem(k); });
-
-            this._loggedIn = false;
-            this._username = '';
-            this._password = '';
+            this._clearAllCache();
             this.updateUI();
             App.Toast.show('已退出登录，本地缓存已清空', 'info');
 
@@ -3018,6 +3038,9 @@
                     }catch(e){}
                 }
             });
+
+            // 延迟跳转登录页，确保 Toast 和 postMessage 能发出
+            setTimeout(function(){ window.location.href = 'denglu.html'; }, 800);
         },
 
         isLoggedIn: function(){
