@@ -74,6 +74,18 @@ var ModeRules = {
             '智能强度参数可在设置中调整（默认5）'
         ],
         groupExtra: '获胜小组全员每题额外 +5 分'
+    },
+    lottery: {
+        title: '🎲 抽签',
+        icon: '🎲',
+        rules: [
+            '纯随机抽取学生，人人机会均等',
+            '不依赖题库，题目由老师现场口头指定',
+            '与积分无关，仅作为课堂抽签工具',
+            '抽签次数不限，随时可点击「结束」停止',
+            '缺勤学生当日不参与抽签'
+        ],
+        personalOnly: true
     }
 };
 
@@ -83,7 +95,8 @@ var ParticipationLabels = {
         challenge: '🎯 个人挑战',
         pk: '⚔️ 个人PK',
         practice: '📝 个人练习',
-        smart: '🧠 个人智能抽查'
+        smart: '🧠 个人智能抽查',
+        lottery: '🎲 个人抽签'
     },
     group: {
         farm: '🌾 小组打野',

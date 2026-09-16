@@ -3187,7 +3187,7 @@ input:checked + .slider:before {
 
 .mode-cards {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 20px;
     margin-bottom: 30px;
     max-width: 1200px;
@@ -3267,6 +3267,19 @@ input:checked + .slider:before {
 .mode-card[data-mode="pk"]:hover {
     border-color: var(--danger);
     box-shadow: 0 8px 30px rgba(239, 68, 68, 0.3);
+}
+
+.mode-card[data-mode="lottery"]:hover {
+    border-color: var(--accent-2);
+    box-shadow: 0 8px 30px rgba(168, 85, 247, 0.3);
+}
+
+.lottery-hint {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 42px 20px;
+    font-size: 1.2em;
+    line-height: 1.8;
 }
 
 .btn-back {
