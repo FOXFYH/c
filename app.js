@@ -569,7 +569,14 @@
             if(avgQGroup)avgQGroup.style.display=(isPractice||isLottery)?'none':'';
             var timeoutGroup=document.getElementById('opt-group-timeout');
             if(timeoutGroup)timeoutGroup.style.display=isLottery?'none':'';
-            if(isLottery&&playerOrderEl)playerOrderEl.value='random';
+            var lotteryRandomGroup=document.getElementById('opt-group-lottery-random');
+            if(lotteryRandomGroup)lotteryRandomGroup.style.display=isLottery?'':'none';
+            if(isLottery&&lotteryRandomGroup){
+                var savedLR=settings.lastLotteryRandom||'fairCycle';
+                var lrSelect=document.getElementById('exam-lottery-random');
+                if(lrSelect){for(var li=0;li<lrSelect.options.length;li++){if(lrSelect.options[li].value===savedLR){lrSelect.selectedIndex=li;break}}}
+                if(playerOrderEl)playerOrderEl.value='random';
+            }
             var smartGroup=document.getElementById('opt-group-smart');
             if(smartGroup)smartGroup.style.display=isSmart?'':'none';
             if(isSmart){
@@ -660,6 +667,8 @@
             if(bankBar)bankBar.style.display='';
             var smartGroup=document.getElementById('opt-group-smart');
             if(smartGroup)smartGroup.style.display='none';
+            var lotteryRandomGroup=document.getElementById('opt-group-lottery-random');
+            if(lotteryRandomGroup)lotteryRandomGroup.style.display='none';
             App.Effects.playClick();
         },
         renderGroupSelect:function(){
@@ -832,8 +841,11 @@
                 playerOrder='smart';
                 playerQueue=this._buildSmartPlayerQueue(availableStudents,totalQuestionsNeeded);
             }else if(isLottery){
+                var lrSel=document.getElementById('exam-lottery-random');
+                var lotteryMode=lrSel?lrSel.value:'fairCycle';
+                var st_lr=App.Storage.getSettings();st_lr.lastLotteryRandom=lotteryMode;App.Storage.setSettings(st_lr);
                 playerOrder='random';
-                playerQueue=this._buildLotteryQueue(availableStudents,totalQuestionsNeeded);
+                playerQueue=(lotteryMode==='fairCycle')?this._buildFairLotteryQueue(availableStudents,totalQuestionsNeeded):this._buildLotteryQueue(availableStudents,totalQuestionsNeeded);
             }else{
                 playerQueue=this._buildPlayerQueue(availableStudents,playerOrder,totalQuestionsNeeded,pType,groupNames,groupRotation);
             }
@@ -935,6 +947,17 @@
         _buildLotteryQueue:function(students,needed){
             var queue=[];
             for(var i=0;i<needed;i++){queue.push(students[Math.floor(Math.random()*students.length)])}
+            return queue;
+        },
+        _buildFairLotteryQueue:function(students,needed){
+            var queue=[];var batch=[];var idx=0;
+            for(var i=0;i<needed;i++){
+                if(idx>=batch.length){
+                    batch=students.slice().sort(function(){return Math.random()-0.5});
+                    idx=0;
+                }
+                queue.push(batch[idx]);idx++;
+            }
             return queue;
         },
         _calcSmartProbPoints:function(students){
