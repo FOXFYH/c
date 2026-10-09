@@ -2605,6 +2605,10 @@
                         // 文件管理器就绪握手：补发配置与凭据
                         self._sendInitAndAuth();
                         break;
+                    case 'pullAllComplete':
+                        // 文件管理器批量拉取完成
+                        this._pulling = false;
+                        break;
                     case 'openFile':
                         self._onOpenFile(msg);
                         break;
@@ -3008,17 +3012,9 @@
                 return f.cloudOnly||f.contentLength===0||f.isNewFile;
             });
             if(needPull.length===0)return;
-            console.log('[Sync] 需要拉取内容的系统文件：'+needPull.length+'个（题库按需下载，不自动拉取）');
+            console.log('[Sync] 批量拉取系统文件内容：'+needPull.length+'个（一次webhook批取）');
             self._pulling=true;
-            var i=0;
-            function pullNext(){
-                if(i>=needPull.length){self._pulling=false;return}
-                var f=needPull[i];
-                i++;
-                self.postToFileManager({type:'downloadCloudFile',fileId:f.id,fileName:f.name});
-                setTimeout(pullNext,3000);
-            }
-            pullNext();
+            self.postToFileManager({type:'pullAllCloudFiles',ids:needPull.map(function(f){return f.id})});
         },
         migrateOldData:function(){
             try{
