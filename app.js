@@ -1648,12 +1648,13 @@
                 sIds.forEach(function(sid){
                     var sr=studentResults[sid];
                     if(sr.totalCount>0){
-                        var acc=Math.round(sr.correctCount/sr.totalCount*100);
+                        // 用真实比率判定分档，避免四舍五入把 99.5%→100、84.5%→85 造成错档
+                        var ratio=sr.correctCount/sr.totalCount;
                         var bonusPerQ=0;
-                        if(acc>=100)bonusPerQ=15;
-                        else if(acc>=95)bonusPerQ=12;
-                        else if(acc>=90)bonusPerQ=9;
-                        else if(acc>=85)bonusPerQ=6;
+                        if(ratio===1)bonusPerQ=15;
+                        else if(ratio>=0.95)bonusPerQ=12;
+                        else if(ratio>=0.90)bonusPerQ=9;
+                        else if(ratio>=0.85)bonusPerQ=6;
                         if(bonusPerQ>0){
                             var bonus=bonusPerQ*sr.correctCount;
                             sr.pointsEarned+=bonus;
@@ -2593,6 +2594,8 @@
             this.frame=document.getElementById('fileManagerBg');
             if(!this.frame)return;
             var self=this;
+            this._attachFrameReady(this.frame);
+            this._attachFrameReady(document.getElementById('fileManagerFrame'));
             window.addEventListener('message',function(e){
                 if(!e.data||typeof e.data!=='object')return;
                 var msg=e.data;
@@ -2658,6 +2661,7 @@
             document.addEventListener('visibilitychange',function(){
                 if(!document.hidden&&self.ready){
                     self.postToFileManager({type:'mainActivated'});
+                    self._ensureCoreStars();
                 }
             });
             setTimeout(function(){
@@ -2665,6 +2669,7 @@
                 self.postToFileManager({type:'initConfig',appPrefix:'exam'});
                 self.postToFileManager({type:'mainReady'});
                 self.ready=true;
+                self._ensureCoreStars();
                 self.syncAll();
                 setTimeout(function(){self.pullAllCloudContent()},8000);
             },1500);
@@ -2678,6 +2683,40 @@
             if(frame&&frame.contentWindow){
                 try{frame.contentWindow.postMessage(Object.assign({target:'fileManager'},msg),'*')}catch(e){}
             }
+        },
+        _frameReady:false,
+        _pending:null,
+        _attachFrameReady:function(frame){
+            if(!frame)return;
+            var self=this;
+            var mark=function(){
+                try{if(frame.contentDocument&&frame.contentDocument.readyState!=='complete')return}catch(e){}
+                self._frameReady=true;
+                self._flushPending();
+            };
+            try{frame.addEventListener('load',mark)}catch(e){}
+            mark();
+        },
+        _pushContent:function(name,content){
+            if(!name||content===undefined)return;
+            if(!this._frameReady){this._pending=this._pending||[];this._pending.push({name:name,content:content});return}
+            this.postToFileManager({type:'contentChanged',name:name,content:content});
+        },
+        _flushPending:function(){
+            if(!this._pending||!this._pending.length)return;
+            var q=this._pending;this._pending=[];
+            for(var i=0;i<q.length;i++)this.postToFileManager({type:'contentChanged',name:q[i].name,content:q[i].content});
+        },
+        _ensureCoreStars:function(){
+            try{
+                var prefix='exam';
+                var idx=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                var names=['系统-学生信息','系统-考试数据','系统-等级设置','系统-AI配置'];
+                var changed=false;
+                for(var i=0;i<idx.length;i++){if(names.indexOf(idx[i].name)>=0&&!idx[i].star){idx[i].star=true;changed=true}}
+                if(changed){localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));}
+                for(var j=0;j<idx.length;j++){if(names.indexOf(idx[j].name)>=0&&idx[j].id)this.postToFileManager({type:'setStar',id:idx[j].id,star:true});}
+            }catch(e){}
         },
         _formatTime:function(){
             var d=new Date();
@@ -2857,12 +2896,12 @@
                         var contentChanged=!oldData||oldData!==content;
                         if(contentChanged){existing.version=(existing.version||0)+1}
                         existing.contentLength=[...content].length;
-                        existing.lastEditTime=self._formatTime();
+                        existing.lastEditTime=App.Sync._formatTime();
                         // 题库文件不设置文件夹（云端平铺）
-                        try{localStorage.setItem(prefix+'_file_id_'+existing.id,JSON.stringify({data:content,view:null}))}catch(e){}
+                        self._pushContent(fileName,content);
                     }else{
-                        fileIndex.push({name:fileName,id:bankId,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length,time:Date.now()});
-                        try{localStorage.setItem(prefix+'_file_id_'+bankId,JSON.stringify({data:content,view:null}))}catch(e){}
+                        fileIndex.push({name:fileName,id:bankId,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:'',createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...content].length,time:Date.now()});
+                        self._pushContent(fileName,content);
                     }
                 });
                 if(banksChanged)App.Storage.setBanks(banks);
@@ -2885,11 +2924,14 @@
                         if(contentChanged2){existing2.version=(existing2.version||0)+1}
                         existing2.contentLength=[...content].length;
                         existing2.lastEditTime=this._formatTime();
+                        existing2.star=true;
                         try{localStorage.setItem(prefix+'_file_id_'+existing2.id,JSON.stringify({data:content,view:null}))}catch(e){}
+                        this._pushContent(fileName,content);
                     }else{
                         var id=this._getFileIdForDataType(dataType);
-                        fileIndex2.push({name:fileName,id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'系统',owner:'',createTime:'',lastUploadTime:'',lastEditTime:this._formatTime(),contentLength:[...content].length,time:Date.now()});
+                        fileIndex2.push({name:fileName,id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'系统',owner:'',createTime:'',lastUploadTime:'',lastEditTime:this._formatTime(),contentLength:[...content].length,time:Date.now(),star:true});
                         try{localStorage.setItem(prefix+'_file_id_'+id,JSON.stringify({data:content,view:null}))}catch(e){}
+                        this._pushContent(fileName,content);
                     }
                     try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex2))}catch(e){}
                     if(isLoggedIn)this.postToFileManager({type:'syncAllFiles'});
@@ -2971,7 +3013,7 @@
                 var levels=App.Storage.getSettings().levels||[];
                 // 检查是否有非默认的用户数据（有云端ID的题库说明是旧同步数据）
                 var hasRealData=banks.some(function(b){return b.id&&b.id.indexOf('QB_')===0})||
-                    students.length>0||
+                    students.some(function(s){return !s._demo})||
                     Object.keys(records).length>0;
                 if(!hasRealData){
                     localStorage.setItem('exam_sync_migrated_v2','1');
@@ -2985,7 +3027,7 @@
                     var name=b.name||id;
                     var content=JSON.stringify(b);
                     var fileId=id;
-                    fileIndex.push({name:name,id:fileId,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...content].length});
+                    fileIndex.push({name:name,id:fileId,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:'',createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...content].length});
                     try{localStorage.setItem(prefix+'_file_id_'+fileId,JSON.stringify({data:content,view:null}))}catch(e){}
                 });
                 var aiConfig={aiApiUrl:App.Storage.getSettings().aiApiUrl||'',aiApiKey:App.Storage.getSettings().aiApiKey||'',aiModel:App.Storage.getSettings().aiModel||''};
@@ -2996,7 +3038,7 @@
                     {key:'EXAM_SYS_AI_CONFIG',name:'系统-AI配置',content:JSON.stringify(aiConfig),folder:'系统'}
                 ];
                 sysFiles.forEach(function(f){
-                    fileIndex.push({name:f.name,id:f.key,version:1,lastSyncVersion:0,isNewFile:true,folder:f.folder,owner:'',createTime:'',lastUploadTime:'',lastEditTime:self._formatTime(),contentLength:[...f.content].length});
+                    fileIndex.push({name:f.name,id:f.key,version:1,lastSyncVersion:0,isNewFile:true,folder:f.folder,owner:'',createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...f.content].length,star:true});
                     try{localStorage.setItem(prefix+'_file_id_'+f.key,JSON.stringify({data:f.content,view:null}))}catch(e){}
                 });
                 try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}

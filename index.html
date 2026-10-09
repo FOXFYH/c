@@ -37,32 +37,32 @@
                 <div class="exam-mode-select" id="exam-mode-select">
                     <h2 class="section-title">📋 请选择模式</h2>
                     <div class="mode-cards">
-                        <div class="mode-card" data-mode="farm" onclick="App.Exam.enterMode('farm')">
+                        <div class="mode-card" data-mode="farm" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('farm');event.preventDefault()}" onclick="App.Exam.enterMode('farm')">
                             <div class="mode-card-icon">&#127806;</div>
                             <div class="mode-card-name">打野</div>
                             <div class="mode-card-desc">答对得10分，稳扎稳打积累积分</div>
                         </div>
-                        <div class="mode-card" data-mode="challenge" onclick="App.Exam.enterMode('challenge')">
+                        <div class="mode-card" data-mode="challenge" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('challenge');event.preventDefault()}" onclick="App.Exam.enterMode('challenge')">
                             <div class="mode-card-icon">🎯</div>
                             <div class="mode-card-name">挑战</div>
                             <div class="mode-card-desc">答对得5分，高正确率触发额外补偿</div>
                         </div>
-                        <div class="mode-card" data-mode="pk" onclick="App.Exam.enterMode('pk')">
+                        <div class="mode-card" data-mode="pk" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('pk');event.preventDefault()}" onclick="App.Exam.enterMode('pk')">
                             <div class="mode-card-icon">⚔️</div>
                             <div class="mode-card-name">PK</div>
                             <div class="mode-card-desc">答对得5分，获胜者每题额外+10分</div>
                         </div>
-                        <div class="mode-card" data-mode="practice" onclick="App.Exam.enterMode('practice')">
+                        <div class="mode-card" data-mode="practice" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('practice');event.preventDefault()}" onclick="App.Exam.enterMode('practice')">
                             <div class="mode-card-icon">📝</div>
                             <div class="mode-card-name">练习</div>
                             <div class="mode-card-desc">单人练习，完成整个题库才结算积分</div>
                         </div>
-                        <div class="mode-card" data-mode="smart" onclick="App.Exam.enterMode('smart')">
+                        <div class="mode-card" data-mode="smart" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('smart');event.preventDefault()}" onclick="App.Exam.enterMode('smart')">
                             <div class="mode-card-icon">🧠</div>
                             <div class="mode-card-name">智能抽查</div>
                             <div class="mode-card-desc">正确率越低越容易被抽中，分值随概率反比调整</div>
                         </div>
-                        <div class="mode-card" data-mode="lottery" onclick="App.Exam.enterMode('lottery')">
+                        <div class="mode-card" data-mode="lottery" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('lottery');event.preventDefault()}" onclick="App.Exam.enterMode('lottery')">
                             <div class="mode-card-icon">🎲</div>
                             <div class="mode-card-name">抽签</div>
                             <div class="mode-card-desc">纯随机抽选学生，老师现场口头出题</div>
