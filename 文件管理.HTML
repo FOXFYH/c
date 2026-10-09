@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.05
+  存储测试网页版 · 文件管理器        当前版本 6.07
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,8 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.07 (2026-10-09) 新增「日志」分页：自动记录最近 50 条（可调）webhook 收发摘要——每条含 操作名+简单摘要+成功/失败+耗时，不保存收发原文以避免占用空间；按天统计 Webhook 消耗次数，保留最近 7 天（可调）；超量/超期自动清理。新增 localStorage 键 oplog / oplog_daily；设置页新增「日志参数」模块（保留条数/保留天数）。
+    6.06 (2026-10-09) 联网三处补齐：①refreshCloudIndex 中「云端有、本地未落盘」条目改为 e=s=cloudVer，消除「刚从云端下来也报版本号偏小」；②新增只读动作「批量读取」(按 ID 列表一次取回多文件)，客户端批量拉取改走它，替代逐文件下载；③删除永不触发的异常降级/异常升级死码；另补 fmReady 就绪握手。
     6.05 (2026-10-09) 补齐「上云后自动迁入 IndexedDB」：上传成功(isNewFile 清除)时立即按分层规则重落盘，非星标普通文件内容即时由 localStorage 迁入 IndexedDB，避免已上传文件内容长期滞留 localStorage。
     6.04 (2026-10-09) 三层本地缓存：核心数据与「星标」文件内容存 localStorage（星标常年落盘、不参与淘汰），其余已上云的普通文件内容改存 IndexedDB（增内存镜像 MEM + 启动预加载，保证同步读取命中）；未上云新文件暂存 localStorage、上云后自动迁入 IndexedDB；文件列表新增星标切换按钮与宿主 starFile 消息；版本号未变更时复用本地缓存、减少下载。
     6.03 (2026-09-21) 补齐与宿主的消息互动缺口（配合 index.html 1.03）：① 新增结构化同步三态推送
@@ -74,7 +76,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.06</title>
+<title>文件管理 v6.07</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -109,7 +111,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.06</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.07</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -119,6 +121,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <div id="tab-bar" style="display:flex;border-bottom:1px solid #ddd;background:#fff;flex-shrink:0;font-size:13px">
   <div class="app-tab active" data-tab="home" onclick="switchTab('home')" style="padding:7px 20px;cursor:pointer;border-bottom:2px solid transparent;color:#555;font-weight:bold">主页</div>
   <div class="app-tab" data-tab="settings" onclick="switchTab('settings')" style="padding:7px 20px;cursor:pointer;border-bottom:2px solid transparent;color:#555;font-weight:bold">设置</div>
+  <div class="app-tab" data-tab="log" onclick="switchTab('log')" style="padding:7px 20px;cursor:pointer;border-bottom:2px solid transparent;color:#555;font-weight:bold">日志</div>
   <div class="app-tab" data-tab="guide" onclick="switchTab('guide')" style="padding:7px 20px;cursor:pointer;border-bottom:2px solid transparent;color:#555;font-weight:bold">说明书</div>
   <div style="flex:1;border-bottom:2px solid transparent"></div>
 </div>
@@ -210,6 +213,15 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
       </div>
     </div>
 
+    <!-- 第五类：日志参数 -->
+    <div style="border:1px solid #f9e79f;border-radius:6px;padding:8px 10px;margin-bottom:10px;background:#fefce8">
+      <div style="font-size:12px;font-weight:bold;color:#b7950b;margin-bottom:6px">📝 日志参数</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px">
+        <div><label style="font-size:11px;color:#666">保留条数</label><input id="syncOplogMax" type="number" value="50" min="10" max="500" style="width:100%;padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:11px;margin-top:2px" title="收发日志最多保留的条数，超出后自动淘汰最旧的"></div>
+        <div><label style="font-size:11px;color:#666">保留天数</label><input id="syncOplogKeepDays" type="number" value="7" min="1" max="60" style="width:100%;padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:11px;margin-top:2px" title="每日 Webhook 消耗统计与日志的保留天数，超过后自动清理"></div>
+      </div>
+    </div>
+
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
       <button onclick="closeSyncSettings()" style="padding:6px 18px;border-radius:5px;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit;font-size:13px">取消</button>
@@ -217,6 +229,21 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
     </div>
     </div>
     </div>
+  </div>
+</div>
+
+<div id="view-log" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+  <div style="display:flex;flex-direction:column;flex:1;min-height:0;padding:12px 16px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:15px;font-weight:bold;color:#333">📝 收发日志</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="renderOplog()" style="padding:4px 12px;border:1px solid #ccc;border-radius:5px;background:#fff;cursor:pointer;font-size:12px;font-family:inherit">刷新</button>
+        <button onclick="clearOplog()" style="padding:4px 12px;border:1px solid #e74c3c;border-radius:5px;background:#fff;color:#e74c3c;cursor:pointer;font-size:12px;font-family:inherit">清空日志</button>
+      </div>
+    </div>
+    <div id="oplogStats" style="border:1px solid #d4e6f9;border-radius:6px;padding:8px 10px;margin-bottom:6px;background:#f0f6ff;font-size:12px;color:#333"></div>
+    <div id="oplogHint" style="font-size:11px;color:#999;margin-bottom:4px"></div>
+    <div id="oplogList" style="flex:1;min-height:0;overflow-y:auto;border:1px solid #eee;border-radius:6px"></div>
   </div>
 </div>
 
@@ -298,7 +325,7 @@ function initAuthBar(){
 // 存储键名生成函数：所有 localStorage 键通过此函数生成
 function K(suffix){return APP_PREFIX+'_'+suffix}
 
-const DEFAULT_SYNC_CONFIG={enabled:true,apiUrl:PRIMARY_API_URLS[0],webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/519302387327/script/V2-6t4db1ZSsEPesqKsD7aj3/sync_task',token:'',cloudCheckInterval:5,syncThreshold:10,syncDeltaInterval:5,sheetName:'抽奖考试',retryCount:5,retryInterval:2,conflictMode:'manual',semiAutoThreshold:100,semiAutoDownloadLoss:4,semiAutoUploadLoss:4,taskInterval:0,appPrefix:'exam',cacheMaxUsage:0.7,cacheMaxFileChars:1000000,mirrorPrefix:'系统-',autoRefreshOnOpen:true,autoRefreshAfterAction:true};
+const DEFAULT_SYNC_CONFIG={enabled:true,apiUrl:PRIMARY_API_URLS[0],webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/519302387327/script/V2-6t4db1ZSsEPesqKsD7aj3/sync_task',token:'',cloudCheckInterval:5,syncThreshold:10,syncDeltaInterval:5,sheetName:'抽奖考试',retryCount:5,retryInterval:2,conflictMode:'manual',semiAutoThreshold:100,semiAutoDownloadLoss:4,semiAutoUploadLoss:4,taskInterval:0,appPrefix:'exam',cacheMaxUsage:0.7,cacheMaxFileChars:1000000,mirrorPrefix:'系统-',autoRefreshOnOpen:true,autoRefreshAfterAction:true,oplogMax:50,oplogKeepDays:7};
 
 let syncConfig=null;
 let cloudFileCache=new Map();
@@ -524,6 +551,8 @@ function getSyncConfig(){
   if(syncConfig.taskInterval===undefined){syncConfig.taskInterval=DEFAULT_SYNC_CONFIG.taskInterval;saveSyncConfig(syncConfig)}
   if(syncConfig.appPrefix===undefined){syncConfig.appPrefix=DEFAULT_SYNC_CONFIG.appPrefix;saveSyncConfig(syncConfig)}
   if(syncConfig.sheetName===undefined){syncConfig.sheetName='';saveSyncConfig(syncConfig)}
+  if(syncConfig.oplogMax===undefined){syncConfig.oplogMax=DEFAULT_SYNC_CONFIG.oplogMax;saveSyncConfig(syncConfig)}
+  if(syncConfig.oplogKeepDays===undefined){syncConfig.oplogKeepDays=DEFAULT_SYNC_CONFIG.oplogKeepDays;saveSyncConfig(syncConfig)}
   return syncConfig;
 }
 
@@ -864,7 +893,119 @@ async function getNetworkTime(){
   return Date.now();
 }
 
+// ========== 收发日志（日志功能） ==========
+// 只记录每条 webhook 调用的简单摘要，不保存收发原文；按天统计调用次数；超量/超期自动清理。
+function _dayOf(ts){const d=new Date(ts+8*3600*1000);return d.toISOString().slice(0,10);}
+function _todayStr(){return _dayOf(Date.now());}
+function _keepDaysList(keepDays){const out=[];for(let i=0;i<keepDays;i++){out.push(_dayOf(Date.now()-i*86400000));}return out;}
+function _pruneDaily(daily,keepDays){const keep=_keepDaysList(keepDays);const out={};for(const k in daily){if(keep.indexOf(k)!==-1)out[k]=daily[k];}return out;}
+function oplogSummary(action,params){
+  const p=params||{};
+  const cnt=v=>Array.isArray(v)?v.length:0;
+  switch(action){
+    case '版本':return '查询云端脚本版本';
+    case '获取表头':return '读取云端表头';
+    case '初始化表头':return '初始化云端表头';
+    case '获取维度':return '获取表格维度';
+    case '读取索引':return '读取云端文件索引';
+    case '查找':return '查找云端文件';
+    case '批量读取':return '批量读取 '+cnt(p.ID列表)+' 个文件';
+    case '智能下载':return '下载云端文件内容';
+    case '同步提交':return p.文件列表?('提交 '+cnt(p.文件列表)+' 个文件'):'提交 1 个文件';
+    case '转正确认':return p.文件列表?('转正 '+cnt(p.文件列表)+' 个文件'):'转正 1 个文件';
+    case '清理临时':return '清理临时行';
+    case '强制覆盖云端':return '强制覆盖云端内容';
+    case '删除行':return '删除 1 条记录';
+    case '批量写入':return p.数据?'写入 1 行数据':'批量写入数据';
+    case '抢锁':return '获取云端写入锁';
+    case '解锁':return '释放云端写入锁';
+    default:return action||'未知操作';
+  }
+}
+function _pruneEntries(arr,keepDays,max){
+  const keep=_keepDaysList(keepDays);
+  const out=[];
+  for(const it of arr){if(it&&keep.indexOf(_dayOf(it.t))!==-1)out.push(it);}
+  return out.slice(0,max);
+}
+function recordWebhookLog(action,params,result,ms){
+  const cfg=getSyncConfig();
+  const max=Math.max(1,parseInt(cfg.oplogMax)||50);
+  const keepDays=Math.max(1,parseInt(cfg.oplogKeepDays)||7);
+  const item={t:Date.now(),a:action,s:oplogSummary(action,params),ok:(result&&result.status==='success')?1:0,ms:ms};
+  let arr=[];
+  try{arr=JSON.parse(localStorage.getItem(K('oplog'))||'[]');if(!Array.isArray(arr))arr=[]}catch(e){arr=[]}
+  arr.unshift(item);
+  arr=_pruneEntries(arr,keepDays,max);
+  try{localStorage.setItem(K('oplog'),JSON.stringify(arr))}catch(e){}
+  const day=_todayStr();
+  let daily={};
+  try{daily=JSON.parse(localStorage.getItem(K('oplog_daily'))||'{}')||{}}catch(e){daily={}}
+  daily[day]=(parseInt(daily[day])||0)+1;
+  daily=_pruneDaily(daily,keepDays);
+  try{localStorage.setItem(K('oplog_daily'),JSON.stringify(daily))}catch(e){}
+  const lv=document.getElementById('view-log');
+  if(lv&&lv.style.display!=='none')renderOplog();
+}
+function _fmtClock(ts){const d=new Date(ts+8*3600*1000);const p=n=>String(n).padStart(2,'0');return p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds());}
+function renderOplog(){
+  const statsEl=document.getElementById('oplogStats');
+  const listEl=document.getElementById('oplogList');
+  const hintEl=document.getElementById('oplogHint');
+  if(!statsEl||!listEl)return;
+  const cfg=getSyncConfig();
+  const max=Math.max(1,parseInt(cfg.oplogMax)||50);
+  const keepDays=Math.max(1,parseInt(cfg.oplogKeepDays)||7);
+  let arr=[];
+  try{arr=JSON.parse(localStorage.getItem(K('oplog'))||'[]');if(!Array.isArray(arr))arr=[]}catch(e){arr=[]}
+  arr=_pruneEntries(arr,keepDays,max);
+  let daily={};
+  try{daily=JSON.parse(localStorage.getItem(K('oplog_daily'))||'{}')||{}}catch(e){daily={}}
+  daily=_pruneDaily(daily,keepDays);
+  const days=_keepDaysList(keepDays);
+  const today=_todayStr();
+  let total=0;days.forEach(function(k){total+=(parseInt(daily[k])||0)});
+  let statsHtml='<div style="margin-bottom:4px"><b>今日 Webhook 消耗：'+(parseInt(daily[today])||0)+' 次</b>　<span style="color:#888">近 '+keepDays+' 天合计：'+total+' 次</span></div>';
+  statsHtml+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+  days.forEach(function(k){statsHtml+='<span style="background:#fff;border:1px solid #cfe0f7;border-radius:4px;padding:1px 6px;font-size:11px">'+k.slice(5)+'：'+(parseInt(daily[k])||0)+'</span>';});
+  statsHtml+='</div>';
+  statsEl.innerHTML=statsHtml;
+  if(hintEl)hintEl.textContent='仅记录简单摘要，不保存收发原文；显示最近 '+max+' 条，日志与每日消耗统计保留 '+keepDays+' 天（可在「设置」页调整）。';
+  if(!arr.length){listEl.innerHTML='<div style="padding:16px;text-align:center;color:#999;font-size:12px">暂无收发记录</div>';return;}
+  let html='';
+  arr.forEach(function(it){
+    const okTxt=it.ok?'<span style="color:#27ae60">成功</span>':'<span style="color:#e74c3c">失败</span>';
+    html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid #f2f2f2;font-size:11px">'
+      +'<span style="color:#999;font-family:monospace;flex-shrink:0">'+_fmtClock(it.t)+'</span>'
+      +'<span style="color:#4A90D9;flex-shrink:0;min-width:72px">'+(it.a||'')+'</span>'
+      +'<span style="color:#333;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(it.s||'')+'</span>'
+      +'<span style="flex-shrink:0">'+okTxt+'</span>'
+      +'<span style="color:#999;flex-shrink:0;font-family:monospace">'+(it.ms||0)+'ms</span>'
+      +'</div>';
+  });
+  listEl.innerHTML=html;
+}
+function clearOplog(){
+  try{localStorage.removeItem(K('oplog'))}catch(e){}
+  try{localStorage.removeItem(K('oplog_daily'))}catch(e){}
+  renderOplog();
+  toast('日志已清空');
+}
+
+// ========== 包裹 callCloudAPI：记录每次 webhook 收发 ==========
 async function callCloudAPI(action,params={}){
+  const _cfg=getSyncConfig();
+  if(!_cfg.enabled||!AUTH_USERNAME||!AUTH_PASSWORD){
+    // 未启用或未登录：不会发起 webhook，不记日志
+    return _callCloudAPICore(action,params);
+  }
+  const _t0=Date.now();
+  const _r=await _callCloudAPICore(action,params);
+  try{recordWebhookLog(action,params,_r,Date.now()-_t0);}catch(e){}
+  return _r;
+}
+
+async function _callCloudAPICore(action,params={}){
   const config=getSyncConfig();
   if(!config.enabled)return{status:'error',message:'云同步未启用',isNetworkError:false};
   if(!AUTH_USERNAME||!AUTH_PASSWORD)return{status:'error',message:'未登录，无法访问云端',isNetworkError:false};
@@ -3108,9 +3249,11 @@ function switchTab(name){
   const home=document.getElementById('view-home');
   const settings=document.getElementById('view-settings');
   const guide=document.getElementById('view-guide');
+  const logView=document.getElementById('view-log');
   if(home)home.style.display=(name==='home')?'flex':'none';
   if(settings)settings.style.display=(name==='settings')?'flex':'none';
   if(guide)guide.style.display=(name==='guide')?'flex':'none';
+  if(logView)logView.style.display=(name==='log')?'flex':'none';
   document.querySelectorAll('#tab-bar .app-tab').forEach(t=>{
     const on=t.getAttribute('data-tab')===name;
     t.classList.toggle('active',on);
@@ -3119,6 +3262,8 @@ function switchTab(name){
   });
   // 打开设置页时预填充表单
   if(name==='settings'&&typeof showSyncSettings==='function')showSyncSettings();
+  // 打开日志页时渲染
+  if(name==='log'&&typeof renderOplog==='function')renderOplog();
 }
 
 function showSyncSettings(){
@@ -3143,6 +3288,8 @@ function showSyncSettings(){
   document.getElementById('syncCacheMaxFileChars').value=config.cacheMaxFileChars||1000000;
   document.getElementById('syncEnabled').checked=config.enabled!==false;
   document.getElementById('syncAutoRefreshOnOpen').checked=config.autoRefreshOnOpen!==false;
+  document.getElementById('syncOplogMax').value=config.oplogMax||50;
+  document.getElementById('syncOplogKeepDays').value=config.oplogKeepDays||7;
 }
 
 function closeSyncSettings(){
@@ -3172,7 +3319,9 @@ function saveSyncSettings(){
     taskInterval:parseInt(document.getElementById('syncTaskInterval').value)||0,
     cacheMaxUsage:(parseInt(document.getElementById('syncCacheMaxUsage').value)||70)/100,
     cacheMaxFileChars:parseInt(document.getElementById('syncCacheMaxFileChars').value)||1000000,
-    autoRefreshOnOpen:document.getElementById('syncAutoRefreshOnOpen').checked
+    autoRefreshOnOpen:document.getElementById('syncAutoRefreshOnOpen').checked,
+    oplogMax:parseInt(document.getElementById('syncOplogMax').value)||50,
+    oplogKeepDays:parseInt(document.getElementById('syncOplogKeepDays').value)||7
   };
   saveSyncConfig(config);
   closeSyncSettings();
