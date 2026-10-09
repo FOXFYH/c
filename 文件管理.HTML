@@ -259,15 +259,23 @@ const MAX_CLOUD_CHARS=30000;
 let APP_PREFIX='storagetest';
 
 // 设备标识：用于云端抢锁，每个浏览器实例唯一
-let DEVICE_ID=(()=>{
+// 延迟到 getSyncConfig() 解析出真实前缀后再生成，避免键名落在默认前缀下
+let DEVICE_ID='';
+function ensureDeviceId(){
   let id=localStorage.getItem(K('device_id'));
   if(!id){id='D'+Date.now().toString(36)+Math.random().toString(36).substr(2,4);localStorage.setItem(K('device_id'),id);}
-  return id;
-})();
+  DEVICE_ID=id;return id;
+}
 
 // 用户认证信息：用户名+密码，持久化到localStorage
-let AUTH_USERNAME=(()=>{return localStorage.getItem(K('auth_user'))||'';})();
-let AUTH_PASSWORD=(()=>{return localStorage.getItem(K('auth_pass'))||'';})();
+// 必须在 APP_PREFIX 解析完成后调用 loadAuthFromStorage()，否则读到的是默认前缀下的空值
+let AUTH_USERNAME='';
+let AUTH_PASSWORD='';
+function loadAuthFromStorage(){
+  AUTH_USERNAME=localStorage.getItem(K('auth_user'))||'';
+  AUTH_PASSWORD=localStorage.getItem(K('auth_pass'))||'';
+  return !!(AUTH_USERNAME&&AUTH_PASSWORD);
+}
 
 function saveAuthInfo(){
   const u=document.getElementById('usernameInput').value.trim();
@@ -4371,6 +4379,11 @@ window.addEventListener('message',function(e){
 });
 
 (function init(){
+  // 先解析配置得到真实 APP_PREFIX，再读取设备号与登录凭据
+  // （原解析期读取会落在默认前缀下，导致凭据恒为空、一直提示未登录）
+  const config=getSyncConfig();
+  ensureDeviceId();
+  loadAuthFromStorage();
   initAuthBar();
   refreshMirrorFileIds();
   preloadFileCacheFromIdb().finally(function(){
@@ -4384,7 +4397,9 @@ window.addEventListener('message',function(e){
     renderFileList();
     updateFolderPath();
   });
-  const config=getSyncConfig();
+  // 就绪握手：告知宿主本iframe已加载完成，请补发 initConfig / authChanged
+  // （脚本体积大，宿主一次性推送的消息可能在监听注册前发出而丢失）
+  notifyParent('fmReady',{appPrefix:APP_PREFIX});
   if(config.enabled){
     initSyncSheet().catch(()=>{});
     startAutoSync();
