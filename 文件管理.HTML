@@ -74,7 +74,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.05</title>
+<title>文件管理 v6.06</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -109,7 +109,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.05</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.06</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -2857,6 +2857,48 @@ async function deleteFileById(id,silent){
   toast('已删除：'+name);
 }
 
+// 批量拉取云端内容：一次 webhook（批量读取）取回多个文件内容并静默落盘
+async function pullAllCloudFilesByIds(ids){
+  const want=new Set((ids||[]).filter(Boolean));
+  if(!want.size)return{status:'success',count:0};
+  const r=await callCloudAPI('批量读取',{ID列表:(ids||[]).filter(Boolean)});
+  if(!r||r.status!=='success'||!Array.isArray(r.数据)){
+    toast('批量拉取失败：'+((r&&r.tongzhi)||'未知错误'),'error');
+    return{status:'error',count:0};
+  }
+  let idx=getFileIndex();
+  let count=0;
+  for(const row of r.数据){
+    const fid=row['ID'];
+    if(!fid||!want.has(fid))continue;
+    const existing=idx.find(x=>x.id===fid);
+    if(isFolderId(fid)){if(existing)existing.cloudOnly=false;continue}
+    const cp=parseCharCountStr(row['内容字符数']);
+    if(cp&&cp.part>1){await downloadCloudFileById(fid,row['文件名']||'');count++;continue}
+    const content=extractCloudContent(row);
+    if(!content)continue;
+    const cloudVer=parseInt(row['起点号']||'0')||0;
+    const cloudFileName=row['文件名']||'';
+    const cloudFolder=row['文件夹路径']||'';
+    if(existing){
+      existing.e=cloudVer;existing.s=cloudVer;existing.cloudOnly=false;
+      existing.contentLength=countChars(content);
+      if(cloudFileName)existing.name=cloudFileName;
+      existing.folder=cloudFolder;
+    }else{
+      idx.push({name:cloudFileName,time:Date.now(),id:fid,e:cloudVer,s:cloudVer,folder:cloudFolder,owner:row['拥有者']||'',contentLength:cp?cp.total:countChars(content),cloudOnly:false,isNewFile:false});
+    }
+    if(shouldCacheFile(content)){_saveFileObj(fid,content,(_readFileObjSync(fid)||{}).view);}
+    count++;
+  }
+  setFileIndex(idx);
+  renderFileList();
+  smartCleanCache();
+  if(count>0)toast('已批量拉取云端内容：'+count+'个文件');
+  notifyParent('pullAllComplete',{count});
+  return{status:'success',count};
+}
+
 async function downloadCloudFileById(id,name){
   const cloudResult=await findFileInCloudById(id);
   if(!cloudResult.networkOk){toast('网络异常，无法下载');return}
@@ -3426,9 +3468,7 @@ async function syncOneFileTwoPhase(f){
     });
     if(!result.status||result.status==='error'){
       const isNet=result.isNetworkError;
-      if(result.判定结果==='本地异常降级'){toast('文件['+f.name+']本地终点号异常降级，禁止上传','error')}
-      else if(result.判定结果==='异常升级'){toast('文件['+f.name+']本地终点号异常升级，不上传','error')}
-      else if(result.判定结果==='标识错乱'){toast('文件['+f.name+']标识错乱，请联系管理员','error')}
+      if(result.判定结果==='标识错乱'){toast('文件['+f.name+']标识错乱，请联系管理员','error')}
       else{toast('提交['+f.name+']失败：'+(result.tongzhi||result.message||'未知错误'))}
       return{status:'error',message:result.tongzhi||result.message,isNetworkError:isNet,version:E};
     }
@@ -3760,9 +3800,7 @@ async function downloadCurrentFile(){
   if(!result.status||result.status==='error'){
     updateSyncButton('❌');
     setTimeout(()=>updateSyncButton('☁️'),2000);
-    if(result.判定结果==='云端异常降级'){
-      toast('云端起点号异常降级(云端起点<本地终点'+localVer+')，禁止下载','error');
-    }else if(result.判定结果==='本地滞后'){
+    if(result.判定结果==='本地滞后'){
       toast('云端文件已删除，本地索引滞后，请刷新云端','warn');
       return{status:'stale',message:'本地索引滞后'};
     }else if(result.判定结果==='新文件跳过'){
@@ -3852,13 +3890,6 @@ async function downloadCurrentFile(){
       return{status:'conflict',message:'本地有未同步编辑(共同号v'+effectiveSyncVer+')，云端版本更高'};
     }
 
-    // 下载判断：本地终点号异常降级
-    if(result.下载判断==='本地版本异常降级'){
-      toast('本地终点号异常降级(本地终点'+localVer+'<本地起点'+effectiveSyncVer+')，禁止下载','error');
-      updateSyncButton('❌');
-      setTimeout(()=>updateSyncButton('☁️'),2000);
-      return{status:'error',message:'本地版本异常降级',isNetworkError:false};
-    }
   }
 
   updateSyncButton('☁️');
@@ -3967,7 +3998,7 @@ async function refreshCloudIndex(){
         // 普通文件
         if(!cf.文件名||cf.文件名.trim()==='')continue;
         const cloudVer=parseInt(cf.起点号||'0');
-        idx2.push({name:cf.文件名,time:Date.now(),id:cf.ID,e:cloudVer,s:0,folder:cf.文件夹路径||'',owner:cf.拥有者||'',contentLength:(()=>{const p=parseCharCountStr(cf.内容字符数);return p?p.total:0})(),cloudOnly:true,isNewFile:false});
+        idx2.push({name:cf.文件名,time:Date.now(),id:cf.ID,e:cloudVer,s:cloudVer,folder:cf.文件夹路径||'',owner:cf.拥有者||'',contentLength:(()=>{const p=parseCharCountStr(cf.内容字符数);return p?p.total:0})(),cloudOnly:true,isNewFile:false});
         addedCount++;
       }
     }
@@ -4202,6 +4233,13 @@ window.addEventListener('message',function(e){
         try{
           await downloadCloudFileById(data.fileId,data.fileName);
         }catch(err){}
+      })();
+      break;
+    case 'pullAllCloudFiles':
+      (async function(){
+        try{
+          await pullAllCloudFilesByIds(data.ids||[]);
+        }catch(err){toast('批量拉取异常：'+err.message,'error')}
       })();
       break;
 
