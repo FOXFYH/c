@@ -2601,6 +2601,10 @@
                 var msg=e.data;
                 if(!msg.type)return;
                 switch(msg.type){
+                    case 'fmReady':
+                        // 文件管理器就绪握手：补发配置与凭据
+                        self._sendInitAndAuth();
+                        break;
                     case 'openFile':
                         self._onOpenFile(msg);
                         break;
@@ -2666,8 +2670,7 @@
             });
             setTimeout(function(){
                 self.migrateOldData();
-                self.postToFileManager({type:'initConfig',appPrefix:'exam'});
-                self.postToFileManager({type:'mainReady'});
+                self._sendInitAndAuth();
                 self.ready=true;
                 self._ensureCoreStars();
                 self.syncAll();
@@ -2682,6 +2685,23 @@
             var frame=this.getFrame();
             if(frame&&frame.contentWindow){
                 try{frame.contentWindow.postMessage(Object.assign({target:'fileManager'},msg),'*')}catch(e){}
+            }
+        },
+        // 向两个iframe（后台常驻+弹窗）同时发消息，避免只发一个导致另一个漏收配置/凭据
+        postToBothFrames:function(msg){
+            ['fileManagerBg','fileManagerFrame'].forEach(function(id){
+                var frame=document.getElementById(id);
+                if(frame&&frame.contentWindow){
+                    try{frame.contentWindow.postMessage(Object.assign({target:'fileManager'},msg),'*')}catch(e){}
+                }
+            });
+        },
+        // 统一下发初始化配置与凭据（收到 fmReady 时也调用，确保晚加载的iframe补收）
+        _sendInitAndAuth:function(){
+            this.postToBothFrames({type:'initConfig',appPrefix:'exam'});
+            this.postToBothFrames({type:'mainReady'});
+            if(App.Login&&App.Login.isLoggedIn()){
+                this.postToBothFrames({type:'authChanged',username:App.Login._username,password:App.Login._password});
             }
         },
         _frameReady:false,
