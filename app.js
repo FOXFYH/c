@@ -85,7 +85,7 @@
                     {name:'专家',minPoints:600,comment:'学识渊博，无人能敌！'},
                     {name:'大师',minPoints:1000,comment:'登峰造极，一代宗师！'}
                 ],
-                aiApiUrl:'https://open.bigmodel.cn/api/paas/v4/chat/completions',aiApiKey:'a2c7cedcd0c64b74abf9967d85ba3d4c.lRKWx5uvKXz7Gn6B',aiModel:'glm-4.7-flash',
+                aiApiUrl:'https://open.bigmodel.cn/api/paas/v4/chat/completions',aiApiKey:'',aiModel:'glm-4.7-flash',
                 soundEnabled:true,soundVolume:70,
                 shuffleOptions:true,baseTimeout:30,charTimeoutCompensation:0.2,autoNext:true,drawAnimation:true,drawDuration:3
             });
