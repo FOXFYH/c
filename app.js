@@ -576,6 +576,7 @@
                 var lrSelect=document.getElementById('exam-lottery-random');
                 if(lrSelect){for(var li=0;li<lrSelect.options.length;li++){if(lrSelect.options[li].value===savedLR){lrSelect.selectedIndex=li;break}}}
                 if(playerOrderEl)playerOrderEl.value='random';
+                this._updateLotteryWeightUI();
             }
             var smartGroup=document.getElementById('opt-group-smart');
             if(smartGroup)smartGroup.style.display=isSmart?'':'none';
@@ -845,11 +846,20 @@
                 var lotteryMode=lrSel?lrSel.value:'fairCycle';
                 var st_lr=App.Storage.getSettings();st_lr.lastLotteryRandom=lotteryMode;App.Storage.setSettings(st_lr);
                 playerOrder='random';
-                playerQueue=(lotteryMode==='fairCycle')?this._buildFairLotteryQueue(availableStudents,totalQuestionsNeeded):this._buildLotteryQueue(availableStudents,totalQuestionsNeeded);
+                if(lotteryMode==='fairCycle'){playerQueue=this._buildFairLotteryQueue(availableStudents,totalQuestionsNeeded);}
+                else if(lotteryMode==='daily'){
+                    playerQueue=this._buildDailyLotteryQueue(availableStudents,totalQuestionsNeeded);
+                    if(playerQueue.length===0){App.Toast.show('今日名单已全部抽完，可点「重置今日名单」后再抽','warning');return;}
+                }
+                else if(lotteryMode==='weighted'){
+                    playerQueue=this._buildWeightedLotteryQueue(availableStudents,totalQuestionsNeeded);
+                    if(playerQueue.length===0){App.Toast.show('加权名单全部权重为 0，没有可抽的人；请把至少一人的权重调到 1 以上','warning');return;}
+                }
+                else{playerQueue=this._buildLotteryQueue(availableStudents,totalQuestionsNeeded);}
             }else{
                 playerQueue=this._buildPlayerQueue(availableStudents,playerOrder,totalQuestionsNeeded,pType,groupNames,groupRotation);
             }
-            var exam={mode:mode,participationType:pType,questions:questionPool,timeLimit:timeLimit,autoNext:autoNext,students:examStudents,currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:playerQueue,queueIndex:0,avgQuestions:avgQuestions,groupNames:groupNames,groupRotation:groupRotation,playerOrder:isPractice?'order':playerOrder,_pointsPerQ:isPractice?this._getInitialPointsPerQ(examStudents[0].id,bankIds[0]||''):0};
+            var exam={mode:mode,participationType:pType,questions:questionPool,timeLimit:timeLimit,autoNext:autoNext,students:examStudents,currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:playerQueue,queueIndex:0,avgQuestions:avgQuestions,groupNames:groupNames,groupRotation:groupRotation,playerOrder:isPractice?'order':playerOrder,_pointsPerQ:isPractice?this._getInitialPointsPerQ(examStudents[0].id,bankIds[0]||''):0,_lotteryMode:isLottery?(lotteryMode||'fairCycle'):''};
             if(isSmart){
                 exam._smartProbMap=this._calcSmartProbPoints(examStudents);
             }
@@ -959,6 +969,118 @@
                 queue.push(batch[idx]);idx++;
             }
             return queue;
+        },
+        // ===== 今日随机：当天已抽中的人不再出现，按自然日 0 点重置 =====
+        _todayStr:function(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()},
+        getDailyLottery:function(){
+            var d=App.Storage.get('lottery_daily',null);
+            if(!d||d.date!==this._todayStr())return {date:this._todayStr(),ids:[]};
+            return d;
+        },
+        recordDailyDraw:function(id){
+            var d=this.getDailyLottery();
+            if(d.ids.indexOf(id)<0)d.ids.push(id);
+            App.Storage.set('lottery_daily',d);
+        },
+        // 队列预演：每次从「今日未抽中」的人里随机取；今日全部抽完就停（不重复抽已抽过的人）
+        _buildDailyLotteryQueue:function(students,needed){
+            var drawn=this.getDailyLottery().ids.slice();
+            var pool=students.filter(function(s){return drawn.indexOf(s.id)<0});
+            var queue=[];
+            for(var i=0;i<needed;i++){
+                if(pool.length===0)break;
+                var pick=pool[Math.floor(Math.random()*pool.length)];
+                queue.push(pick);
+                pool=pool.filter(function(s){return s.id!==pick.id});
+            }
+            return queue;
+        },
+        // 权重明确规则：未设置=100；0=排除（概率 0，永不出现）；负数/非数字=排除；上限 9999
+        getLotteryWeight:function(studentId){
+            var raw=(App.Storage.getSettings().lotteryWeights||{})[studentId];
+            if(raw===undefined||raw===null||raw==='')return 100;
+            var v=Number(raw);
+            if(!isFinite(v)||v<0)return 0;
+            return Math.min(9999,Math.floor(v));
+        },
+        _buildWeightedLotteryQueue:function(students,needed){
+            var queue=[];
+            if(students.length===0)return queue;
+            var self=this;
+            var weights=students.map(function(s){return self.getLotteryWeight(s.id)});
+            var total=0;for(var t=0;t<weights.length;t++)total+=weights[t];
+            if(total<=0)return queue;   // 全员权重为 0：一个都不抽
+            for(var i=0;i<needed;i++){
+                var r=Math.random()*total,acc=0,pick=null;
+                for(var k=0;k<weights.length;k++){
+                    if(weights[k]<=0)continue;   // 0 权重根本不进抽样区间
+                    acc+=weights[k];
+                    if(r<acc){pick=students[k];break}
+                }
+                if(!pick)break;
+                queue.push(pick);
+            }
+            return queue;
+        },
+        _onLotteryModeChange:function(){
+            var sel=document.getElementById('exam-lottery-random');
+            if(sel){var s=App.Storage.getSettings();s.lastLotteryRandom=sel.value;App.Storage.setSettings(s);}
+            this._updateLotteryWeightUI();
+        },
+        _updateLotteryWeightUI:function(){
+            var sel=document.getElementById('exam-lottery-random');
+            var box=document.getElementById('lottery-weight-editor');
+            var hint=document.getElementById('lottery-daily-hint');
+            var mode=sel?sel.value:'';
+            if(box)box.style.display=(mode==='weighted')?'':'none';
+            if(hint){
+                if(mode==='daily'){
+                    var d=this.getDailyLottery();
+                    var names=[];
+                    var students=App.Storage.getStudents();
+                    d.ids.forEach(function(id){var st=students.find(function(s){return s.id===id});if(st)names.push(st.name)});
+                    hint.style.display='';
+                    hint.innerHTML='今日已抽 '+d.ids.length+' 人'+(names.length?'：'+names.join('、'):'')+'　<button class="btn-secondary btn-sm" onclick="App.Exam.resetDailyLottery()">重置今日名单</button>';
+                }else{
+                    hint.style.display='none';
+                }
+            }
+            if(mode==='weighted')this.renderLotteryWeightEditor();
+        },
+        resetDailyLottery:function(){
+            App.Storage.set('lottery_daily',null);
+            this._updateLotteryWeightUI();
+            App.Toast.show('今日已抽名单已清空','info');
+        },
+        renderLotteryWeightEditor:function(){
+            var list=document.getElementById('lottery-weight-list');
+            if(!list)return;
+            var self=this;
+            var students=App.Storage.getStudents();
+            var html='';
+            students.forEach(function(s){
+                var name=(s.name||'').replace(/</g,'&lt;');
+                html+='<div class="weight-row" style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+                    +'<span style="flex:1">'+name+'</span>'
+                    +'<input type="number" min="0" max="9999" step="1" data-wid="'+s.id+'" value="'+self.getLotteryWeight(s.id)+'" style="width:80px" oninput="App.Exam.saveLotteryWeight(this)">'
+                    +'</div>';
+            });
+            list.innerHTML=html;
+        },
+        saveLotteryWeight:function(el){
+            var id=el.getAttribute('data-wid');
+            if(!id)return;
+            var s=App.Storage.getSettings();
+            s.lotteryWeights=s.lotteryWeights||{};
+            var raw=String(el.value==null?'':el.value).trim();
+            if(raw===''){delete s.lotteryWeights[id];}   // 清空=恢复默认 100
+            else{
+                var v=Math.floor(Number(raw));
+                if(!isFinite(v)||v<0)v=0;   // 负数/非数字一律按 0 排除
+                if(v>9999)v=9999;
+                s.lotteryWeights[id]=v;
+            }
+            App.Storage.setSettings(s);
         },
         _calcSmartProbPoints:function(students){
             var settings=App.Storage.getSettings();
@@ -1089,6 +1211,8 @@
             var student=exam.playerQueue[exam.queueIndex];
             exam.currentStudent=student;
             exam.queueIndex++;
+            // 今日随机：真正抽到才记入今日已抽名单（不是预演时提前记）
+            if(exam.mode==='lottery'&&exam._lotteryMode==='daily')this.recordDailyDraw(student.id);
             exam.answered=false;
             if(exam.mode==='lottery'){exam.playerScores[student.id]=(exam.playerScores[student.id]||0)+1}
             this.renderWarReport(false);
@@ -2602,8 +2726,9 @@
                 if(!msg.type)return;
                 switch(msg.type){
                     case 'fmReady':
-                        // 文件管理器就绪握手：补发配置与凭据
-                        self._sendInitAndAuth();
+                        // 文件管理器就绪握手：记下已就绪，只回给刚就绪的这个帧
+                        self._anyFrameReady=true;
+                        self._sendInitAndAuth(e.source);
                         break;
                     case 'pullAllComplete':
                         // 文件管理器批量拉取完成
@@ -2674,11 +2799,9 @@
             });
             setTimeout(function(){
                 self.migrateOldData();
-                self._sendInitAndAuth();
+                self._sendInitAndAuth();   // 首屏唯一一条握手；索引同步由 initSession 在管理器内触发一次
                 self.ready=true;
                 self._ensureCoreStars();
-                self.syncAll();
-                setTimeout(function(){self.pullAllCloudContent()},8000);
             },1500);
         },
         getFrame:function(){
@@ -2701,12 +2824,15 @@
             });
         },
         // 统一下发初始化配置与凭据（收到 fmReady 时也调用，确保晚加载的iframe补收）
-        _sendInitAndAuth:function(){
-            this.postToBothFrames({type:'initConfig',appPrefix:'exam'});
-            this.postToBothFrames({type:'mainReady'});
-            if(App.Login&&App.Login.isLoggedIn()){
-                this.postToBothFrames({type:'authChanged',username:App.Login._username,password:App.Login._password});
-            }
+        _sendInitAndAuth:function(targetWin){
+            // 一发一收：配置+就绪+凭据合成一条 initSession，文件管理器回 sessionReady 并只跑一次登录同步
+            // 有目标帧就只发给它（每次 fmReady 各握手一次）；无目标只在没有任何帧就绪时兜底发一次
+            var msg={target:'fileManager',type:'initSession',appPrefix:'exam',syncOnReady:true};
+            if(App.Login&&App.Login.isLoggedIn()){msg.username=App.Login._username;msg.password=App.Login._password}
+            if(targetWin){try{targetWin.postMessage(msg,'*')}catch(e){};return}
+            if(this._anyFrameReady||this._initTimeoutSent)return;
+            this._initTimeoutSent=true;
+            this.postToBothFrames(msg);
         },
         _frameReady:false,
         _pending:null,
@@ -2724,22 +2850,30 @@
         _pushContent:function(name,content){
             if(!name||content===undefined)return;
             if(!this._frameReady){this._pending=this._pending||[];this._pending.push({name:name,content:content});return}
-            this.postToFileManager({type:'contentChanged',name:name,content:content});
+            this._pushQueue=this._pushQueue||[];
+            this._pushQueue.push({name:name,content:content});
+            if(this._pushTimer)return;
+            var self=this;
+            this._pushTimer=setTimeout(function(){
+                var q=self._pushQueue||[];self._pushQueue=[];self._pushTimer=null;
+                if(q.length)self.postToFileManager({type:'contentBatch',items:q});
+            },50);
         },
         _flushPending:function(){
             if(!this._pending||!this._pending.length)return;
             var q=this._pending;this._pending=[];
-            for(var i=0;i<q.length;i++)this.postToFileManager({type:'contentChanged',name:q[i].name,content:q[i].content});
+            if(q.length)this.postToFileManager({type:'contentBatch',items:q});
         },
         _ensureCoreStars:function(){
             try{
                 var prefix='exam';
                 var idx=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
                 var names=['系统-学生信息','系统-考试数据','系统-等级设置','系统-AI配置'];
-                var changed=false;
+                var changed=false,ids=[];
                 for(var i=0;i<idx.length;i++){if(names.indexOf(idx[i].name)>=0&&!idx[i].star){idx[i].star=true;changed=true}}
                 if(changed){localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));}
-                for(var j=0;j<idx.length;j++){if(names.indexOf(idx[j].name)>=0&&idx[j].id)this.postToFileManager({type:'setStar',id:idx[j].id,star:true});}
+                for(var j=0;j<idx.length;j++){if(names.indexOf(idx[j].name)>=0&&idx[j].id)ids.push(idx[j].id);}
+                if(ids.length)this.postToFileManager({type:'setStars',ids:ids,star:true});
             }catch(e){}
         },
         _formatTime:function(){
@@ -2993,8 +3127,19 @@
             var modal=document.getElementById('file-modal');
             if(modal)modal.style.display='flex';
             var frame=document.getElementById('fileManagerFrame');
-            if(frame&&frame.contentWindow){
-                frame.contentWindow.postMessage({target:'fileManager',type:'open'},'*');
+            if(frame){
+                // 弹窗用 iframe 首次打开才加载，避免首屏重复初始化、重复打云函数
+                if(!frame.getAttribute('src')){
+                    frame.setAttribute('src',frame.getAttribute('data-src')||'文件管理.HTML');
+                    frame.addEventListener('load',function once(){
+                        frame.removeEventListener('load',once);
+                        try{frame.contentWindow.postMessage({target:'fileManager',type:'open'},'*')}catch(e){}
+                    });
+                    return;
+                }
+                if(frame.contentWindow){
+                    frame.contentWindow.postMessage({target:'fileManager',type:'open'},'*');
+                }
             }
         },
         closeFileManager:function(){
@@ -3091,7 +3236,7 @@
                 return;
             }
 
-            // 延迟：验证已有凭据 + 通知文件管理器
+            // 延迟：验证已有凭据（凭据已随 initSession 一次性下发，不再单独发 authChanged）
             setTimeout(function(){
                 self.verifyCredentials(self._username, self._password, function(ok){
                     if(!ok){
@@ -3100,7 +3245,6 @@
                         self._redirectToLogin();
                     }
                 });
-                self._notifyFileManager();
             }, 2000);
         },
 
@@ -3124,23 +3268,6 @@
         // 跳转到登录页
         _redirectToLogin: function(){
             window.location.href = 'denglu.html';
-        },
-
-        _notifyFileManager: function(){
-            var frames = [document.getElementById('fileManagerBg'), document.getElementById('fileManagerFrame')];
-            var self = this;
-            frames.forEach(function(frame){
-                if(frame && frame.contentWindow){
-                    try{
-                        frame.contentWindow.postMessage({
-                            target: 'fileManager',
-                            type: 'authChanged',
-                            username: self._username,
-                            password: self._password
-                        }, '*');
-                    }catch(e){}
-                }
-            });
         },
 
         verifyCredentials: function(username, password, callback){
