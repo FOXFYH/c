@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.08
+  存储测试网页版 · 文件管理器        当前版本 6.09
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.09 (2026-10-25) H9二次：宿主侧通知合并（非握手消息 120ms 合帧 hostBatch，宿主侧目标≤3条）；弹窗未加载不再收 initSession（消除重复握手与凭据发空白帧）；字节口径改按实测。
     6.08 (2026-10-25) 首屏收发合并为一次会话握手：新增 initSession（一条带齐配置+凭据，回 sessionReady，且只触发一次登录同步）；弹窗 iframe 改为首次打开才加载；云端「获取表头」仅首次核对并留标记；新增批量星标 setStars；宿主内容变更合并为 contentBatch 一条收一条回执。
     6.07 (2026-10-09) 新增「日志」分页：自动记录最近 50 条（可调）webhook 收发摘要——每条含 操作名+简单摘要+成功/失败+耗时，不保存收发原文以避免占用空间；按天统计 Webhook 消耗次数，保留最近 7 天（可调）；超量/超期自动清理。新增 localStorage 键 oplog / oplog_daily；设置页新增「日志参数」模块（保留条数/保留天数）。
     6.06 (2026-10-09) 联网三处补齐：①refreshCloudIndex 中「云端有、本地未落盘」条目改为 e=s=cloudVer，消除「刚从云端下来也报版本号偏小」；②新增只读动作「批量读取」(按 ID 列表一次取回多文件)，客户端批量拉取改走它，替代逐文件下载；③删除永不触发的异常降级/异常升级死码；另补 fmReady 就绪握手。
@@ -77,7 +78,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.08</title>
+<title>文件管理 v6.09</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -112,7 +113,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.08</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.09</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -386,10 +387,48 @@ function getLastEditTime(){
   return localStorage.getItem(K('last_edit_time'))||'';
 }
 
+// H9二次：宿主侧通知合并——握手消息即时发，其余攒到本轮同步结束（pullAllComplete）合并成一帧 hostBatch
+var HOST_PENDING=[],HOST_FLUSH_TIMER=null,HOST_SEEN_SYNC=false;
+var HOST_IMMEDIATE={fmReady:1,sessionReady:1};
+function scheduleHostFlush(ms){
+  if(HOST_FLUSH_TIMER)clearTimeout(HOST_FLUSH_TIMER);
+  HOST_FLUSH_TIMER=setTimeout(flushHostPending,ms);
+}
+var HOST_LAST_WINS={syncState:1,syncStatusChanged:1,syncComplete:1,pullAllComplete:1};
+function flushHostPending(){
+  if(HOST_FLUSH_TIMER){clearTimeout(HOST_FLUSH_TIMER);HOST_FLUSH_TIMER=null;}
+  var items=HOST_PENDING;HOST_PENDING=[];
+  if(!items.length)return;
+  // 同类状态只留最后一条、提示只留最后一条，进一步压字节
+  var lastIdx={};
+  items.forEach(function(it,i){if(it.type==='syncToast'||HOST_LAST_WINS[it.type])lastIdx[it.type]=i;});
+  var out=items.filter(function(it,i){
+    if(it.type==='syncToast'||HOST_LAST_WINS[it.type])return i===lastIdx[it.type];
+    return true;
+  });
+  if(!out.length)return;
+  try{
+    if(out.length===1){
+      // 只剩一条就不再套 hostBatch 外壳，避免小消息反而变大
+      window.parent.postMessage(out[0],'*');
+    }else{
+      window.parent.postMessage({type:'hostBatch',items:out},'*');
+    }
+  }catch(e){}
+}
 function notifyParent(type,data){
-  if(window.parent&&window.parent!==window){
+  if(!(window.parent&&window.parent!==window))return;
+  if(HOST_IMMEDIATE[type]){
     window.parent.postMessage({type,...data},'*');
+    return;
   }
+  HOST_PENDING.push(Object.assign({type:type},data||{}));
+  // 同步提交完成后再等 3 秒，把紧随其后的批量拉取通知也吞进同一帧
+  if(type==='syncComplete'){HOST_SEEN_SYNC=true;scheduleHostFlush(3000);return;}
+  // 批量拉取收尾：同步回合已出现，则 300ms 后把整轮一次发完
+  if(type==='pullAllComplete'&&HOST_SEEN_SYNC){scheduleHostFlush(300);return;}
+  // 兜底：没有收尾信号时最多攒 4 秒，必须发出去，不许闷在队列里
+  if(!HOST_FLUSH_TIMER)scheduleHostFlush(4000);
 }
 
 // 结构化同步三态推送（v6.03）：state='syncing'|'done'|'error'，detail 为文本或统计对象
