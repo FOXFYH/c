@@ -2724,15 +2724,25 @@
                 if(!e.data||typeof e.data!=='object')return;
                 var msg=e.data;
                 if(!msg.type)return;
+                // H9二次：文件管理器把多条通知合并成一帧 hostBatch，这里按原顺序逐条还原处理
+                var _list=(msg.type==='hostBatch'&&Array.isArray(msg.items))?msg.items:[msg];
+                _list.forEach(function(m){
+                if(!m||!m.type)return;
+                msg=m;
                 switch(msg.type){
                     case 'fmReady':
                         // 文件管理器就绪握手：记下已就绪，只回给刚就绪的这个帧
                         self._anyFrameReady=true;
                         self._sendInitAndAuth(e.source);
                         break;
+                    case 'sessionReady':
+                        // H9二次：索引建好后主动拉一次，别等 syncComplete 再拉（否则通知被拆成两帧）
+                        setTimeout(function(){ self.pullAllCloudContent(); },3000);
+                        setTimeout(function(){ self.pullAllCloudContent(); },6500);
+                        break;
                     case 'pullAllComplete':
                         // 文件管理器批量拉取完成
-                        this._pulling = false;
+                        self._pulling = false;
                         break;
                     case 'openFile':
                         self._onOpenFile(msg);
@@ -2790,6 +2800,7 @@
                         if(App.Questions)App.Questions.render();
                         break;
                 }
+                });
             });
             document.addEventListener('visibilitychange',function(){
                 if(!document.hidden&&self.ready){
@@ -2814,11 +2825,11 @@
                 try{frame.contentWindow.postMessage(Object.assign({target:'fileManager'},msg),'*')}catch(e){}
             }
         },
-        // 向两个iframe（后台常驻+弹窗）同时发消息，避免只发一个导致另一个漏收配置/凭据
+        // 只发给已真正加载管理器的帧：弹窗未 set src 前不发，避免同一条 initSession 被数两份、凭据发进空白帧
         postToBothFrames:function(msg){
             ['fileManagerBg','fileManagerFrame'].forEach(function(id){
                 var frame=document.getElementById(id);
-                if(frame&&frame.contentWindow){
+                if(frame&&frame.getAttribute('src')&&frame.contentWindow){
                     try{frame.contentWindow.postMessage(Object.assign({target:'fileManager'},msg),'*')}catch(e){}
                 }
             });
@@ -2827,6 +2838,7 @@
         _sendInitAndAuth:function(targetWin){
             // 一发一收：配置+就绪+凭据合成一条 initSession，文件管理器回 sessionReady 并只跑一次登录同步
             // 有目标帧就只发给它（每次 fmReady 各握手一次）；无目标只在没有任何帧就绪时兜底发一次
+            // 注意：initSession 内含 username/password，接 H12 日志模板时必须脱敏，禁止原文落盘
             var msg={target:'fileManager',type:'initSession',appPrefix:'exam',syncOnReady:true};
             if(App.Login&&App.Login.isLoggedIn()){msg.username=App.Login._username;msg.password=App.Login._password}
             if(targetWin){try{targetWin.postMessage(msg,'*')}catch(e){};return}
@@ -2840,6 +2852,8 @@
             if(!frame)return;
             var self=this;
             var mark=function(){
+                // 弹窗未 set src（还是 data-src）时不算就绪，也不参与首屏握手
+                if(!frame.getAttribute('src'))return;
                 try{if(frame.contentDocument&&frame.contentDocument.readyState!=='complete')return}catch(e){}
                 self._frameReady=true;
                 self._flushPending();
