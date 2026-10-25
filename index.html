@@ -127,10 +127,17 @@
                             </div>
                             <div class="option-group" id="opt-group-lottery-random" style="display:none">
                                 <label>🎲 抽签方式</label>
-                                <select id="exam-lottery-random">
+                                <select id="exam-lottery-random" onchange="App.Exam._onLotteryModeChange()">
                                     <option value="fairCycle" selected>公平随机（一轮每人必抽一次，全部抽完再洗牌下一轮）</option>
                                     <option value="random">真随机（每签独立随机，可能连续抽中同一人）</option>
+                                    <option value="daily">今日随机（今天抽中过的不再抽，0 点重置）</option>
+                                    <option value="weighted">加权随机（每人默认权重 100，权重越高越容易被抽中）</option>
                                 </select>
+                                <div id="lottery-daily-hint" class="form-hint" style="display:none"></div>
+                                <div id="lottery-weight-editor" style="display:none;margin-top:8px">
+                                    <div class="form-hint">⚖️ 个人权重：未填=默认 100；填 0=不参与（永不抽中）；负数/非数字按 0 处理；上限 9999</div>
+                                    <div id="lottery-weight-list" class="student-select-list" style="max-height:220px;overflow:auto"></div>
+                                </div>
                             </div>
                             <div class="option-group" id="opt-group-smart" style="display:none">
                                 <label>🧠 智能强度</label>
@@ -277,7 +284,7 @@
     <div class="modal-overlay" id="modal-overlay" onclick="App.Modal.closeOnOverlay(event)"><div class="modal" id="modal-container"><div class="modal-header"><h3 id="modal-title">标题</h3><button class="modal-close" onclick="App.Modal.close()">✕</button></div><div class="modal-body" id="modal-body"></div><div class="modal-footer" id="modal-footer"></div></div></div>
     <canvas id="fx-canvas"></canvas>
     <div id="file-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:200;justify-content:center;align-items:center" onclick="if(event.target===this)App.Sync.closeFileManager()">
-        <iframe id="fileManagerFrame" src="文件管理.HTML" style="width:780px;max-width:95vw;height:75vh;border:none;border-radius:10px;background:#fff"></iframe>
+        <iframe id="fileManagerFrame" data-src="文件管理.HTML" style="width:780px;max-width:95vw;height:75vh;border:none;border-radius:10px;background:#fff"></iframe>
     </div>
     <iframe id="fileManagerBg" src="文件管理.HTML" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
     <script src="demo-data.js"></script>
