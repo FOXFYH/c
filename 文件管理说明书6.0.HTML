@@ -48,7 +48,7 @@
 </head>
 <body>
 <div class="header">
-  <h2>📋 文件管理器 说明书 <span id="appVersionBadge" class="app-ver">v6.02</span></h2>
+  <h2>📋 文件管理器 说明书 <span id="appVersionBadge" class="app-ver">v6.09</span></h2>
   <span style="font-size:11px;color:#aaa">独立文档 · iframe 内嵌</span>
 </div>
 <div class="wrap">
@@ -128,8 +128,60 @@
     </p>
   </section>
 
+  <section>
+    <h3>八、宿主接入规范（接入前必读，违反即视为未接入）</h3>
+    <p class="warn"><b>非落盘存储的唯一含义：本地只是云端状态的镜像，任何写入都必须先由云端确认。</b>宿主不得自己先改本地/界面，事后再补同步。</p>
+
+    <h4>8.1 唯一写入口</h4>
+    <ul>
+      <li>宿主的<b>任何写操作</b>（新建/改名/写入内容/修改内容/删除内容/删除文件/移动/复制）都必须以 <code>postMessage</code> 发给文件管理器，由文件管理器调用云端；<b>云端失败＝整体失败</b>。</li>
+      <li>宿主<b>禁止</b>直连云端接口、也<b>禁止</b>先在 localStorage / 界面上落地。</li>
+      <li>宿主界面只能在收到<b>成功回执</b>后更新；收到失败回执必须保持原状并红字提示。</li>
+    </ul>
+
+    <h4>8.2 合规与违规对照</h4>
+    <table>
+      <tr><th style="width:90px">动作</th><th>合规路径（必须这样）</th><th>违规路径（本项目的教训）</th></tr>
+      <tr><td>改名</td><td>宿主发消息 → 管理器云端改名 → 回执成功 → 宿主改本地与索引</td><td>宿主直接改本地名字，等下次「同步」再补传</td></tr>
+      <tr><td>新建</td><td>宿主发消息 → 管理器先建云端行拿到 ID → 回执 → 宿主再建本地</td><td>宿主先建本地空库（_newFile），等同步才上云</td></tr>
+      <tr><td>加/改/删题目</td><td>宿主发消息 → 管理器提交内容并令版本 +1 → 回执 → 宿主更新</td><td>宿主直接 <code>setBanks()</code> 改本地</td></tr>
+      <tr><td>删除文件</td><td>宿主发消息 → 管理器查云端行 → 删除行成功 → 回执 → 宿主清本地</td><td>宿主先隐藏/先删本地，失败被吞掉</td></tr>
+    </table>
+
+    <h4>8.3 已支持的消息（宿主 → 管理器）</h4>
+    <ul>
+      <li><code>initSession</code>：登录后握手，传账号密码与宿主只读数据。</li>
+      <li><code>fileChanged_local</code>：保存内容（上传后由管理器写云端并回执）。</li>
+      <li><code>fileDeleted_local</code>：删除；<b>建议随带 username/password</b>，管理器本次操作强制使用该账号，<code>finally</code> 还原。</li>
+      <li>宿主需要新的写动作时，<b>必须先在本文件管理器注册新消息类型</b>，不得在宿主侧私自实现。</li>
+    </ul>
+    <h4>8.4 管理器 → 宿主的回执（必须处理）</h4>
+    <ul>
+      <li><code>bankDeleted</code> / <code>fileDeleted</code>：成功，宿主此刻才清本地。</li>
+      <li><code>bankDeleteFailed</code>：失败，带 reason：<code>network_error</code>（网络）、<code>cloud_not_found</code>（云端无此行）、<code>sync_disabled</code>（未启用同步）、其它＝云端拒绝原文。<b>宿主禁止隐藏对象或静默吞错。</b></li>
+      <li>唯一例外：<code>cloud_not_found</code> 且宿主本地<b>没有该文件内容</b>（纯索引残留）→ 可按成功清理本地索引，并提示「云端已无此条，已清理本地残留」。</li>
+    </ul>
+
+    <h4>8.5 并发、超时与凭据</h4>
+    <ul>
+      <li>同一文件同一时刻只允许一个写动作；宿主需串行化并显示「处理中」。</li>
+      <li>管理器回执超时（默认 90 秒）一律按失败处理，不得假定成功。</li>
+      <li>宿主换账号后，每次写消息都要带上当前账号；管理器用完即还原，<b>不得长期持有宿主凭据</b>。</li>
+    </ul>
+
+    <h4>8.6 接入验收用例（六条全过才算接入完成）</h4>
+    <ol>
+      <li>断网/关同步时点保存：本地不变、红字报错。</li>
+      <li>云端无此行时点删除：提示「云端已无此条」，本地索引被清、不残留。</li>
+      <li>换账号后删除他人文件：提示无权限，本地不变。</li>
+      <li>改名：管理器回执成功后，云端文件名与宿主显示同时变为新名。</li>
+      <li>新建：云端先出现行，宿主才出现条目（顺序不可颠倒）。</li>
+      <li>连续两次快速点击同一删除：第二次被串行化拦截或提示处理中，不得双删。</li>
+    </ol>
+  </section>
+
   <hr>
-  <div class="foot">文件管理说明书 · v6.0 · 随 文件管理6.0.HTML v6.0 分页内嵌</div>
+  <div class="foot">文件管理说明书 · v6.09 · 随 文件管理.HTML v6.09 分页内嵌</div>
 </div>
 </body>
 </html>
