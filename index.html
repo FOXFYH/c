@@ -7,13 +7,28 @@
     <link rel="stylesheet" href="style.css?v=2.0.3">
     <link rel="stylesheet" href="mobile.css?v=2.0.3">
     <script src="ui-mode.js?v=2.0.3"></script>
+    <script>
+      // 现场诊断：任何 JS 报错都在页面顶部显示一条红条，方便手机截图反馈；同时暴露版本号
+      window.__APP_VER='2.0.3';
+      window.addEventListener('error',function(e){
+        try{
+          var d=document.getElementById('js-err-bar');
+          if(!d){d=document.createElement('div');d.id='js-err-bar';d.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:2000;background:#c0392b;color:#fff;font-size:12px;padding:6px 10px;white-space:pre-wrap';document.body.appendChild(d)}
+          d.textContent='JS错误: '+(e.message||e.error||'')+' @'+((e.filename||'').split('/').pop())+':'+(e.lineno||'');
+        }catch(_){}
+      });
+      window.addEventListener('unhandledrejection',function(e){
+        try{var d=document.getElementById('js-err-bar');if(!d){d=document.createElement('div');d.id='js-err-bar';d.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:2000;background:#c0392b;color:#fff;font-size:12px;padding:6px 10px;white-space:pre-wrap';document.body.appendChild(d)}
+          d.textContent='异步错误: '+((e.reason&&(e.reason.message||e.reason))||'未知');}catch(_){}
+      });
+    </script>
 </head>
 <body>
     <canvas id="bg-canvas"></canvas>
     <nav id="main-nav">
         <div class="nav-brand" onclick="App.switchView('home')">
             <span class="nav-logo">🎯</span>
-            <span class="nav-title">挑战系统 2.0</span>
+            <span class="nav-title">挑战系统 2.0</span><span id="nav-ver" style="margin-left:6px;font-size:11px;color:#8ab;border:1px solid #8ab;border-radius:8px;padding:0 5px;vertical-align:middle">v2.0.3</span>
         </div>
         <div class="nav-items">
             <button class="nav-btn active" data-view="home" onclick="App.switchView('home')"><span class="nav-icon">🚀</span><span class="nav-text">Let's go</span></button>
