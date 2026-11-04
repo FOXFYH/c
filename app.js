@@ -2872,13 +2872,24 @@
                         })();
                         break;
                     case 'bankDeleteFailed':
-                        // 云端删除失败/无法确认 → 本地列表原样保留，红字报错
+                        // 云端删除失败/无法确认 → 本地列表原样保留；但「云端本就没有这行」视为已达成目标，清掉本地残留索引
                         (function(){
                             var delId=msg.fileId;
                             var reason=msg.reason||'cloud_delete_failed';
-                            var reasonText={'cloud_not_found':'云端找不到该题库行','network_error':'网络异常，无法连接云端','sync_disabled':'云同步未启用'}[reason]||('云端删除失败（'+reason+'）');
                             if(App._bankDeleteTimer){clearTimeout(App._bankDeleteTimer);App._bankDeleteTimer=null}
                             if(!App._bankDeleting||App._bankDeleting===delId)App._bankDeleting=null;
+                            if(reason==='cloud_not_found'){
+                                var hasLocal=App.Storage.getBanks().some(function(b){return b.id===delId});
+                                if(!hasLocal){
+                                    var fi0=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                                    var n0=fi0.length;
+                                    fi0=fi0.filter(function(f){return f.id!==delId});
+                                    try{localStorage.setItem('exam_file_index',JSON.stringify(fi0))}catch(e){}
+                                    if(App.Questions)App.Questions.render();
+                                    if(n0!==fi0.length){App.Toast.show('云端已无此题库，已清理本地残留（刷新后不再出现）','success');return}
+                                }
+                            }
+                            var reasonText={'cloud_not_found':'云端找不到该题库行','network_error':'网络异常，无法连接云端','sync_disabled':'云同步未启用'}[reason]||('云端删除失败（'+reason+'）');
                             if(App.Questions)App.Questions.render();
                             App.Toast.show('删除失败：'+reasonText+'（题库已保留，未被隐藏）','error');
                         })();
@@ -3224,7 +3235,9 @@
             var banks=App.Storage.getBanks();
             var bank=banks.find(function(b){return b.id===bankKey||b.name===bankKey});
             var fileId=bank?bank.id:bankKey;
-            var msg={type:'fileDeleted_local',fileId:fileId,name:bank?bank.name:''};
+            var msg={type:'fileDeleted_local',fileId:fileId,name:bank?bank.name:'',
+                     username:(App.Login&&App.Login._username)||localStorage.getItem('exam_auth_user')||'',
+                     password:(App.Login&&App.Login._password)||localStorage.getItem('exam_auth_pass')||''};
             // 后台管理器帧未就绪时先排队，fmReady 后再发，避免消息发进空白帧丢掉
             if(!this._anyFrameReady){
                 this._pendingBankDeletes=this._pendingBankDeletes||[];
