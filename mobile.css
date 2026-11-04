@@ -1,0 +1,702 @@
+/* ============================================================
+   挑战答题 · 手机竖版适配
+   规则纪律：所有适配规则均以 html[data-ui="mobile"] 为前缀，
+   电脑横版（data-ui="desktop"）不会被任何一条规则命中。
+   ============================================================ */
+
+/* ---------- 1. 全局：禁止整页横向滚动 ---------- */
+html[data-ui="mobile"],
+html[data-ui="mobile"] body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+}
+html[data-ui="mobile"] body {
+    font-size: 15px;
+}
+html[data-ui="mobile"] img,
+html[data-ui="mobile"] canvas,
+html[data-ui="mobile"] iframe {
+    max-width: 100%;
+}
+
+/* ---------- 2. 顶栏：两行、总高 <= 96px ---------- */
+html[data-ui="mobile"] #main-nav {
+    height: auto;
+    min-height: 0;
+    /* 缺陷 8：收紧 1px，避免 390.45 这类亚像素溢出（视觉无感，背景同色） */
+    width: calc(100% - 1px);
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    padding: 2px 8px;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 2px 4px;
+}
+/* 第 1 行 */
+html[data-ui="mobile"] .nav-brand {
+    order: 0;
+    flex: 0 0 auto;
+    min-width: 44px;
+    height: 44px;
+    justify-content: center;
+    gap: 0;
+}
+html[data-ui="mobile"] .nav-title { display: none; }
+html[data-ui="mobile"] .nav-logo { font-size: 22px; }
+
+html[data-ui="mobile"] .nav-sound {
+    order: 1;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+html[data-ui="mobile"] .nav-login {
+    order: 2;
+    height: 44px;
+    gap: 2px;
+}
+html[data-ui="mobile"] #nav-login-status { display: none !important; }
+html[data-ui="mobile"] .nav-login-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+/* 第 2 行：5 个导航按钮等宽、仅图标 */
+html[data-ui="mobile"] .nav-items {
+    order: 100;
+    flex: 0 0 100%;
+    width: 100%;
+    gap: 2px;
+}
+html[data-ui="mobile"] .nav-items .nav-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 44px;
+    padding: 0 2px;
+    justify-content: center;
+    gap: 0;
+    font-size: 13px;
+}
+html[data-ui="mobile"] .nav-text { display: none; }
+html[data-ui="mobile"] .nav-icon { font-size: 20px; }
+
+/* 考试中的顶部控制按钮：命中高度 44 */
+html[data-ui="mobile"] #nav-exam-mode,
+html[data-ui="mobile"] #nav-exam-end {
+    order: 3;
+    min-height: 44px;
+    min-width: 44px;
+    max-width: 46%;
+    padding: 0 8px;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+html[data-ui="mobile"] #nav-exam-end { order: 4; }
+
+/* 缩放 / 全屏：手机上隐藏，不占主行 */
+html[data-ui="mobile"] #nav-zoom-controls,
+html[data-ui="mobile"] .nav-fullscreen { display: none !important; }
+
+/* 手机/电脑切换按钮：两种模式都常显（电脑版 36×36，手机版 44×44） */
+html[data-ui="desktop"] #ui-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 36px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 0 2px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 17px;
+    cursor: pointer;
+    line-height: 1;
+}
+html[data-ui="desktop"] #ui-mode-toggle:hover {
+    background: rgba(108, 92, 231, 0.15);
+}
+html[data-ui="mobile"] #ui-mode-toggle {
+    order: 5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    flex: 0 0 44px;
+}
+
+/* 手机上手动切成「电脑版」：窄屏顶栏压到 <=96px，且切换按钮仍可点 */
+@media (max-width: 820px) {
+    html[data-ui="desktop"][data-ui-manual="1"] #main-nav {
+        height: auto;
+        min-height: 0;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: 2px 8px;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 2px 4px;
+    }
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-brand {
+        order: 0;
+        height: 40px;
+        flex: 0 0 auto;
+    }
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-logo { font-size: 20px; }
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-title { font-size: 15px; }
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-sound {
+        order: 1;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-login { order: 2; height: 40px; }
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-login-btn {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-items {
+        order: 100;
+        flex: 0 0 100%;
+        width: 100%;
+        gap: 4px;
+    }
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-btn {
+        flex: 1 1 0;
+        min-width: 0;
+        height: 40px;
+        padding: 2px 8px;
+        font-size: 13px;
+        gap: 4px;
+        justify-content: center;
+    }
+    html[data-ui="desktop"][data-ui-manual="1"] #ui-mode-toggle {
+        order: 5;
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+        font-size: 16px;
+    }
+    html[data-ui="desktop"][data-ui-manual="1"] #nav-zoom-controls,
+    html[data-ui="desktop"][data-ui-manual="1"] .nav-fullscreen { display: none !important; }
+    html[data-ui="desktop"][data-ui-manual="1"] #app-content { padding-top: 90px; }
+}
+
+/* 内容区让出顶栏高度 */
+html[data-ui="mobile"] #app-content { padding-top: 96px; min-height: 0; }
+
+/* ---------- 3. 视图容器：满屏宽、单列 ---------- */
+html[data-ui="mobile"] .home-container,
+html[data-ui="mobile"] .manage-container,
+html[data-ui="mobile"] .leaderboard-container,
+html[data-ui="mobile"] .settings-container {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 12px;
+    min-height: 0;
+}
+html[data-ui="mobile"] .home-container { justify-content: flex-start; }
+html[data-ui="mobile"] .home-container.in-exam,
+html[data-ui="mobile"] .home-container:has(.exam-playing:not(.hidden)) { padding: 0; }
+html[data-ui="mobile"] .section-title { font-size: 20px; }
+
+/* 模式卡：390px 下两列不挤压 */
+html[data-ui="mobile"] .mode-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+    max-width: none;
+    margin-bottom: 16px;
+}
+html[data-ui="mobile"] .mode-card {
+    padding: 14px 10px;
+    border-radius: 14px;
+}
+html[data-ui="mobile"] .mode-card-icon { font-size: 30px; margin-bottom: 6px; }
+html[data-ui="mobile"] .mode-card-name { font-size: 16px; margin-bottom: 4px; }
+html[data-ui="mobile"] .mode-card-desc { font-size: 13.5px; line-height: 1.45; }
+@media (max-width: 359px) {
+    html[data-ui="mobile"] .mode-cards { grid-template-columns: 1fr; }
+}
+
+/* 题库 / 学生卡片单列 */
+html[data-ui="mobile"] .bank-grid,
+html[data-ui="mobile"] .student-grid { grid-template-columns: 1fr; gap: 12px; }
+html[data-ui="mobile"] .bank-card,
+html[data-ui="mobile"] .student-card { padding: 14px; }
+
+/* 缺陷 3：题库卡四按钮 28.9 高/12 字 → 每个命中 44 高、字号 13，两行排列 */
+html[data-ui="mobile"] .bank-card .bc-actions { gap: 8px; }
+html[data-ui="mobile"] .bank-card .bc-actions button {
+    flex: 1 1 calc(50% - 4px);
+    min-height: 44px;
+    min-width: 44px;
+    padding: 6px 8px;
+    font-size: 13px;
+    white-space: normal;
+    line-height: 1.25;
+}
+
+/* 榜首/榜单 */
+html[data-ui="mobile"] .leaderboard-podium { gap: 8px; padding: 0 2px; flex-wrap: wrap; margin-bottom: 20px; }
+html[data-ui="mobile"] .podium-item .podium-avatar { width: 56px; height: 56px; font-size: 22px; }
+html[data-ui="mobile"] .lb-item { padding: 10px 12px; gap: 10px; }
+html[data-ui="mobile"] .lb-item .lb-info { min-width: 0; }
+html[data-ui="mobile"] .lb-item .lb-name,
+html[data-ui="mobile"] .lb-item .lb-level { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-ui="mobile"] .lb-item .lb-points { font-size: 18px; }
+/* 领奖台：5 个席位必须挤进 390px，不撑破页面 */
+html[data-ui="mobile"] .podium-stage {
+    flex-wrap: wrap;
+    justify-content: center;
+    min-height: 0;
+    gap: 6px;
+    padding: 6px 0 0;
+}
+html[data-ui="mobile"] .podium-slot,
+html[data-ui="mobile"] .podium-slot.rank-1 { width: 68px; }
+html[data-ui="mobile"] .podium-slot .podium-avatar { width: 44px; height: 44px; font-size: 18px; border-width: 2px; }
+html[data-ui="mobile"] .podium-slot.rank-1 .podium-avatar { width: 54px; height: 54px; font-size: 22px; }
+html[data-ui="mobile"] .podium-slot .podium-name,
+html[data-ui="mobile"] .podium-slot.rank-1 .podium-name,
+html[data-ui="mobile"] .podium-slot.rank-2 .podium-name,
+html[data-ui="mobile"] .podium-slot.rank-3 .podium-name { font-size: 13px; }
+html[data-ui="mobile"] .podium-slot .podium-bar { min-width: 0; }
+/* 缺陷 7：名次 11 / 积分 12 → 13 */
+html[data-ui="mobile"] .podium-slot .podium-points { font-size: 13px; }
+html[data-ui="mobile"] .podium-rank-label { font-size: 13px; padding: 2px 5px; }
+html[data-ui="mobile"] .flb-level { font-size: 13px; }
+html[data-ui="mobile"] .flb-exams { font-size: 12px; }
+html[data-ui="mobile"] .flb-rank { font-size: 13px; }
+html[data-ui="mobile"] .podium-medal { font-size: 14px; top: -4px; right: -4px; }
+/* 全量榜单格子：12/4 列在小屏会撑破，改 3 列且允许收缩 */
+html[data-ui="mobile"] .full-leaderboard-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+html[data-ui="mobile"] .flb-item { min-width: 0; padding: 8px 2px; }
+html[data-ui="mobile"] .flb-name { font-size: 14px; }
+html[data-ui="mobile"] .remaining-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* 学情/设置里的学生表格：容器内横向滚动，不撑破整页 */
+html[data-ui="mobile"] .student-table-wrap,
+html[data-ui="mobile"] #student-mgmt-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+html[data-ui="mobile"] .student-table { min-width: 700px; }
+html[data-ui="mobile"] .student-table th,
+html[data-ui="mobile"] .student-table td { padding: 10px 12px; font-size: 13px; }
+
+/* ---------- 4. 按钮 / 表单：点击区 >= 44px ---------- */
+html[data-ui="mobile"] .btn-primary,
+html[data-ui="mobile"] .btn-secondary,
+html[data-ui="mobile"] .btn-danger,
+html[data-ui="mobile"] .btn-save-all,
+html[data-ui="mobile"] .btn-select-all,
+html[data-ui="mobile"] .btn-table,
+html[data-ui="mobile"] .btn-table-del,
+html[data-ui="mobile"] .btn-table-detail,
+html[data-ui="mobile"] .btn-back,
+html[data-ui="mobile"] .ptab-btn,
+html[data-ui="mobile"] .modal-close { min-height: 44px; }
+
+html[data-ui="mobile"] .manage-header { gap: 10px; margin-bottom: 14px; }
+html[data-ui="mobile"] .manage-actions { width: 100%; gap: 8px; }
+html[data-ui="mobile"] .manage-actions .btn-primary,
+html[data-ui="mobile"] .manage-actions .btn-secondary {
+    flex: 1 1 calc(50% - 4px);
+    justify-content: center;
+    min-height: 44px;
+    font-size: 14px;
+}
+html[data-ui="mobile"] .btn-primary.btn-sm,
+html[data-ui="mobile"] .btn-secondary.btn-sm,
+html[data-ui="mobile"] .btn-danger.btn-sm {
+    min-height: 44px;
+    font-size: 14px;
+}
+html[data-ui="mobile"] .settings-actions { gap: 8px; }
+html[data-ui="mobile"] .settings-actions .btn-primary,
+html[data-ui="mobile"] .settings-actions .btn-secondary,
+html[data-ui="mobile"] .settings-actions .btn-danger,
+html[data-ui="mobile"] .settings-actions .btn-save-all {
+    flex: 1 1 calc(50% - 4px);
+    justify-content: center;
+    min-height: 44px;
+}
+
+/* 表单控件 */
+html[data-ui="mobile"] input[type="text"],
+html[data-ui="mobile"] input[type="password"],
+html[data-ui="mobile"] input[type="number"],
+html[data-ui="mobile"] input[type="email"],
+html[data-ui="mobile"] select,
+html[data-ui="mobile"] textarea {
+    min-height: 40px;
+    font-size: 16px;
+}
+/* 缺陷 10：数字输入框统一 44 命中高度（配置页/设置页的 40~41 高） */
+html[data-ui="mobile"] input[type="number"] { min-height: 44px; }
+html[data-ui="mobile"] .level-item input { min-height: 44px; }
+html[data-ui="mobile"] .timeout-inline { flex-wrap: wrap; }
+html[data-ui="mobile"] .timeout-inline input[type="number"] { width: 42% !important; }
+
+/* 设置面板 */
+html[data-ui="mobile"] .settings-card { padding: 14px; }
+html[data-ui="mobile"] .settings-tabs { flex-wrap: wrap; gap: 4px; }
+html[data-ui="mobile"] .settings-tab {
+    flex: 1 1 auto;
+    padding: 8px 10px;
+    font-size: 13px;
+    min-height: 44px;
+    margin-bottom: -2px;
+}
+html[data-ui="mobile"] .data-io-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+}
+html[data-ui="mobile"] .data-io-btns { gap: 8px; }
+html[data-ui="mobile"] .data-io-btns button {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: 44px;
+}
+html[data-ui="mobile"] .record-card { padding: 14px; }
+
+/* 缺陷 4：等级行「✕」视觉 26，命中 44×44（透明扩区，不放大图标） */
+html[data-ui="mobile"] .level-item .btn-remove-level {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    padding: 0;
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+}
+html[data-ui="mobile"] .level-item { gap: 6px; padding: 8px 10px; flex-wrap: nowrap; }
+html[data-ui="mobile"] .level-item input { font-size: 14px; }
+html[data-ui="mobile"] .level-item .level-name-input { width: 80px; }
+html[data-ui="mobile"] .level-item .level-pts-input { width: 80px; }
+html[data-ui="mobile"] .level-item .level-comment-input { flex: 1 1 auto; min-width: 60px; }
+
+/* 缺陷 7：学情筛选栏「↓ 降序」等按钮 33 高 → 命中 44 */
+html[data-ui="mobile"] .student-filters { gap: 8px; }
+html[data-ui="mobile"] .student-filters .btn-sm,
+html[data-ui="mobile"] .student-filters button,
+html[data-ui="mobile"] .student-filters select {
+    min-height: 44px;
+    font-size: 13px;
+}
+
+/* 设置页里内联的两列/并排容器改成纵向 */
+html[data-ui="mobile"] #stab-sync > div > div[style*="display:flex"] { flex-wrap: wrap; }
+
+/* ---------- 5. 弹窗：满宽、按钮 >= 44px ---------- */
+html[data-ui="mobile"] .modal-overlay { padding: 0; }
+html[data-ui="mobile"] .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 14px;
+}
+html[data-ui="mobile"] .modal-header { padding: 12px 14px; }
+html[data-ui="mobile"] .modal-header h3 { font-size: 16px; }
+html[data-ui="mobile"] .modal-body { padding: 14px; }
+html[data-ui="mobile"] .modal-footer { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+html[data-ui="mobile"] .modal-footer button {
+    flex: 1 1 45%;
+    justify-content: center;
+    min-height: 44px;
+}
+html[data-ui="mobile"] .modal-body textarea { min-height: 90px; }
+
+/* 缺陷 1：文件管理器弹窗必须压在顶栏（z-index 1000）之上，否则标题/路径/✕/tab 被盖死 */
+html[data-ui="mobile"] #file-modal {
+    z-index: 1100 !important;
+    align-items: stretch !important;
+    padding: 0 !important;
+}
+/* 文件管理器弹窗（iframe）占满手机屏 */
+html[data-ui="mobile"] #file-modal iframe {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+}
+
+/* ---------- 6. 选模式后的配置页 ---------- */
+html[data-ui="mobile"] .setup-layout { flex-direction: column; gap: 12px; }
+html[data-ui="mobile"] .setup-rules { flex: none; width: 100%; }
+html[data-ui="mobile"] .rules-card { position: static; }
+html[data-ui="mobile"] .setup-header { flex-wrap: wrap; gap: 8px; justify-content: center; }
+html[data-ui="mobile"] .setup-header .btn-back { order: 1; min-height: 44px; }
+html[data-ui="mobile"] .setup-header .section-title { order: 2; flex: 1 1 40%; font-size: 18px; text-align: right; }
+html[data-ui="mobile"] .setup-header .btn-start-top {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: center;
+    font-size: 18px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+html[data-ui="mobile"] .exam-options-grid { grid-template-columns: 1fr; gap: 10px; }
+html[data-ui="mobile"] .exam-options-grid .option-group input[type="number"] { min-height: 44px; font-size: 16px; }
+html[data-ui="mobile"] .timeout-inline input[type="number"] { min-height: 44px; }
+html[data-ui="mobile"] .participation-toggle { display: flex; }
+html[data-ui="mobile"] .participation-toggle .ptab-btn { flex: 1; font-size: 15px; }
+html[data-ui="mobile"] .bank-select-bar { min-height: 44px; }
+html[data-ui="mobile"] .student-select-list { max-height: 240px; }
+html[data-ui="mobile"] .sub-title-row { flex-wrap: wrap; gap: 8px; }
+
+/* ---------- 7. 答题界面：单列 ---------- */
+html[data-ui="mobile"] .exam-playing { width: 100%; }
+html[data-ui="mobile"] .exam-play-layout {
+    flex-direction: column;
+    width: 100%;
+    height: auto;
+    padding: 8px;
+    gap: 8px;
+}
+html[data-ui="mobile"] .exam-play-main { flex: none; width: 100%; overflow-y: visible; }
+html[data-ui="mobile"] .exam-play-sidebar {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    max-height: 240px;
+    padding: 8px;
+}
+html[data-ui="mobile"] .exam-student-card { padding: 8px 10px; }
+html[data-ui="mobile"] .student-avatar { width: 44px; height: 44px; font-size: 18px; border-width: 2px; }
+html[data-ui="mobile"] .student-info { gap: 8px; }
+html[data-ui="mobile"] #exam-student-name { font-size: 18px !important; }
+html[data-ui="mobile"] #exam-student-comment,
+html[data-ui="mobile"] #exam-student-level { font-size: 14px !important; }
+html[data-ui="mobile"] .question-card { padding: 14px; }
+html[data-ui="mobile"] #question-text,
+html[data-ui="mobile"] .question-text { font-size: 15px !important; line-height: 1.6; margin-bottom: 14px; }
+html[data-ui="mobile"] .question-options { grid-template-columns: 1fr; gap: 10px; }
+html[data-ui="mobile"] .option-btn { min-height: 44px; padding: 12px; font-size: 15px !important; }
+html[data-ui="mobile"] .exam-actions { flex-wrap: wrap; gap: 8px; }
+html[data-ui="mobile"] .exam-actions button { flex: 1 1 auto; min-height: 44px; margin-right: 0; }
+html[data-ui="mobile"] .exam-progress { gap: 8px; }
+html[data-ui="mobile"] .drawing-card { max-width: 100%; }
+html[data-ui="mobile"] .btn-stop-drawing { min-height: 44px; }
+
+/* ============================================================
+   8. 文件管理.HTML（iframe 内页面）
+   说明：它是 iframe，手机上宽约 390（桌面弹窗里固定 780，独立打开时更宽）。
+   这里用 @media (max-width: 560px) 圈定「手机尺寸的容器」，
+   选择器 html:not([data-ui="desktop"]) 天然排除所有电脑版页面
+   （index/denglu 一定带 data-ui），因此电脑横版完全不受影响；
+   同时该写法不依赖 iframe 跨域同步，file:// 预览也能生效。
+   ============================================================ */
+@media (max-width: 560px) {
+    html:not([data-ui="desktop"]) #mainUI,
+    html:not([data-ui="desktop"]) #view-home,
+    html:not([data-ui="desktop"]) #view-settings { width: 100%; }
+
+    /* 工具栏竖向堆叠 */
+    html:not([data-ui="desktop"]) .btn-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+    html:not([data-ui="desktop"]) .btn-row input {
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 40px;
+        font-size: 14px !important;
+    }
+    html:not([data-ui="desktop"]) .btn-row button {
+        width: 100%;
+        min-height: 44px;
+        font-size: 14px !important;
+        padding: 8px 10px !important;
+    }
+    html:not([data-ui="desktop"]) .btn-row2 { gap: 6px; }
+    html:not([data-ui="desktop"]) .btn-row2 button {
+        flex: 1 1 calc(50% - 6px);
+        min-height: 44px;
+        font-size: 13px !important;
+        padding: 8px 6px !important;
+    }
+
+    /* 缺陷 6：分页标签视觉 40、命中 44 */
+    html:not([data-ui="desktop"]) #tab-bar .app-tab {
+        flex: 1;
+        text-align: center;
+        min-height: 44px;
+        padding: 10px 4px !important;
+        font-size: 14px !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 列表项：行高与字号放大（缺陷 7：时间/删除 10 → 12） */
+    html:not([data-ui="desktop"]) .file-item { min-height: 44px; padding: 8px; }
+    html:not([data-ui="desktop"]) .file-item .file-name { font-size: 13px !important; }
+    html:not([data-ui="desktop"]) .file-item .file-time { font-size: 13px !important; }
+    /* 缺陷 1：行内「删除」命中区 >=44（38×24.9 → 44×44） */
+    html:not([data-ui="desktop"]) .file-item .file-del {
+        font-size: 14px !important;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0 8px;
+        margin-left: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+    html:not([data-ui="desktop"]) .file-check .chkbox { width: 22px; height: 22px; }
+
+    /* 缺陷 6：底部凭据条，输入 >=40 高、字号 >=13、保存 >=44 */
+    html:not([data-ui="desktop"]) #authBar {
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 6px 8px;
+    }
+    html:not([data-ui="desktop"]) #authBar > div:first-child {
+        flex-wrap: wrap;
+        flex: 1 1 100%;
+        gap: 4px;
+    }
+    html:not([data-ui="desktop"]) #authBar input {
+        min-width: 0;
+        min-height: 40px !important;
+        font-size: 13px !important;
+        padding: 4px 6px !important;
+    }
+    html:not([data-ui="desktop"]) #deviceIdInput { width: 88px; }
+    html:not([data-ui="desktop"]) #usernameInput,
+    html:not([data-ui="desktop"]) #passwordInput { width: 84px; }
+    html:not([data-ui="desktop"]) #authBar button {
+        min-height: 44px;
+        min-width: 44px;
+        font-size: 13px !important;
+        padding: 0 12px !important;
+    }
+    /* 头部「✕」：视觉 23 → 命中 44 */
+    html:not([data-ui="desktop"]) .header-right > button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0 !important;
+        font-size: 16px !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    html:not([data-ui="desktop"]) body:has(#mainUI) { padding-bottom: 118px; }
+
+    /* 设置页：两列网格降为单列（只作用于文件管理器页面，避免命中去首页设置） */
+    html:not([data-ui="desktop"]) body:has(#mainUI) #view-settings div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+    html:not([data-ui="desktop"]) body:has(#mainUI) #view-settings > div { padding: 8px !important; }
+    html:not([data-ui="desktop"]) body:has(#mainUI) #view-settings input { min-height: 32px; font-size: 13px !important; }
+}
+
+/* ============================================================
+   9. 登录页 denglu.html（页内为内联样式，故用 !important 少量覆盖）
+   作用域：body 内存在 #statusText 才命中，避免波及其它页面
+   ============================================================ */
+html[data-ui="mobile"] body:has(> #statusText) {
+    padding: 10px;
+    gap: 8px;
+    overflow-x: hidden;
+}
+html[data-ui="mobile"] body:has(> #statusText) > .card {
+    width: 100%;
+    max-width: 100%;
+    padding: 14px;
+}
+html[data-ui="mobile"] body:has(> #statusText) .tab {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+}
+html[data-ui="mobile"] body:has(> #statusText) .section,
+html[data-ui="mobile"] body:has(> #statusText) .code-box { margin-bottom: 12px; }
+html[data-ui="mobile"] body:has(> #statusText) label { font-size: 14px; }
+html[data-ui="mobile"] body:has(> #statusText) input {
+    min-height: 44px;
+    font-size: 16px !important;
+}
+html[data-ui="mobile"] body:has(> #statusText) .code-box label { width: 62px; font-size: 13px; }
+html[data-ui="mobile"] body:has(> #statusText) .code-box input { min-width: 0; }
+html[data-ui="mobile"] body:has(> #statusText) .code-box button {
+    width: auto;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 14px !important;
+}
+html[data-ui="mobile"] body:has(> #statusText) .panel > button {
+    min-height: 48px;
+    font-size: 16px;
+}
+html[data-ui="mobile"] body:has(> #statusText) .status { font-size: 13px; }
+
+/* ============================================================
+   10. 宽屏上手动切「手机版」：内容居中限宽 480px
+   仅在 >=821px 生效，390 手机视口仍满屏宽
+   ============================================================ */
+@media (min-width: 821px) {
+    html[data-ui="mobile"] .home-container,
+    html[data-ui="mobile"] .manage-container,
+    html[data-ui="mobile"] .leaderboard-container,
+    html[data-ui="mobile"] .settings-container {
+        max-width: 480px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    /* 顶栏内容同步居中（左右内边距 = 侧边留白） */
+    html[data-ui="mobile"] #main-nav {
+        padding-left: max(8px, calc((100% - 480px) / 2));
+        padding-right: max(8px, calc((100% - 480px) / 2));
+    }
+    /* 文件管理器弹窗同样限宽居中 */
+    html[data-ui="mobile"] #file-modal iframe { max-width: 480px !important; }
+}
