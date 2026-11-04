@@ -59,8 +59,29 @@
         },
         getStudents:function(){return this.get('students',[])},
         setStudents:function(s){var hasReal=s.some(function(x){return!x._demo});if(hasReal){s=s.filter(function(x){return!x._demo})}this.set('students',s);if(!this._syncSilent)App.Sync.notifyChange('students',s)},
-        getBanks:function(){return this.get('banks',[])},
-        setBanks:function(b){var hasReal=b.some(function(x){return!x._demo});if(hasReal){b=b.filter(function(x){return!x._demo})}this.set('banks',b);if(!this._syncSilent)App.Sync.notifyChange('banks',b)},
+        getBanks:function(){
+            var banks=this.get('banks',[]);
+            // 本地始终保留且仅保留一条测试题库；只写本地，不写 exam_file_index，不上云
+            if(!this._skipDemoRefill&&!banks.some(function(x){return x._demo})&&typeof DemoData!=='undefined'&&DemoData.banks&&DemoData.banks[0]){
+                var demo=JSON.parse(JSON.stringify(DemoData.banks[0]));
+                demo._demo=true;demo.createdAt=Date.now();
+                banks.push(demo);
+                this.set('banks',banks);
+            }
+            this._skipDemoRefill=false;
+            return banks
+        },
+        setBanks:function(b){
+            // 至多保留一条 demo 题库（只留第一条），真实题库照常保留
+            var demoKept=false;
+            b=b.filter(function(x){
+                if(!x._demo)return true;
+                if(demoKept)return false;
+                demoKept=true;return true
+            });
+            this.set('banks',b);
+            if(!this._syncSilent)App.Sync.notifyChange('banks',b)
+        },
         getRecords:function(){return this.get('records',[])},
         setRecords:function(r){this.set('records',r);if(!this._syncSilent)App.Sync.notifyChange('records',r)},
         getExamProgress:function(){return this.get('examProgress',null)},
@@ -309,7 +330,7 @@
     };
 
     App.Questions = {
-        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var html='';banks.forEach(function(b){var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'空题库';html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+b.name+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});cloudOnlyBanks.forEach(function(f){html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+f.name+'</div><div class="bc-count">(空题库)</div></div></div><div class="bc-desc">'+(f.contentLength?f.contentLength+'字':'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+f.id+'\')">📋 编辑预览</button><button class="btn-del" onclick="App.Questions.removeBank(\''+f.id+'\')">🗑️ 删除</button></div></div>'});grid.innerHTML=html},
+        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var html='';banks.forEach(function(b){var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'空题库';var demoBadge=b._demo?'<span style="margin-left:6px;font-size:11px;color:#b07d00;background:#fff7e0;border:1px solid #f0d090;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">测试·仅本地</span>':'';html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+b.name+demoBadge+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});cloudOnlyBanks.forEach(function(f){html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-header"><div><div class="bc-name">'+f.name+'</div><div class="bc-count">(空题库)</div></div></div><div class="bc-desc">'+(f.contentLength?f.contentLength+'字':'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+f.id+'\')">📋 编辑预览</button><button class="btn-del" onclick="App.Questions.removeBank(\''+f.id+'\')">🗑️ 删除</button></div></div>'});grid.innerHTML=html},
         renderBankSelect:function(){var banks=App.Storage.getBanks();var info=document.getElementById('exam-bank-info');if(!info)return;var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){info.textContent='暂无题库，请先创建';return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var matched=banks.filter(function(b){return lastIds.indexOf(b.id)>=0});var cloudMatched=cloudOnlyBanks.filter(function(f){return lastIds.indexOf(f.id)>=0});if(matched.length>0||cloudMatched.length>0){var names=[];var totalQ=0;matched.forEach(function(b){names.push(b.name);totalQ+=b.questions.length});cloudMatched.forEach(function(f){names.push(f.name)});info.textContent=names.join('、')+'（'+totalQ+' 题）'}else{info.textContent='点击选择题库'}},
         showBankSelectModal:function(){var banks=App.Storage.getBanks();var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){App.Toast.show('暂无题库，请先在题库中创建','warning');return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var isPractice=App.Exam.currentMode==='practice';var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';body+='</div>'});cloudOnlyBanks.forEach(function(f){var sel=lastIds.indexOf(f.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+f.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+f.name+'</span>';body+='<span class="bank-modal-count">0 题</span>';body+='</div>'});body+='</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
         toggleModalBank:function(el,single){if(single){document.querySelectorAll('.bank-modal-item.selected').forEach(function(item){if(item!==el){item.classList.remove('selected');item.querySelector('.bank-modal-check').textContent=''}})}el.classList.toggle('selected');el.querySelector('.bank-modal-check').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
@@ -322,10 +343,21 @@
         showEditBankDialog:function(id){var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" value="'+b.name+'"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" value="'+(b.description||'')+'"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.updateBank(\''+id+'\')">保存</button>';App.Modal.open('编辑题库',body,footer)},
         updateBank:function(id){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;b.name=name;b.description=desc;App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库信息已更新','success')},
         removeBank:function(id){
-            if(!confirm('确定要删除该题库及其所有题目吗？（同时删除云端行，云端删除失败则题库保留）'))return;
-            if(App._bankDeleting){App.Toast.show('正在删除云端题库，请稍候…','warning');return}
             var banks=App.Storage.getBanks();
             var bank=banks.find(function(x){return x.id===id});
+            // 测试题库只存在本地：只删本地存储，不发云端删除消息
+            if(bank&&bank._demo){
+                if(!confirm('确定要删除本地测试题库吗？（仅本地删除，云端无此条）'))return;
+                App.Storage.set('banks',banks.filter(function(x){return x.id!==id}));
+                // 本次渲染不自动补回，刷新页面后才重新出现
+                App.Storage._skipDemoRefill=true;
+                this.render();
+                App.Storage._skipDemoRefill=false;
+                App.Toast.show('已移除本地测试题库（云端无此条）','info');
+                return;
+            }
+            if(!confirm('确定要删除该题库及其所有题目吗？（同时删除云端行，云端删除失败则题库保留）'))return;
+            if(App._bankDeleting){App.Toast.show('正在删除云端题库，请稍候…','warning');return}
             var name=bank?bank.name:(function(){var fi=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var f=fi.find(function(x){return x.id===id});return f&&f.name?f.name:id})();
             App._bankDeleting=id;
             App.Toast.show('正在删除云端题库「'+name+'」…','info');
@@ -3064,6 +3096,13 @@
                 var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
                 var self=this;
                 var banksChanged=false;
+                // 清理历史残留的 demo 行：demo 题库永远只在本地，不进文件索引
+                var demoIds={demo_b1:1,demo_b2:1};
+                banks.forEach(function(b){if(b._demo&&b.id)demoIds[b.id]=1});
+                if(fileIndex.some(function(f){return demoIds[f.id]})){
+                    fileIndex=fileIndex.filter(function(f){return !demoIds[f.id]});
+                    try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}
+                }
                 // 跳过demo题库，不创建文件索引也不上传
                 banks.forEach(function(b){
                     if(b._demo)return;
