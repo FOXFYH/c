@@ -390,7 +390,7 @@ function getLastEditTime(){
 
 // H9二次：宿主侧通知合并——握手消息即时发，其余攒到本轮同步结束（pullAllComplete）合并成一帧 hostBatch
 var HOST_PENDING=[],HOST_FLUSH_TIMER=null,HOST_SEEN_SYNC=false;
-var HOST_IMMEDIATE={fmReady:1,sessionReady:1};
+var HOST_IMMEDIATE={fmReady:1,sessionReady:1,bankDeleted:1,bankDeleteFailed:1};
 function scheduleHostFlush(ms){
   if(HOST_FLUSH_TIMER)clearTimeout(HOST_FLUSH_TIMER);
   HOST_FLUSH_TIMER=setTimeout(flushHostPending,ms);
@@ -4508,20 +4508,54 @@ window.addEventListener('message',function(e){
       break;
 
     case 'fileDeleted_local':
+      // 宿主删库：必须先确认云端「删除行」成功，成功才清本地索引/缓存并回执 bankDeleted
       (async function(){
+        const fid=data.fileId;
         try{
-          const cloudResult=await findFileInCloudById(data.fileId);
-          if(cloudResult.networkOk&&cloudResult.file){
-            // 云端"删除行"只需ID参数，会自己遍历表格找匹配行删除
-            const delResult=await callCloudAPI('删除行',{ID:data.fileId});
-            if(delResult.status==='success'){
-              await cleanupCloudFragments(data.fileId,0);
-              setLastSyncTime(Date.now());
-            }else{
-              toast('云端删除失败(ID:'+data.fileId+')：'+(delResult.tongzhi||delResult.message||'未知错误'));
-            }
+          if(!fid){
+            toast('删除失败：缺少文件ID','error');
+            notifyParent('bankDeleteFailed',{fileId:fid,reason:'cloud_not_found'});
+            return;
           }
-        }catch(err){}
+          if(!getSyncConfig().enabled){
+            toast('删除失败：云同步未启用，无法删除云端行','error');
+            notifyParent('bankDeleteFailed',{fileId:fid,reason:'sync_disabled'});
+            return;
+          }
+          const cloudResult=await findFileInCloudById(fid);
+          if(!cloudResult.networkOk){
+            toast('删除失败：网络异常，无法确认云端状态','error');
+            notifyParent('bankDeleteFailed',{fileId:fid,reason:'network_error'});
+            return;
+          }
+          if(!cloudResult.file){
+            toast('删除失败：云端找不到该行(ID:'+fid+')','error');
+            notifyParent('bankDeleteFailed',{fileId:fid,reason:'cloud_not_found'});
+            return;
+          }
+          // 云端"删除行"只需ID参数，会自己遍历表格找匹配行删除
+          const delResult=await callCloudAPI('删除行',{ID:fid});
+          if(delResult.status!=='success'){
+            const reason=delResult.tongzhi||delResult.message||'cloud_delete_failed';
+            toast('云端删除失败(ID:'+fid+')：'+reason,'error');
+            notifyParent('bankDeleteFailed',{fileId:fid,reason:reason});
+            return;
+          }
+          await cleanupCloudFragments(fid,0);
+          setLastSyncTime(Date.now());
+          // 云端确认成功后，才清理本地索引与内容缓存
+          const localF=getFileIndex().find(x=>x.id===fid);
+          const delName=localF?localF.name:(cloudResult.file['文件名']||'');
+          deleteFileDataById(fid);
+          if(currentFileName===delName){currentFileName='';currentFileContent=''}
+          renderFileList();
+          toast('云端已删除(ID:'+fid+')');
+          notifyParent('bankDeleted',{fileId:fid,name:delName});
+        }catch(err){
+          const reason='exception:'+((err&&err.message)||'unknown');
+          toast('删除失败：'+((err&&err.message)||'未知异常'),'error');
+          notifyParent('bankDeleteFailed',{fileId:fid,reason:reason});
+        }
       })();
       break;
 
