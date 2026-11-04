@@ -4511,6 +4511,9 @@ window.addEventListener('message',function(e){
       // 宿主删库：必须先确认云端「删除行」成功，成功才清本地索引/缓存并回执 bankDeleted
       (async function(){
         const fid=data.fileId;
+        const _u0=AUTH_USERNAME,_p0=AUTH_PASSWORD;
+        // 宿主随消息带来当前网页登录账号，删库这一趟强制用它（防止管理器的旧凭据删别人/自己的库失败）
+        if(data.username&&data.password){AUTH_USERNAME=data.username;AUTH_PASSWORD=data.password;}
         try{
           if(!fid){
             toast('删除失败：缺少文件ID','error');
@@ -4555,6 +4558,8 @@ window.addEventListener('message',function(e){
           const reason='exception:'+((err&&err.message)||'unknown');
           toast('删除失败：'+((err&&err.message)||'未知异常'),'error');
           notifyParent('bankDeleteFailed',{fileId:fid,reason:reason});
+        }finally{
+          AUTH_USERNAME=_u0;AUTH_PASSWORD=_p0;
         }
       })();
       break;
