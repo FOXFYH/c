@@ -321,7 +321,25 @@
         addBank:function(){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();banks.push({id:genBankId(),name:name,description:desc,questions:[],createdAt:Date.now(),_newFile:true});App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库 '+name+' 创建成功','success')},
         showEditBankDialog:function(id){var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" value="'+b.name+'"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" value="'+(b.description||'')+'"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.updateBank(\''+id+'\')">保存</button>';App.Modal.open('编辑题库',body,footer)},
         updateBank:function(id){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;b.name=name;b.description=desc;App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库信息已更新','success')},
-        removeBank:function(id){if(!confirm('确定要删除该题库及其所有题目吗？'))return;var banks=App.Storage.getBanks();var deleted=banks.find(function(x){return x.id===id});var remaining=banks.filter(function(x){return x.id!==id});App.Storage.setBanks(remaining);if(deleted){App.Sync.deleteBank(deleted.id||deleted.name)}else{var prefix='exam';var fileIndex=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');fileIndex=fileIndex.filter(function(f){return f.id!==id});try{localStorage.setItem(prefix+'_file_index',JSON.stringify(fileIndex))}catch(e){}}this.render();App.Toast.show('题库已删除','info')},
+        removeBank:function(id){
+            if(!confirm('确定要删除该题库及其所有题目吗？（同时删除云端行，云端删除失败则题库保留）'))return;
+            if(App._bankDeleting){App.Toast.show('正在删除云端题库，请稍候…','warning');return}
+            var banks=App.Storage.getBanks();
+            var bank=banks.find(function(x){return x.id===id});
+            var name=bank?bank.name:(function(){var fi=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var f=fi.find(function(x){return x.id===id});return f&&f.name?f.name:id})();
+            App._bankDeleting=id;
+            App.Toast.show('正在删除云端题库「'+name+'」…','info');
+            // 回执超时兜底：未收到 bankDeleted/bankDeleteFailed 就按失败处理，绝不先隐藏
+            if(App._bankDeleteTimer)clearTimeout(App._bankDeleteTimer);
+            App._bankDeleteTimer=setTimeout(function(){
+                if(App._bankDeleting!==id)return;
+                App._bankDeleting=null;
+                App._bankDeleteTimer=null;
+                App.Toast.show('删除超时：未收到云端删除回执，题库已保留，请检查网络后重试','error');
+                if(App.Questions)App.Questions.render();
+            },90000);
+            App.Sync.deleteBank(id);
+        },
         downloadCloudBank:async function(id,name){
             App.Toast.show('正在从云端下载题库...','info');
             if(App.Sync&&App.Sync.ready){
@@ -2734,6 +2752,11 @@
                         // 文件管理器就绪握手：记下已就绪，只回给刚就绪的这个帧
                         self._anyFrameReady=true;
                         self._sendInitAndAuth(e.source);
+                        // 帧未就绪时排队的删库请求，就绪后补发
+                        if(self._pendingBankDeletes&&self._pendingBankDeletes.length){
+                            var _pd=self._pendingBankDeletes;self._pendingBankDeletes=[];
+                            _pd.forEach(function(m){self.postToFileManager(m)});
+                        }
                         break;
                     case 'sessionReady':
                         // H9二次：索引建好后主动拉一次，别等 syncComplete 再拉（否则通知被拆成两帧）
@@ -2798,6 +2821,35 @@
                     case 'cloudIndexUpdated':
                         // 云端索引更新完成，刷新题库列表
                         if(App.Questions)App.Questions.render();
+                        break;
+                    case 'bankDeleted':
+                        // 文件管理器确认云端「删除行」成功 → 此时才允许本地隐藏
+                        (function(){
+                            var delId=msg.fileId;
+                            if(!delId)return;
+                            var bk=App.Storage.getBanks();
+                            var remaining=bk.filter(function(x){return x.id!==delId});
+                            if(remaining.length!==bk.length)App.Storage.setBanks(remaining);
+                            var fi=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                            fi=fi.filter(function(f){return f.id!==delId});
+                            try{localStorage.setItem('exam_file_index',JSON.stringify(fi))}catch(e){}
+                            if(App._bankDeleteTimer){clearTimeout(App._bankDeleteTimer);App._bankDeleteTimer=null}
+                            if(App._bankDeleting===delId)App._bankDeleting=null;
+                            if(App.Questions)App.Questions.render();
+                            App.Toast.show('云端已删除'+(msg.name?'题库「'+msg.name+'」':''),'success');
+                        })();
+                        break;
+                    case 'bankDeleteFailed':
+                        // 云端删除失败/无法确认 → 本地列表原样保留，红字报错
+                        (function(){
+                            var delId=msg.fileId;
+                            var reason=msg.reason||'cloud_delete_failed';
+                            var reasonText={'cloud_not_found':'云端找不到该题库行','network_error':'网络异常，无法连接云端','sync_disabled':'云同步未启用'}[reason]||('云端删除失败（'+reason+'）');
+                            if(App._bankDeleteTimer){clearTimeout(App._bankDeleteTimer);App._bankDeleteTimer=null}
+                            if(!App._bankDeleting||App._bankDeleting===delId)App._bankDeleting=null;
+                            if(App.Questions)App.Questions.render();
+                            App.Toast.show('删除失败：'+reasonText+'（题库已保留，未被隐藏）','error');
+                        })();
                         break;
                 }
                 });
@@ -3132,9 +3184,15 @@
         deleteBank:function(bankKey){
             var banks=App.Storage.getBanks();
             var bank=banks.find(function(b){return b.id===bankKey||b.name===bankKey});
-            var fileName=bank?bank.name:bankKey;
             var fileId=bank?bank.id:bankKey;
-            this.postToFileManager({type:'fileDeleted_local',fileId:fileId});
+            var msg={type:'fileDeleted_local',fileId:fileId,name:bank?bank.name:''};
+            // 后台管理器帧未就绪时先排队，fmReady 后再发，避免消息发进空白帧丢掉
+            if(!this._anyFrameReady){
+                this._pendingBankDeletes=this._pendingBankDeletes||[];
+                this._pendingBankDeletes.push(msg);
+                return;
+            }
+            this.postToFileManager(msg);
         },
         openFileManager:function(){
             this._isFileManagerOpen=true;
