@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>🎯 挑战系统</title>
+    <title>🎯 挑战系统 2.0</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="mobile.css">
+    <script src="ui-mode.js"></script>
 </head>
 <body>
     <canvas id="bg-canvas"></canvas>
     <nav id="main-nav">
         <div class="nav-brand" onclick="App.switchView('home')">
             <span class="nav-logo">🎯</span>
-            <span class="nav-title">挑战系统</span>
+            <span class="nav-title">挑战系统 2.0</span>
         </div>
         <div class="nav-items">
             <button class="nav-btn active" data-view="home" onclick="App.switchView('home')"><span class="nav-icon">🚀</span><span class="nav-text">Let's go</span></button>
@@ -28,6 +30,7 @@
         </div>
         <button class="nav-exam-ctrl hidden" id="nav-exam-mode" onclick="App.switchView('home')"></button>
         <button class="nav-exam-ctrl hidden" id="nav-exam-end" onclick="App.Exam.endExam()">⏹ 结束</button>
+        <button id="ui-mode-toggle" type="button" title="切换到手机版界面">📱</button>
         <div class="nav-zoom" id="nav-zoom-controls"><button class="zoom-btn" onclick="App.zoomOut()" title="缩小">−</button><span class="zoom-level" id="zoom-level">100%</span><button class="zoom-btn" onclick="App.zoomIn()" title="放大">+</button></div>
         <div class="nav-fullscreen" onclick="App.toggleFullscreen()" title="全屏显示">⛶</div>
     </nav>
