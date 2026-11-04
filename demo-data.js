@@ -66,41 +66,6 @@ var DemoData = {
                 {id:'q19',text:'地球的自转周期大约是多少？',options:{A:'12小时',B:'24小时',C:'36小时',D:'48小时'},answer:'B',points:10},
                 {id:'q20',text:'以下哪个朝代在中国历史上最早？',options:{A:'唐朝',B:'汉朝',C:'秦朝',D:'宋朝'},answer:'C',points:10}
             ],createdAt:Date.now()
-        },
-        {
-            id:'demo_b2',name:'科学知识题库',description:'科学类测试题库，可自行删除',_demo:true,
-            questions:[
-                {id:'sq1',text:'原子核由什么组成？',options:{A:'质子和中子',B:'质子和电子',C:'中子和电子',D:'质子、中子和电子'},answer:'A',points:10},
-                {id:'sq2',text:'光合作用主要发生在植物的哪个部位？',options:{A:'根部',B:'茎部',C:'叶片',D:'花朵'},answer:'C',points:10},
-                {id:'sq3',text:'绝对零度是多少摄氏度？',options:{A:'-100°C',B:'-273.15°C',C:'-373.15°C',D:'0°C'},answer:'B',points:10},
-                {id:'sq4',text:'地球的大气层中含量最多的气体是？',options:{A:'氧气',B:'二氧化碳',C:'氮气',D:'氩气'},answer:'C',points:10},
-                {id:'sq5',text:'以下哪种元素在元素周期表中排第一位？',options:{A:'氦',B:'锂',C:'氢',D:'碳'},answer:'C',points:10},
-                {id:'sq6',text:'声音在真空中能传播吗？',options:{A:'能',B:'不能',C:'只能传播低频',D:'取决于温度'},answer:'B',points:10},
-                {id:'sq7',text:'牛顿第一定律又被称为什么？',options:{A:'万有引力定律',B:'惯性定律',C:'加速度定律',D:'作用力与反作用力定律'},answer:'B',points:10},
-                {id:'sq8',text:'人体血液中负责运输氧气的成分是？',options:{A:'白细胞',B:'血小板',C:'红细胞',D:'血浆'},answer:'C',points:10},
-                {id:'sq9',text:'以下哪种物质是导体？',options:{A:'橡胶',B:'塑料',C:'铜',D:'玻璃'},answer:'C',points:10},
-                {id:'sq10',text:'地球的卫星是什么？',options:{A:'太阳',B:'火星',C:'月球',D:'金星'},answer:'C',points:10},
-                {id:'sq11',text:'化学元素Fe代表什么？',options:{A:'氟',B:'铁',C:'铅',D:'锡'},answer:'B',points:10},
-                {id:'sq12',text:'以下哪个是可再生能源？',options:{A:'石油',B:'天然气',C:'煤炭',D:'太阳能'},answer:'D',points:10},
-                {id:'sq13',text:'人体有多少对染色体？',options:{A:'21对',B:'22对',C:'23对',D:'24对'},answer:'C',points:10},
-                {id:'sq14',text:'以下哪种疾病由病毒引起？',options:{A:'肺结核',B:'流感',C:'破伤风',D:'霍乱'},answer:'B',points:10},
-                {id:'sq15',text:'地球的内核主要由什么组成？',options:{A:'硅',B:'铁和镍',C:'碳',D:'铝'},answer:'B',points:10},
-                {id:'sq16',text:'以下哪种现象属于化学变化？',options:{A:'冰融化',B:'铁生锈',C:'玻璃破碎',D:'水蒸发'},answer:'B',points:10},
-                {id:'sq17',text:'光年是衡量什么的单位？',options:{A:'时间',B:'速度',C:'距离',D:'亮度'},answer:'C',points:10},
-                {id:'sq18',text:'以下哪种维生素有助于促进钙的吸收？',options:{A:'维生素A',B:'维生素B',C:'维生素C',D:'维生素D'},answer:'D',points:10},
-                {id:'sq19',text:'植物细胞特有而动物细胞没有的结构是？',options:{A:'细胞膜',B:'细胞核',C:'细胞壁',D:'线粒体'},answer:'C',points:10},
-                {id:'sq20',text:'以下哪种物质的pH值小于7？',options:{A:'纯水',B:'食盐水',C:'醋',D:'肥皂水'},answer:'C',points:10},
-                {id:'sq21',text:'地球表面约有多少比例被水覆盖？',options:{A:'50%',B:'60%',C:'71%',D:'80%'},answer:'C',points:10},
-                {id:'sq22',text:'以下哪种动物属于两栖动物？',options:{A:'蛇',B:'青蛙',C:'乌龟',D:'鳄鱼'},answer:'B',points:10},
-                {id:'sq23',text:'化学方程式2H₂+O₂→2H₂O表示什么反应？',options:{A:'分解反应',B:'化合反应',C:'置换反应',D:'复分解反应'},answer:'B',points:10},
-                {id:'sq24',text:'以下哪个天体属于矮行星？',options:{A:'火星',B:'木星',C:'冥王星',D:'土星'},answer:'C',points:10},
-                {id:'sq25',text:'人体最坚硬的部分是什么？',options:{A:'骨骼',B:'指甲',C:'牙釉质',D:'头发'},answer:'C',points:10},
-                {id:'sq26',text:'以下哪种食物富含蛋白质？',options:{A:'米饭',B:'鸡蛋',C:'苹果',D:'白菜'},answer:'B',points:10},
-                {id:'sq27',text:'热传递的三种方式不包括以下哪个？',options:{A:'传导',B:'对流',C:'辐射',D:'反射'},answer:'D',points:10},
-                {id:'sq28',text:'以下哪种金属常温下是液态的？',options:{A:'铁',B:'铜',C:'汞',D:'铝'},answer:'C',points:10},
-                {id:'sq29',text:'DNA的双螺旋结构由谁发现？',options:{A:'达尔文',B:'孟德尔',C:'沃森和克里克',D:'巴斯德'},answer:'C',points:10},
-                {id:'sq30',text:'以下哪种气体是温室气体？',options:{A:'氮气',B:'氧气',C:'二氧化碳',D:'氦气'},answer:'C',points:10}
-            ],createdAt:Date.now()
         }
     ]
 };
