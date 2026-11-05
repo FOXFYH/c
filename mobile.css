@@ -508,13 +508,18 @@ html[data-ui="mobile"] .exam-options-grid label { font-size: 12.5px; margin-bott
 html[data-ui="mobile"] .exam-options-grid select,
 html[data-ui="mobile"] .exam-options-grid .option-group input[type="number"] { min-height: 44px; font-size: 14px; width: 100%; }
 html[data-ui="mobile"] .exam-options-grid .timeout-inline {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
     align-items: center;
 }
-html[data-ui="mobile"] .exam-options-grid .timeout-inline span { font-size: 12px; white-space: nowrap; }
-html[data-ui="mobile"] .exam-options-grid .timeout-inline input[type="number"] { width: 100% !important; min-width: 0; }
+html[data-ui="mobile"] .exam-options-grid .timeout-inline span { font-size: 11px; white-space: nowrap; }
+html[data-ui="mobile"] .exam-options-grid .timeout-inline input[type="number"] {
+    width: 50px !important;
+    min-width: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+}
 html[data-ui="mobile"] .participation-toggle { display: flex; }
 html[data-ui="mobile"] .participation-toggle .ptab-btn { flex: 1; font-size: 15px; }
 html[data-ui="mobile"] .bank-select-bar { min-height: 44px; }
