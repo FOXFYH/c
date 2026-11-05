@@ -2858,6 +2858,9 @@
                     case 'importResult':
                         console.log('[Sync] 导入结果:',msg.success,msg.name,msg.id);
                         break;
+                    case 'loginGateResult':
+                        App.Sync._applyLoginGate(msg);
+                        break;
                     case 'syncComplete':
                         if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
                         if(!self._pulling)self.pullAllCloudContent();
@@ -3400,6 +3403,61 @@
                 console.log('[Sync] 已为账号 '+user+' 建系统文件夹与系统文件并提交同步');
                 return true;
             }catch(e){console.error('[Sync] 系统文件补建失败:',e);return false}
+        },
+        // 登录门禁：一次「读取全部」→ 验证行 + 本账号全部系统文件（含内容与版本号）
+        _applyLoginGate:function(msg){
+            try{
+                var rows=(msg&&msg.rows)||[];
+                var user=(App.Login&&App.Login._username)||localStorage.getItem('exam_auth_user')||'';
+                var verify=false;
+                for(var i=0;i<rows.length;i++){if(String(rows[i].ID)==='999999999'){verify=true;break}}
+                if(!msg||!msg.ok||!verify){
+                    App.Sync._gateBlocked=true;
+                    App.Sync._gateDone=false;
+                    App.Toast.show('云端校验失败：读不到验证行，已阻止进入','error');
+                    return;
+                }
+                var sysRows=[];
+                for(var j=0;j<rows.length;j++){
+                    var r=rows[j];
+                    var nm=String(r.文件名||'');
+                    var ow=String(r.拥有者||'').trim();
+                    if(nm.indexOf('系统-')===0&&(!ow||ow===user))sysRows.push(r);
+                }
+                var prefix='exam';
+                var idx=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                if(sysRows.length===0){
+                    // 云端确实没有本账号系统文件 → 此时才允许本地创建
+                    App.Sync.ensureAccountSystemFiles(true);
+                }else{
+                    var dtMap={'系统-学生信息':'students','系统-考试数据':'records','系统-等级设置':'levels','系统-AI配置':'aiConfig'};
+                    sysRows.forEach(function(r){
+                        var fid=String(r.ID||'');
+                        var cloudS=parseInt(r.起点号||0)||0;
+                        var cloudE=parseInt(r.终点号||0)||0;
+                        var content='';
+                        try{content=(JSON.parse(r.文件JSON||'{}').内容)||''}catch(e){}
+                        var e=idx.find(function(x){return x.id===fid});
+                        var localE=e?(parseInt(e.e||0)||0):-1;
+                        if(!e){
+                            idx.push({name:r.文件名,id:fid,version:1,lastSyncVersion:cloudS,isNewFile:false,folder:String(r.文件夹路径||''),owner:user,createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...content].length,time:Date.now(),star:true,s:cloudS,e:cloudE});
+                            try{localStorage.setItem(prefix+'_file_id_'+fid,JSON.stringify({data:content,view:null}))}catch(err){}
+                        }else if(cloudE>localE){
+                            // 云端更大 → 云端覆盖本地
+                            e.s=cloudS;e.e=cloudE;e.isNewFile=false;e.cloudOnly=false;e.folder=String(r.文件夹路径||e.folder||'');
+                            try{localStorage.setItem(prefix+'_file_id_'+fid,JSON.stringify({data:content,view:null}))}catch(err){}
+                        }
+                        var t=dtMap[String(r.文件名||'')];
+                        if(t&&content)App.Sync._applyContentToApp(t,content);
+                    });
+                    localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));
+                    // 本地版本更高的，继续按常规同步推上去
+                    App.Sync.postToFileManager({type:'syncAllFiles'});
+                }
+                App.Sync._gateBlocked=false;
+                App.Sync._gateDone=true;
+                console.log('[Gate] 云端校验通过，系统文件 '+sysRows.length+' 个');
+            }catch(e){console.error('[Gate] 校验异常:',e)}
         }
     };
 
@@ -3438,8 +3496,16 @@
                         App.Toast.show('登录已过期，请重新登录', 'warning');
                         self._redirectToLogin();
                     }else{
-                        // 每个账号首次登录：自动补建该系统账号专属的系统文件并上传云端
-                        if(App.Sync&&App.Sync.ensureAccountSystemFiles)App.Sync.ensureAccountSystemFiles();
+                        // 登录门禁：先读云端验证行与本账号系统文件，通过后才放行；读不到验证行不创建任何东西
+                        if(App.Sync&&App.Sync.postToFileManager){
+                            var gateTries=0;
+                            var gateTimer=setInterval(function(){
+                                gateTries++;
+                                App.Sync.postToFileManager({type:'loginGateReadAll'});
+                                if(App.Sync._gateDone||gateTries>=5)clearInterval(gateTimer);
+                            },3000);
+                            App.Sync.postToFileManager({type:'loginGateReadAll'});
+                        }
                     }
                 });
             }, 2000);
