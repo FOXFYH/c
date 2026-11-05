@@ -467,7 +467,30 @@ html[data-ui="mobile"] #file-modal iframe {
 /* ---------- 6. 选模式后的配置页 ---------- */
 html[data-ui="mobile"] .setup-layout { flex-direction: column; gap: 12px; }
 html[data-ui="mobile"] .setup-rules { flex: none; width: 100%; }
-html[data-ui="mobile"] .rules-card { position: static; }
+html[data-ui="mobile"] .rules-card { position: static; padding: 0; }
+
+/* 模式规则说明：手机版默认折叠，点标题按需展开；电脑版始终展开 */
+.rules-arrow { display: none; }
+html[data-ui="mobile"] .rules-title.rules-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0;
+    padding: 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    -webkit-tap-highlight-color: transparent;
+}
+html[data-ui="mobile"] .rules-card:not(.expanded) .rules-title.rules-toggle { border-bottom: 0; }
+html[data-ui="mobile"] .rules-body { padding: 4px 14px 14px; }
+html[data-ui="mobile"] .rules-card:not(.expanded) .rules-body { display: none; }
+html[data-ui="mobile"] .rules-arrow {
+    display: inline-block;
+    font-size: 12px;
+    opacity: .7;
+    transition: transform .2s;
+}
+html[data-ui="mobile"] .rules-card.expanded .rules-arrow { transform: rotate(180deg); }
 html[data-ui="mobile"] .setup-header { flex-wrap: wrap; gap: 8px; justify-content: center; }
 html[data-ui="mobile"] .setup-header .btn-back { order: 1; min-height: 44px; }
 html[data-ui="mobile"] .setup-header .section-title { order: 2; flex: 1 1 40%; font-size: 18px; text-align: right; }
