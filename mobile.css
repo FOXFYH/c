@@ -545,6 +545,26 @@ html[data-ui="mobile"] .sub-title-row { flex-wrap: wrap; gap: 8px; }
 
 /* ---------- 7. 答题界面：单列 ---------- */
 html[data-ui="mobile"] .exam-playing { width: 100%; }
+
+/* 答题页全屏按钮：仅手机显示，手动切换全屏 / 竖屏 */
+.play-fs-bar { display: none; }
+html[data-ui="mobile"] .play-fs-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 2px 6px;
+}
+html[data-ui="mobile"] .btn-play-fs {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 40px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, .08);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
 html[data-ui="mobile"] .exam-play-layout {
     flex-direction: column;
     width: 100%;
