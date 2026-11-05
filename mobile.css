@@ -502,9 +502,19 @@ html[data-ui="mobile"] .setup-header .btn-start-top {
     padding: 12px;
     margin-bottom: 8px;
 }
-html[data-ui="mobile"] .exam-options-grid { grid-template-columns: 1fr; gap: 10px; }
-html[data-ui="mobile"] .exam-options-grid .option-group input[type="number"] { min-height: 44px; font-size: 16px; }
-html[data-ui="mobile"] .timeout-inline input[type="number"] { min-height: 44px; }
+html[data-ui="mobile"] .exam-options-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+html[data-ui="mobile"] .exam-options-grid .option-group { min-width: 0; }
+html[data-ui="mobile"] .exam-options-grid label { font-size: 12.5px; margin-bottom: 4px; line-height: 1.35; }
+html[data-ui="mobile"] .exam-options-grid select,
+html[data-ui="mobile"] .exam-options-grid .option-group input[type="number"] { min-height: 44px; font-size: 14px; width: 100%; }
+html[data-ui="mobile"] .exam-options-grid .timeout-inline {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+}
+html[data-ui="mobile"] .exam-options-grid .timeout-inline span { font-size: 12px; white-space: nowrap; }
+html[data-ui="mobile"] .exam-options-grid .timeout-inline input[type="number"] { width: 100% !important; min-width: 0; }
 html[data-ui="mobile"] .participation-toggle { display: flex; }
 html[data-ui="mobile"] .participation-toggle .ptab-btn { flex: 1; font-size: 15px; }
 html[data-ui="mobile"] .bank-select-bar { min-height: 44px; }
