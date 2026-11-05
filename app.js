@@ -2757,7 +2757,7 @@
     };
     App._syncFullscreenBtn = function(){
         var b=document.querySelector('.btn-play-fs');
-        if(b)b.textContent=document.fullscreenElement?'⤢ 退出全屏':'⛶ 全屏';
+        if(b)b.textContent=document.fullscreenElement?'退出全屏':'全屏';
     };
     document.addEventListener('fullscreenchange',function(){App._syncFullscreenBtn()});
 
