@@ -481,6 +481,12 @@ html[data-ui="mobile"] .student-filters select {
 /* 设置页里内联的两列/并排容器改成纵向 */
 html[data-ui="mobile"] #stab-sync > div > div[style*="display:flex"] { flex-wrap: wrap; }
 
+/* 挑战参数：电脑两列，手机回落为单列 */
+html[data-ui="mobile"] #stab-exam .settings-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
 /* ---------- 5. 弹窗：满宽、按钮 >= 44px ---------- */
 html[data-ui="mobile"] .modal-overlay { padding: 0; }
 html[data-ui="mobile"] .modal {
