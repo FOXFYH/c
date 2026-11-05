@@ -3358,15 +3358,19 @@
                 console.log('[Sync] 旧数据迁移完成，共'+fileIndex.length+'个文件');
             }catch(e){console.error('[Sync] 迁移失败:',e)}
         },
-        // 每个账号首次登录：自动补建该账号的 4 个系统文件并推送到云端
+        // 每个账号首次登录：自动建该系统账号专属的「系统」文件夹 + 4 个系统文件，并推送到云端
         ensureAccountSystemFiles:function(force){
             try{
                 var user='';try{user=localStorage.getItem('exam_auth_user')||''}catch(e){}
                 if(!user)return false;
                 var prefix='exam';
-                var flag='exam_sys_init__'+user;
+                var flag='exam_sys_init2__'+user;
                 if(!force&&localStorage.getItem(flag)==='1')return false;
                 var idx=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                var folderId='FOLDER_SYS__'+user;
+                if(!idx.some(function(x){return x.id===folderId})){
+                    idx.push({name:'系统',id:folderId,version:1,lastSyncVersion:0,isNewFile:false,folder:'',owner:user,createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:0,time:Date.now()});
+                }
                 var settings=App.Storage.getSettings();
                 var ai={aiApiUrl:settings.aiApiUrl||'',aiApiKey:settings.aiApiKey||'',aiModel:settings.aiModel||''};
                 var sys=[
@@ -3380,17 +3384,20 @@
                     var content=JSON.stringify(s[3]);
                     var e=idx.find(function(x){return x.id===id});
                     if(e){
-                        e.folder='';e.owner=user;e.cloudOnly=false;
+                        e.folder=folderId;e.owner=user;e.cloudOnly=false;
                         if(force)e.isNewFile=true;
                     }else{
-                        idx.push({name:s[2],id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:user,createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...content].length,time:Date.now(),star:true});
+                        idx.push({name:s[2],id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:folderId,owner:user,createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...content].length,time:Date.now(),star:true});
                     }
                     try{localStorage.setItem(prefix+'_file_id_'+id,JSON.stringify({data:content,view:null}))}catch(err){}
                 });
                 localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));
                 localStorage.setItem(flag,'1');
-                this.postToFileManager({type:'syncAllFiles'});
-                console.log('[Sync] 已为账号 '+user+' 补建系统文件并提交同步');
+                var self=this;
+                var sysIds=['EXAM_SYS_STUDENT_INFO','EXAM_SYS_RECORDS','EXAM_SYS_LEVELS','EXAM_SYS_AI_CONFIG'].map(function(k){return k+'__'+user});
+                this.postToFileManager({type:'ensureFolder',folderId:folderId,name:'系统',fileIds:sysIds});
+                setTimeout(function(){self.postToFileManager({type:'syncAllFiles'})},3000);
+                console.log('[Sync] 已为账号 '+user+' 建系统文件夹与系统文件并提交同步');
                 return true;
             }catch(e){console.error('[Sync] 系统文件补建失败:',e);return false}
         }
