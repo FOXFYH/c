@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.12
+  存储测试网页版 · 文件管理器        当前版本 6.13
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.13 (2026-11-05) 登录门禁改为轻量：只用「读取索引」拿验证行+系统文件版本号（不含题库内容），再用「批量读取」只取「系统-」4个文件内容；登录不再整表拉取题库，避免撑爆流量与本地。
     6.12 (2026-11-05) 新增 loginGateReadAll：宿主登录后一次「读取全部」，同时拿到验证行（ID 999999999）与本账号全部系统文件（含内容、起始/终点号）；宿主据此做登录门禁与版本对齐，避免登录时重复创建系统文件。
     6.11 (2026-11-05) 新增 ensureFolder 消息：宿主可为指定 ID（FOLDER_ 前缀）建云端文件夹登记行，用于「每个账号一套系统文件夹」；建行后不强制刷新索引，避免覆盖宿主待同步的系统文件。
     6.10 (2026-11-05) 修「系统-学生信息」等系统文件永远看不到：宿主把 folder 写成名称「系统」但文件管理器没有对应文件夹项，导致根目录过滤掉这些孤儿文件、也无法进入该文件夹；现改为根目录直接显示这类孤儿 folder 文件，学生信息等系统文件可正常看到与下载。
@@ -81,7 +82,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.12</title>
+<title>文件管理 v6.13</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -117,7 +118,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.12</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.13</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -4467,10 +4468,33 @@ window.addEventListener('message',function(e){
     case 'loginGateReadAll':
       (async function(){
         try{
-          const r=await callCloudAPI('读取全部',{});
-          notifyParent('loginGateResult',{ok:(r.status==='success'),rows:(r.数据||[]),tongzhi:(r.tongzhi||''),error:''});
+          const idxRes=await callCloudAPI('读取索引',{});
+          if(!idxRes||idxRes.status!=='success'){
+            notifyParent('loginGateResult',{ok:false,rows:[],contents:{},tongzhi:(idxRes&&idxRes.tongzhi)||''});
+            return;
+          }
+          const rows=idxRes.数据||[];
+          const userName=AUTH_USERNAME||'';
+          const sysRows=rows.filter(function(r){
+            const nm=String(r.文件名||'');const ow=String(r.拥有者||'').trim();
+            return nm.indexOf('系统-')===0&&(!ow||ow===userName);
+          });
+          const contents={};
+          const ids=sysRows.map(function(r){return r.ID}).filter(Boolean);
+          if(ids.length){
+            const rd=await callCloudAPI('批量读取',{ID列表:ids});
+            if(rd&&rd.status==='success'&&Array.isArray(rd.数据)){
+              for(const row of rd.数据){
+                const fid=row['ID'];if(!fid)continue;
+                let c=extractCloudContent(row);
+                if(!c){try{c=(JSON.parse(row['文件JSON']||'{}').内容)||''}catch(e){}}
+                contents[fid]=c||'';
+              }
+            }
+          }
+          notifyParent('loginGateResult',{ok:true,rows:rows,contents:contents,tongzhi:''});
         }catch(e){
-          notifyParent('loginGateResult',{ok:false,rows:[],error:String((e&&e.message)||e)});
+          notifyParent('loginGateResult',{ok:false,rows:[],contents:{},error:String((e&&e.message)||e)});
         }
       })();
       break;
