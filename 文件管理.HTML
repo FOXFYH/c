@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.13
+  存储测试网页版 · 文件管理器        当前版本 6.14
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.14 (2026-11-05) 手机竖版界面重做：电脑那两排大按钮在手机上全部隐藏，改为顶部单行 5 个紧凑小按钮（同步/刷新/新建/打开/更多），其余 9 个操作收进底部「更多」抽屉；文件列表改为两行小卡片（首行图标+文件名，次行版本号/字数/状态，右侧星标与删除），文件区占满剩余高度；底部凭据条压成单行。电脑横版不变。
     6.13 (2026-11-05) 登录门禁改为轻量：只用「读取索引」拿验证行+系统文件版本号（不含题库内容），再用「批量读取」只取「系统-」4个文件内容；登录不再整表拉取题库，避免撑爆流量与本地。
     6.12 (2026-11-05) 新增 loginGateReadAll：宿主登录后一次「读取全部」，同时拿到验证行（ID 999999999）与本账号全部系统文件（含内容、起始/终点号）；宿主据此做登录门禁与版本对齐，避免登录时重复创建系统文件。
     6.11 (2026-11-05) 新增 ensureFolder 消息：宿主可为指定 ID（FOLDER_ 前缀）建云端文件夹登记行，用于「每个账号一套系统文件夹」；建行后不强制刷新索引，避免覆盖宿主待同步的系统文件。
@@ -82,7 +83,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.13</title>
+<title>文件管理 v6.14</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -112,13 +113,19 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 .btn-row2{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .btn-row2 .spacer{flex:1}
 #fileList{flex:1;overflow-y:auto;min-height:100px}
+.file-main{display:flex;align-items:center;gap:4px;flex:1;min-width:0}
+.file-main .file-name{flex:1;min-width:0}
+.file-meta{display:flex;align-items:center;gap:2px;flex-shrink:0;overflow:hidden}
+.file-acts{display:flex;align-items:center;flex-shrink:0}
+/* 手机专用：单行工具栏 + 「更多」抽屉（电脑端不显示） */
+#fmMobileBar,#fmMoreSheet{display:none}
 </style>
-<link rel="stylesheet" href="mobile.css?v=2.0.3">
+<link rel="stylesheet" href="mobile.css?v=2.0.4">
 </head>
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.13</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.14</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -133,6 +140,29 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
   <div style="flex:1;border-bottom:2px solid transparent"></div>
 </div>
 <div id="view-home" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+<div id="fmMobileBar">
+  <button class="mb" onclick="batchSync(true)"><i>☁️</i><b>同步</b></button>
+  <button class="mb" onclick="refreshCloudIndex()"><i>🔄</i><b>刷新</b></button>
+  <button class="mb" onclick="createFolder()"><i>📁</i><b>新建</b></button>
+  <button class="mb" onclick="openSelectedFile()"><i>📂</i><b>打开</b></button>
+  <button class="mb" onclick="toggleMoreSheet(true)"><i>⋯</i><b>更多</b></button>
+</div>
+<div id="fmMoreSheet" onclick="if(event.target===this)toggleMoreSheet(false)">
+  <div class="sheet">
+    <div class="sheet-title"><span>更多操作</span><span class="sheet-x" onclick="toggleMoreSheet(false)">✕</span></div>
+    <div class="sheet-grid">
+      <button onclick="moreClose();showRenameDialog()">改名</button>
+      <button onclick="moreClose();copyCurrentFile()">复制</button>
+      <button onclick="moreClose();showMoveFileDialog()">移动到</button>
+      <button onclick="moreClose();exportFileJSON()">导出文件</button>
+      <button onclick="moreClose();exportSelectedFile()">导出内容</button>
+      <button onclick="moreClose();importFileJSON()">导入文件</button>
+      <button onclick="moreClose();importFile()">导入内容</button>
+      <button class="danger" onclick="moreClose();deleteSelectedFile()">删除</button>
+      <button onclick="moreClose();closeSelf()">关闭</button>
+    </div>
+  </div>
+</div>
 <div class="btn-row">
   <input id="fileNameInput" type="text" placeholder="输入文件名" readonly>
   <button onclick="showRenameDialog()">改名</button>
@@ -1966,6 +1996,14 @@ async function deleteCloudVersion(){
 }
 
 
+function toggleMoreSheet(open){
+  const s=document.getElementById('fmMoreSheet');
+  if(!s)return;
+  const show=(open===undefined)?!s.classList.contains('show'):!!open;
+  s.classList.toggle('show',show);
+}
+function moreClose(){toggleMoreSheet(false)}
+
 function renderFileList(){
   const list=document.getElementById('fileList');
   const idx=getFileIndex().sort((a,b)=>b.time-a.time||a.name.localeCompare(b.name));
@@ -1978,8 +2016,8 @@ function renderFileList(){
   if(currentFolder){
     const parentId=getParentFolderId(currentFolder);
     html+=`<div class="file-item" style="background:#f0f0f0;cursor:pointer" onclick="navigateFolder('${parentId}')">
-      <span class="file-name">⬆ 返回上级</span>
-      <span class="file-time"></span>
+      <div class="file-main"><div class="file-name">⬆ 返回上级</div></div>
+      <div class="file-time"></div>
     </div>`;
   }
   // 子文件夹列表
@@ -1987,9 +2025,12 @@ function renderFileList(){
     for(const sub of subFolders){
       const count=getFilesInFolder(sub.id).length;
       html+=`<div class="file-item" style="background:#f5f0e8;cursor:pointer" data-folder="${sub.id}">
-        <span class="file-name">📁 ${sub.name||'(未命名)'} <span style="font-size:9px;color:#999">(${count}个文件)</span></span>
-        <span class="file-time"></span>
-        <span class="file-del" data-del-folder="${sub.id}">✕</span>
+        <div class="file-main">
+          <div class="file-name">📁 ${sub.name||'(未命名)'}</div>
+          <div class="file-meta"><span>${count}个文件</span></div>
+        </div>
+        <div class="file-time"></div>
+        <div class="file-acts"><span class="file-del" data-del-folder="${sub.id}">✕</span></div>
         <div class="file-check" data-check="folder" data-id="${sub.id}"><div class="chkbox${selectedBatchSet.has(sub.id)?' checked':''}"><span class="chktick">✓</span></div></div>
       </div>`;
     }
@@ -2022,9 +2063,12 @@ function renderFileList(){
     const idHtml=`<span style="font-size:8px;color:#aaa;font-family:monospace" title="文件ID">${fid.substring(0,8)}</span> `;
     return `<div class="file-item${active}" data-id="${fid}" data-name="${enc}">
       <div class="file-check" data-check="file" data-id="${fid}"><div class="chkbox${selectedBatchSet.has(fid)?' checked':''}"><span class="chktick">✓</span></div></div>
-      <span class="file-name">📄 ${f.name} ${idHtml}${verInfo} ${statusHtml}${charHtml}</span>
-      <span class="file-time">${ts}</span>${starHtml}
-      <span class="file-del" data-del="${fid}">✕</span>
+      <div class="file-main">
+        <div class="file-name" title="${f.name}">📄 ${f.name}</div>
+        <div class="file-meta">${idHtml}${verInfo}${statusHtml}${charHtml}</div>
+      </div>
+      <span class="file-time">${ts}</span>
+      <div class="file-acts">${starHtml}<span class="file-del" data-del="${fid}">✕</span></div>
     </div>`;
   }).join('');
   // 仅存于云端的文件和文件夹
@@ -2056,9 +2100,12 @@ function renderFileList(){
       // 云端文件夹
       for(const cf of cloudOnlyFolders){
         html+=`<div class="file-item" data-folder="${cf.id}" style="background:#f5f0e8;opacity:0.7;cursor:pointer">
-          <span class="file-name">📁 ${cf.name} <span style="font-size:9px;color:#9b59b6">仅云端</span></span>
-          <span class="file-time"></span>
-          <span class="file-del" data-del-folder="${cf.id}">✕</span>
+          <div class="file-main">
+            <div class="file-name">📁 ${cf.name}</div>
+            <div class="file-meta"><span>仅云端</span></div>
+          </div>
+          <div class="file-time"></div>
+          <div class="file-acts"><span class="file-del" data-del-folder="${cf.id}">✕</span></div>
           <div class="file-check" data-check="cloudFolder" data-id="${cf.id}"><div class="chkbox${selectedBatchSet.has(cf.id)?' checked':''}"><span class="chktick">✓</span></div></div>
         </div>`;
       }
@@ -2075,8 +2122,12 @@ function renderFileList(){
         const starHtml=`<span data-star="${cf.id}" title="${cloudStarred?'已星标（内容常年落盘 localStorage）：点击取消':'未星标（内容存 IndexedDB）：点击设为星标'}" style="cursor:pointer;font-size:12px;margin-left:3px;color:${cloudStarred?'#f5b301':'#ccc'}">${cloudStarred?'★':'☆'}</span>`;
         return `<div class="file-item" data-id="${cf.id}" data-name="${encodeURIComponent(cf.name)}" style="opacity:0.7">
           <div class="file-check" data-check="cloudFile" data-id="${cf.id}"><div class="chkbox${selectedBatchSet.has(cf.id)?' checked':''}"><span class="chktick">✓</span></div></div>
-          <span class="file-name">☁️ ${cf.name} ${idHtml}${verInfo} ${charHtml}<span style="font-size:9px;color:#9b59b6">仅存于云端</span></span>
-          <span class="file-time">-</span>${starHtml}
+          <div class="file-main">
+            <div class="file-name" title="${cf.name}">☁️ ${cf.name}</div>
+            <div class="file-meta">${idHtml}${verInfo}${charHtml}<span>仅存于云端</span></div>
+          </div>
+          <span class="file-time">-</span>
+          <div class="file-acts">${starHtml}</div>
         </div>`;
       }).join('');
     }
