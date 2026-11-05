@@ -1346,9 +1346,7 @@
             this.startTimer(question.text);
         },
         toggleFullscreen:function(){
-            App._autoFS();else{
-                document.exitFullscreen().catch(function(){});
-            }
+            App.toggleFullscreen();
         },
         renderWarReport:function(expandCurrentGroup){
             var exam=this.currentExam;
