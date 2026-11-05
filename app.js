@@ -563,9 +563,7 @@
             var label=(labels[exam.participationType]&&labels[exam.participationType][exam.mode])||exam.mode;
             var navMode=document.getElementById('nav-exam-mode');if(navMode){navMode.textContent=label;navMode.classList.remove('hidden')}
             var navEnd=document.getElementById('nav-exam-end');if(navEnd)navEnd.classList.remove('hidden');
-            if(!document.fullscreenElement){
-                document.documentElement.requestFullscreen().catch(function(){});
-            }
+            App._autoFS();
             this.renderWarReport(false);
             this.showQuestion();
             App.Toast.show('已恢复上次比赛','success');
@@ -944,9 +942,7 @@
             document.getElementById('exam-drawing').classList.add('hidden');
             document.getElementById('exam-playing').classList.add('hidden');
             document.getElementById('exam-play-sidebar').classList.remove('hidden');
-            if(!document.fullscreenElement){
-                document.documentElement.requestFullscreen().catch(function(){});
-            }
+            App._autoFS();
             this._nextPlayer();
         },
         _buildQuestionPool:function(allQ,needed,order){
@@ -1350,9 +1346,7 @@
             this.startTimer(question.text);
         },
         toggleFullscreen:function(){
-            if(!document.fullscreenElement){
-                document.documentElement.requestFullscreen().catch(function(){});
-            }else{
+            App._autoFS();else{
                 document.exitFullscreen().catch(function(){});
             }
         },
@@ -1699,7 +1693,7 @@
             var label=(labels[exam.participationType]&&labels[exam.participationType][exam.mode])||exam.mode;
             var navMode=document.getElementById('nav-exam-mode');if(navMode){navMode.textContent=label;navMode.classList.remove('hidden')}
             var navEnd=document.getElementById('nav-exam-end');if(navEnd)navEnd.classList.remove('hidden');
-            if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(function(){})}
+            App._autoFS();
             this.renderWarReport(false);
             this.showQuestion();
             App.Toast.show('已恢复练习进度','success');
@@ -1742,7 +1736,7 @@
             document.getElementById('exam-drawing').classList.add('hidden');
             document.getElementById('exam-playing').classList.add('hidden');
             document.getElementById('exam-play-sidebar').classList.remove('hidden');
-            if(!document.fullscreenElement){document.documentElement.requestFullscreen().catch(function(){})}
+            App._autoFS();
             this._nextPlayer();
         },
         showResult:function(){
@@ -2755,6 +2749,19 @@
             document.exitFullscreen().catch(function(){});
         }
     };
+
+    // 进入答题页时的自动全屏：仅电脑版；手机版改为手动按钮触发
+    App._autoFS = function(){
+        if(document.documentElement.getAttribute('data-ui')==='mobile')return;
+        if(!document.fullscreenElement){
+            document.documentElement.requestFullscreen().catch(function(){});
+        }
+    };
+    App._syncFullscreenBtn = function(){
+        var b=document.querySelector('.btn-play-fs');
+        if(b)b.textContent=document.fullscreenElement?'⤢ 退出全屏':'⛶ 全屏';
+    };
+    document.addEventListener('fullscreenchange',function(){App._syncFullscreenBtn()});
 
     App._zoomLevel=100;
     App.zoomIn=function(){
