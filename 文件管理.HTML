@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.10
+  存储测试网页版 · 文件管理器        当前版本 6.11
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.11 (2026-11-05) 新增 ensureFolder 消息：宿主可为指定 ID（FOLDER_ 前缀）建云端文件夹登记行，用于「每个账号一套系统文件夹」；建行后不强制刷新索引，避免覆盖宿主待同步的系统文件。
     6.10 (2026-11-05) 修「系统-学生信息」等系统文件永远看不到：宿主把 folder 写成名称「系统」但文件管理器没有对应文件夹项，导致根目录过滤掉这些孤儿文件、也无法进入该文件夹；现改为根目录直接显示这类孤儿 folder 文件，学生信息等系统文件可正常看到与下载。
     6.09 (2026-10-25) H9二次：宿主侧通知合并（非握手消息 120ms 合帧 hostBatch，宿主侧目标≤3条）；弹窗未加载不再收 initSession（消除重复握手与凭据发空白帧）；字节口径改按实测。
     6.08 (2026-10-25) 首屏收发合并为一次会话握手：新增 initSession（一条带齐配置+凭据，回 sessionReady，且只触发一次登录同步）；弹窗 iframe 改为首次打开才加载；云端「获取表头」仅首次核对并留标记；新增批量星标 setStars；宿主内容变更合并为 contentBatch 一条收一条回执。
@@ -79,7 +80,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.10</title>
+<title>文件管理 v6.11</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -115,7 +116,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.10</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.11</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -4435,6 +4436,31 @@ window.addEventListener('message',function(e){
 
     case 'syncAllFiles':
       batchSync(true);
+      break;
+
+    case 'ensureFolder':
+      (async function(){
+        try{
+          const fid=data.folderId;const nm=data.name||'系统';
+          if(!fid||!String(fid).startsWith('FOLDER_'))return;
+          await withWriteAccess('新建文件夹', async()=>{
+            const idx=getFileIndex();
+            if(!idx.some(f=>f.id===fid)){
+              const netTime=await getNetworkTime();
+              const r=await callCloudAPI('批量写入',{ID:fid,本地新文件标识:'true',数据:{ID:fid,文件名:nm,内容:'',起点号:'0',终点号:'0',文件夹路径:'',最后上传发起时间:formatBeijingTime(netTime)}});
+              if(r.status!=='success'){toast('建文件夹失败：'+(r.tongzhi||r.message||''));return}
+            }
+            // 把指定文件的「文件夹路径」回填为这个文件夹ID（云端按ID更新，不重传内容）
+            const ids=data.fileIds||[];
+            let fixed=0;
+            for(const id of ids){
+              const r2=await callCloudAPI('批量写入',{ID:id,数据:{文件夹路径:fid}});
+              if(r2.status==='success')fixed++;
+            }
+            toast('系统文件夹就绪：'+nm+'（归档'+fixed+'个系统文件）');
+          });
+        }catch(e){}
+      })();
       break;
 
     case 'downloadCloudFile':
