@@ -3041,10 +3041,12 @@
             return null;
         },
         _getFileIdForDataType:function(dataType){
-            if(dataType==='students')return 'EXAM_SYS_STUDENT_INFO';
-            if(dataType==='records')return 'EXAM_SYS_RECORDS';
-            if(dataType==='levels')return 'EXAM_SYS_LEVELS';
-            if(dataType==='aiConfig')return 'EXAM_SYS_AI_CONFIG';
+            var user='';try{user=localStorage.getItem('exam_auth_user')||''}catch(e){}
+            var suffix=user?('__'+user):'';
+            if(dataType==='students')return 'EXAM_SYS_STUDENT_INFO'+suffix;
+            if(dataType==='records')return 'EXAM_SYS_RECORDS'+suffix;
+            if(dataType==='levels')return 'EXAM_SYS_LEVELS'+suffix;
+            if(dataType==='aiConfig')return 'EXAM_SYS_AI_CONFIG'+suffix;
             return null;
         },
         _applyContentToApp:function(dataType,content){
@@ -3228,7 +3230,7 @@
                         this._pushContent(fileName,content);
                     }else{
                         var id=this._getFileIdForDataType(dataType);
-                        fileIndex2.push({name:fileName,id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'系统',owner:'',createTime:'',lastUploadTime:'',lastEditTime:this._formatTime(),contentLength:[...content].length,time:Date.now(),star:true});
+                        fileIndex2.push({name:fileName,id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:'',createTime:'',lastUploadTime:'',lastEditTime:this._formatTime(),contentLength:[...content].length,time:Date.now(),star:true});
                         try{localStorage.setItem(prefix+'_file_id_'+id,JSON.stringify({data:content,view:null}))}catch(e){}
                         this._pushContent(fileName,content);
                     }
@@ -3342,10 +3344,10 @@
                 });
                 var aiConfig={aiApiUrl:App.Storage.getSettings().aiApiUrl||'',aiApiKey:App.Storage.getSettings().aiApiKey||'',aiModel:App.Storage.getSettings().aiModel||''};
                 var sysFiles=[
-                    {key:'EXAM_SYS_STUDENT_INFO',name:'系统-学生信息',content:JSON.stringify(students),folder:'系统'},
-                    {key:'EXAM_SYS_RECORDS',name:'系统-考试数据',content:JSON.stringify(records),folder:'系统'},
-                    {key:'EXAM_SYS_LEVELS',name:'系统-等级设置',content:JSON.stringify(levels),folder:'系统'},
-                    {key:'EXAM_SYS_AI_CONFIG',name:'系统-AI配置',content:JSON.stringify(aiConfig),folder:'系统'}
+                    {key:'EXAM_SYS_STUDENT_INFO',name:'系统-学生信息',content:JSON.stringify(students),folder:''},
+                    {key:'EXAM_SYS_RECORDS',name:'系统-考试数据',content:JSON.stringify(records),folder:''},
+                    {key:'EXAM_SYS_LEVELS',name:'系统-等级设置',content:JSON.stringify(levels),folder:''},
+                    {key:'EXAM_SYS_AI_CONFIG',name:'系统-AI配置',content:JSON.stringify(aiConfig),folder:''}
                 ];
                 sysFiles.forEach(function(f){
                     fileIndex.push({name:f.name,id:f.key,version:1,lastSyncVersion:0,isNewFile:true,folder:f.folder,owner:'',createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...f.content].length,star:true});
@@ -3355,6 +3357,42 @@
                 localStorage.setItem('exam_sync_migrated_v2','1');
                 console.log('[Sync] 旧数据迁移完成，共'+fileIndex.length+'个文件');
             }catch(e){console.error('[Sync] 迁移失败:',e)}
+        },
+        // 每个账号首次登录：自动补建该账号的 4 个系统文件并推送到云端
+        ensureAccountSystemFiles:function(force){
+            try{
+                var user='';try{user=localStorage.getItem('exam_auth_user')||''}catch(e){}
+                if(!user)return false;
+                var prefix='exam';
+                var flag='exam_sys_init__'+user;
+                if(!force&&localStorage.getItem(flag)==='1')return false;
+                var idx=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                var settings=App.Storage.getSettings();
+                var ai={aiApiUrl:settings.aiApiUrl||'',aiApiKey:settings.aiApiKey||'',aiModel:settings.aiModel||''};
+                var sys=[
+                    ['students','EXAM_SYS_STUDENT_INFO','系统-学生信息',App.Storage.getStudents()],
+                    ['records','EXAM_SYS_RECORDS','系统-考试数据',App.Storage.getRecords()],
+                    ['levels','EXAM_SYS_LEVELS','系统-等级设置',settings.levels||[]],
+                    ['aiConfig','EXAM_SYS_AI_CONFIG','系统-AI配置',ai]
+                ];
+                sys.forEach(function(s){
+                    var id=s[1]+'__'+user;
+                    var content=JSON.stringify(s[3]);
+                    var e=idx.find(function(x){return x.id===id});
+                    if(e){
+                        e.folder='';e.owner=user;e.cloudOnly=false;
+                        if(force)e.isNewFile=true;
+                    }else{
+                        idx.push({name:s[2],id:id,version:1,lastSyncVersion:0,isNewFile:true,folder:'',owner:user,createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...content].length,time:Date.now(),star:true});
+                    }
+                    try{localStorage.setItem(prefix+'_file_id_'+id,JSON.stringify({data:content,view:null}))}catch(err){}
+                });
+                localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));
+                localStorage.setItem(flag,'1');
+                this.postToFileManager({type:'syncAllFiles'});
+                console.log('[Sync] 已为账号 '+user+' 补建系统文件并提交同步');
+                return true;
+            }catch(e){console.error('[Sync] 系统文件补建失败:',e);return false}
         }
     };
 
@@ -3392,6 +3430,9 @@
                         self._clearAllCache();
                         App.Toast.show('登录已过期，请重新登录', 'warning');
                         self._redirectToLogin();
+                    }else{
+                        // 每个账号首次登录：自动补建该系统账号专属的系统文件并上传云端
+                        if(App.Sync&&App.Sync.ensureAccountSystemFiles)App.Sync.ensureAccountSystemFiles();
                     }
                 });
             }, 2000);
