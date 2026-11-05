@@ -268,6 +268,23 @@ html[data-ui="mobile"] .bank-card .bc-actions button {
     line-height: 1.25;
 }
 
+/* 比赛选择题库：竖版缩略卡，一行一个（仿课后延时竖版小卡片） */
+html[data-ui="mobile"] .bank-modal-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    max-height: 60vh;
+}
+html[data-ui="mobile"] .bank-modal-item {
+    min-height: 52px;
+    padding: 12px 14px;
+    border-radius: 10px;
+}
+html[data-ui="mobile"] .bank-modal-name { font-size: 15px; }
+html[data-ui="mobile"] .bank-modal-count { font-size: 13px; }
+
+/* 题库缩略卡：手机触摸行高 */
+html[data-ui="mobile"] .bank-grid.compact .bank-card .bc-line { min-height: 52px; }
+
 /* 榜首/榜单 */
 html[data-ui="mobile"] .leaderboard-podium { gap: 8px; padding: 0 2px; flex-wrap: wrap; margin-bottom: 20px; }
 html[data-ui="mobile"] .podium-item .podium-avatar { width: 56px; height: 56px; font-size: 22px; }
