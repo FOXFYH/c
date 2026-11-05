@@ -1373,6 +1373,48 @@ body {
     background: rgba(239, 68, 68, 0.3);
 }
 
+/* 题库缩略卡：一行显示，点行展开（仿清单系统简约模式） */
+.bank-card .bc-line { display: none; }
+.bank-grid.compact { grid-template-columns: 1fr; gap: 10px; }
+.bank-grid.compact .bank-card { padding: 0; }
+.bank-grid.compact .bank-card .bc-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+}
+.bank-grid.compact .bank-card .bcl-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bank-grid.compact .bank-card .bcl-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.bank-grid.compact .bank-card .bcl-arrow {
+    font-size: 12px;
+    color: var(--accent-1);
+    transition: transform .2s;
+}
+.bank-grid.compact .bank-card:not(.expanded) > .bc-header,
+.bank-grid.compact .bank-card:not(.expanded) > .bc-desc,
+.bank-grid.compact .bank-card:not(.expanded) > .bc-actions { display: none; }
+.bank-grid.compact .bank-card.expanded { padding: 18px; }
+.bank-grid.compact .bank-card.expanded .bc-line {
+    padding: 0 0 10px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: default;
+}
+.bank-grid.compact .bank-card.expanded .bcl-arrow { transform: rotate(90deg); }
+
 /* ===== 排行榜 ===== */
 .leaderboard-container {
     max-width: 1400px;
