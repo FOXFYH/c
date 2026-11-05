@@ -551,7 +551,7 @@ html[data-ui="mobile"] .exam-playing { width: 100%; }
 html[data-ui="mobile"] .play-fs-bar {
     display: flex;
     justify-content: flex-end;
-    padding: 0 2px 6px;
+    padding: 56px 2px 6px;
 }
 html[data-ui="mobile"] .btn-play-fs {
     display: inline-flex;
