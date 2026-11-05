@@ -3363,7 +3363,7 @@
             }catch(e){console.error('[Sync] 迁移失败:',e)}
         },
         // 每个账号首次登录：自动建该系统账号专属的「系统」文件夹 + 4 个系统文件，并推送到云端
-        ensureAccountSystemFiles:function(force){
+        ensureAccountSystemFiles:function(force,onlyKeys){
             try{
                 var user='';try{user=localStorage.getItem('exam_auth_user')||''}catch(e){}
                 if(!user)return false;
@@ -3383,7 +3383,9 @@
                     ['levels','EXAM_SYS_LEVELS','系统-等级设置',settings.levels||[]],
                     ['aiConfig','EXAM_SYS_AI_CONFIG','系统-AI配置',ai]
                 ];
+                var onlyIds=(onlyKeys&&onlyKeys.length)?onlyKeys:null;
                 sys.forEach(function(s){
+                    if(onlyIds&&onlyIds.indexOf(s[1])<0)return;
                     var id=s[1]+'__'+user;
                     var content=JSON.stringify(s[3]);
                     var e=idx.find(function(x){return x.id===id});
@@ -3437,10 +3439,15 @@
                 }
                 var prefix='exam';
                 var idx=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
-                if(sysRows.length===0){
-                    // 云端确实没有本账号系统文件 → 此时才允许本地创建
-                    App.Sync.ensureAccountSystemFiles(true);
-                }else{
+                var cloudNameMap={};
+                sysRows.forEach(function(r){cloudNameMap[String(r.文件名||'')]=r});
+                var std=[['EXAM_SYS_STUDENT_INFO','系统-学生信息'],['EXAM_SYS_RECORDS','系统-考试数据'],['EXAM_SYS_LEVELS','系统-等级设置'],['EXAM_SYS_AI_CONFIG','系统-AI配置']];
+                var missing=std.filter(function(s){return !cloudNameMap[s[1]]}).map(function(s){return s[0]});
+                if(missing.length>0){
+                    // 精确到单个文件：云端缺哪个系统文件，本地才补建哪个
+                    App.Sync.ensureAccountSystemFiles(true,missing);
+                }
+                if(sysRows.length>0){
                     var dtMap={'系统-学生信息':'students','系统-考试数据':'records','系统-等级设置':'levels','系统-AI配置':'aiConfig'};
                     sysRows.forEach(function(r){
                         var fid=String(r.ID||'');
