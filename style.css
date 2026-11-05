@@ -2785,6 +2785,33 @@ input:checked + .slider:before {
 .settings-panel.active {
     display: block;
 }
+/* 挑战参数：两列布局，一行放两个参数，充分利用横向空间 */
+#stab-exam .settings-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 20px;
+    align-items: start;
+}
+#stab-exam .form-group {
+    margin-bottom: 0;
+    min-width: 0;
+}
+#stab-exam .form-group > label:first-child {
+    margin-bottom: 4px;
+}
+#stab-exam .form-group input[type="number"] {
+    width: 100% !important;
+    max-width: none;
+}
+#stab-exam .form-group .form-hint {
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.35;
+}
+#stab-exam .settings-card > .btn-primary {
+    grid-column: 1 / -1;
+    justify-self: start;
+}
 @keyframes fade-in {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
