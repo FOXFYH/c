@@ -683,8 +683,9 @@
             if(!panel||!window.ModeRules)return;
             var rule=ModeRules[mode];
             if(!rule){panel.innerHTML='';return}
-            var html='<div class="rules-card">';
-            html+='<h4 class="rules-title">'+rule.title+' 规则</h4>';
+            var html='<div class="rules-card'+(this.rulesOpen?' expanded':'')+'">';
+            html+='<h4 class="rules-title rules-toggle" onclick="App.Exam.toggleRulesCard(this)">'+rule.title+' 规则<span class="rules-arrow">▾</span></h4>';
+            html+='<div class="rules-body">';
             html+='<ul class="rules-list">';
             rule.rules.forEach(function(r){html+='<li>'+r+'</li>'});
             if(pType==='group'&&rule.groupExtra){html+='<li class="rules-group-extra">🏆 '+rule.groupExtra+'</li>'}
@@ -696,7 +697,14 @@
                 html+='</ul>';
             }
             html+='</div>';
+            html+='</div>';
             panel.innerHTML=html;
+        },
+        toggleRulesCard:function(el){
+            var card=el&&el.closest?el.closest('.rules-card'):null;
+            if(!card)return;
+            card.classList.toggle('expanded');
+            this.rulesOpen=card.classList.contains('expanded');
         },
         backToModes:function(){
             document.getElementById('exam-mode-select').classList.remove('hidden');
