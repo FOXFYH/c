@@ -2862,6 +2862,7 @@
                         App.Sync._applyLoginGate(msg);
                         break;
                     case 'syncComplete':
+                        App.Sync._hideGate();
                         if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
                         if(!self._pulling)self.pullAllCloudContent();
                         if(App.Questions)App.Questions.render();
@@ -3404,6 +3405,15 @@
                 return true;
             }catch(e){console.error('[Sync] 系统文件补建失败:',e);return false}
         },
+        _showGate:function(txt){
+            var m=document.getElementById('gate-mask');var t=document.getElementById('gate-text');
+            if(t&&txt)t.textContent=txt;
+            if(m)m.style.display='flex';
+        },
+        _hideGate:function(){
+            var m=document.getElementById('gate-mask');
+            if(m)m.style.display='none';
+        },
         // 登录门禁：一次「读取全部」→ 验证行 + 本账号全部系统文件（含内容与版本号）
         _applyLoginGate:function(msg){
             try{
@@ -3414,6 +3424,7 @@
                 if(!msg||!msg.ok||!verify){
                     App.Sync._gateBlocked=true;
                     App.Sync._gateDone=false;
+                    App.Sync._showGate('云端校验失败，正在重试…');
                     App.Toast.show('云端校验失败：读不到验证行，已阻止进入','error');
                     return;
                 }
@@ -3456,6 +3467,14 @@
                 }
                 App.Sync._gateBlocked=false;
                 App.Sync._gateDone=true;
+                // 系统文件若本地还有更高版本待上传，等同步完成再放行
+                var pending=false;
+                try{
+                    var idx2=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                    pending=idx2.some(function(x){return String(x.id).indexOf('EXAM_SYS')===0&&((x.isNewFile)||((x.e||0)>(x.s||0)))});
+                }catch(e){}
+                if(pending)App.Sync._showGate('系统文件正在对齐云端…');
+                else App.Sync._hideGate();
                 console.log('[Gate] 云端校验通过，系统文件 '+sysRows.length+' 个');
             }catch(e){console.error('[Gate] 校验异常:',e)}
         }
@@ -3496,15 +3515,26 @@
                         App.Toast.show('登录已过期，请重新登录', 'warning');
                         self._redirectToLogin();
                     }else{
-                        // 登录门禁：先读云端验证行与本账号系统文件，通过后才放行；读不到验证行不创建任何东西
+                        // 登录门禁：只校验系统文件；题库文件按需下载。一致后才放行
+                        if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在校验云端系统文件…');
                         if(App.Sync&&App.Sync.postToFileManager){
                             var gateTries=0;
                             var gateTimer=setInterval(function(){
                                 gateTries++;
                                 App.Sync.postToFileManager({type:'loginGateReadAll'});
-                                if(App.Sync._gateDone||gateTries>=5)clearInterval(gateTimer);
+                                if(App.Sync._gateDone||gateTries>=8)clearInterval(gateTimer);
                             },3000);
                             App.Sync.postToFileManager({type:'loginGateReadAll'});
+                            // 兜底：40 秒仍未通过则提示，避免永远挡着
+                            setTimeout(function(){
+                                if(!App.Sync._gateDone){
+                                    var t=document.getElementById('gate-text');
+                                    if(t)t.textContent='云端校验未完成：请检查网络后重新登录';
+                                    if(App.Toast)App.Toast.show('云端校验未完成，请检查网络后重新登录','warning');
+                                    var m=document.getElementById('gate-mask');
+                                    if(m)m.style.display='none';
+                                }
+                            },40000);
                         }
                     }
                 });
