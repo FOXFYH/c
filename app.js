@@ -3446,8 +3446,7 @@
                         var fid=String(r.ID||'');
                         var cloudS=parseInt(r.起点号||0)||0;
                         var cloudE=parseInt(r.终点号||0)||0;
-                        var content='';
-                        try{content=(JSON.parse(r.文件JSON||'{}').内容)||''}catch(e){}
+                        var content=(msg.contents&&msg.contents[fid])||'';
                         var e=idx.find(function(x){return x.id===fid});
                         var localE=e?(parseInt(e.e||0)||0):-1;
                         if(!e){
