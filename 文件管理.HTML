@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.14
+  存储测试网页版 · 文件管理器        当前版本 6.15
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.15 (2026-11-05) ①修「日志」「说明书」两个分页顶部一大片空白：这两个视图原本落在 #mainUI 之外，被当成独立一块挤到屏幕下半截，现启动时挪回主容器，铺满整屏。②新增右上角「横/竖」单字切换按钮，竖版由 html[data-fm="portrait"] 触发（不再绑死 560px 屏宽），可记忆；横版沿用基础 CSS，同一容器两向可用。
     6.14 (2026-11-05) 手机竖版界面重做：电脑那两排大按钮在手机上全部隐藏，改为顶部单行 5 个紧凑小按钮（同步/刷新/新建/打开/更多），其余 9 个操作收进底部「更多」抽屉；文件列表改为两行小卡片（首行图标+文件名，次行版本号/字数/状态，右侧星标与删除），文件区占满剩余高度；底部凭据条压成单行。电脑横版不变。
     6.13 (2026-11-05) 登录门禁改为轻量：只用「读取索引」拿验证行+系统文件版本号（不含题库内容），再用「批量读取」只取「系统-」4个文件内容；登录不再整表拉取题库，避免撑爆流量与本地。
     6.12 (2026-11-05) 新增 loginGateReadAll：宿主登录后一次「读取全部」，同时拿到验证行（ID 999999999）与本账号全部系统文件（含内容、起始/终点号）；宿主据此做登录门禁与版本对齐，避免登录时重复创建系统文件。
@@ -83,7 +84,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.14</title>
+<title>文件管理 v6.15</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -120,15 +121,16 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 /* 手机专用：单行工具栏 + 「更多」抽屉（电脑端不显示） */
 #fmMobileBar,#fmMoreSheet{display:none}
 </style>
-<link rel="stylesheet" href="mobile.css?v=2.0.4">
+<link rel="stylesheet" href="mobile.css?v=2.0.5">
 </head>
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.14</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.15</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
+    <button id="fmOrientBtn" onclick="toggleFmOrientation()" title="横版 / 竖版切换" style="margin-left:4px;padding:2px 8px;border:1px solid #cfd8e3;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;color:#4A90D9">竖</button>
     <button onclick="closeSelf()" title="关闭" style="margin-left:4px;padding:2px 6px;border:none;border-radius:4px;background:#fff;cursor:pointer;font-size:14px;color:#999;transition:all .2s" onmouseover="this.style.background='#f5f5f5';this.style.color='#e74c3c'" onmouseout="this.style.background='#fff';this.style.color='#999'">✕</button>
   </div>
 </div>
@@ -3343,6 +3345,37 @@ async function openFileById(id){
     notifyParent('openDenied',{name:f.name,reason:'error',message:e.message});
   }
 }
+
+// 日志/说明书分页原来落在 #mainUI 之外，手机上会被顶到屏幕下半截（上方一大片空白）；启动时挪回主容器
+(function(){
+  const host=document.getElementById('mainUI');
+  if(!host)return;
+  ['view-log','view-guide'].forEach(function(id){
+    const el=document.getElementById(id);
+    if(el&&el.parentElement!==host)host.appendChild(el);
+  });
+})();
+
+// 横/竖版切换：竖版=html[data-fm="portrait"]，横版=去掉该属性（走基础 CSS）
+function applyFmOrientation(mode){
+  const root=document.documentElement;
+  if(mode==='portrait')root.setAttribute('data-fm','portrait');
+  else root.removeAttribute('data-fm');
+  const btn=document.getElementById('fmOrientBtn');
+  if(btn)btn.textContent=(mode==='portrait')?'竖':'横';
+}
+function toggleFmOrientation(){
+  const portrait=document.documentElement.getAttribute('data-fm')==='portrait';
+  const next=portrait?'landscape':'portrait';
+  applyFmOrientation(next);
+  try{localStorage.setItem('fm_orientation',next)}catch(e){}
+}
+function initFmOrientation(){
+  let saved=null;
+  try{saved=localStorage.getItem('fm_orientation')}catch(e){}
+  applyFmOrientation(saved||((window.innerWidth||390)<560?'portrait':'landscape'));
+}
+initFmOrientation();
 
 function switchTab(name){
   const home=document.getElementById('view-home');
