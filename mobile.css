@@ -481,10 +481,24 @@ html[data-ui="mobile"] .student-filters select {
 /* 设置页里内联的两列/并排容器改成纵向 */
 html[data-ui="mobile"] #stab-sync > div > div[style*="display:flex"] { flex-wrap: wrap; }
 
-/* 挑战参数：电脑两列，手机回落为单列 */
+/* 挑战参数：手机上同样两列（一行两个），标签/提示缩一号字，保证塞得下 */
 html[data-ui="mobile"] #stab-exam .settings-card {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+}
+html[data-ui="mobile"] #stab-exam .form-group > label:first-child {
+    font-size: 12px;
+    line-height: 1.25;
+    margin-bottom: 4px;
+}
+html[data-ui="mobile"] #stab-exam .form-group input[type="number"] {
+    font-size: 13px !important;
+    padding: 6px 8px !important;
+    min-height: 36px;
+}
+html[data-ui="mobile"] #stab-exam .form-group .form-hint {
+    font-size: 10px;
+    line-height: 1.3;
 }
 
 /* ---------- 5. 弹窗：满宽、按钮 >= 44px ---------- */
