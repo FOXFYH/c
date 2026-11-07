@@ -3743,7 +3743,9 @@
                 var missing=std.filter(function(s){
                     var cr=cloudNameMap[s[1]];
                     if(!cr)return true;
-                    // 云端行存在但内容为空（只有建行、没传过内容）→ 也按缺失补建，否则永远拉回空档
+                    // 云端行有“内容字符数”说明内容存在；此时读不到只是这次读取失败，绝不能拿本地覆盖
+                    var cl=parseInt(cr.内容字符数||0)||0;
+                    if(cl>0)return false;
                     var cc=(msg.contents&&msg.contents[String(cr.ID)])||'';
                     return !String(cc).trim();
                 }).map(function(s){return s[0]});
@@ -3785,6 +3787,15 @@
                     localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));
                     // 本地版本更高的，继续按常规同步推上去
                     App.Sync.postToFileManager({type:'syncAllFiles'});
+                }
+                // 云端明明有内容、这次却没读回来 → 不标记完成，让门禁定时器继续重试
+                var missContent=sysRows.some(function(r){
+                    var cl=parseInt(r.内容字符数||0)||0;
+                    return cl>0 && !String((msg.contents&&msg.contents[String(r.ID)])||'').trim();
+                });
+                if(missContent){
+                    App.Sync._showGate('正在读取云端系统文件…');
+                    return;
                 }
                 App.Sync._gateBlocked=false;
                 App.Sync._gateDone=true;
