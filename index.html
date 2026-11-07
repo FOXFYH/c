@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>🎯 挑战系统 2.0</title>
-    <link rel="stylesheet" href="style.css?v=2.004">
-    <link rel="stylesheet" href="mobile.css?v=2.004">
-    <script src="ui-mode.js?v=2.004"></script>
+    <link rel="stylesheet" href="style.css?v=2.005">
+    <link rel="stylesheet" href="mobile.css?v=2.005">
+    <script src="ui-mode.js?v=2.005"></script>
     <script>
       // 现场诊断：任何 JS 报错都在页面顶部显示一条红条，方便手机截图反馈；同时暴露版本号
       // 版本规则：基线 2.0，每次改动 +0.001（2.001、2.002、2.003…）；
       // 改完必须同步改顶栏 #nav-ver 与下面所有静态资源 ?v= 参数，否则手机会读到旧缓存
-      window.__APP_VER='2.004';
+      window.__APP_VER='2.005';
       window.addEventListener('error',function(e){
         try{
           var d=document.getElementById('js-err-bar');
@@ -34,7 +34,7 @@
     <nav id="main-nav">
         <div class="nav-brand" onclick="App.switchView('home')">
             <span class="nav-logo">🎯</span>
-            <span class="nav-title">挑战系统 2.0</span><span id="nav-ver" style="margin-left:6px;font-size:11px;color:#8ab;border:1px solid #8ab;border-radius:8px;padding:0 5px;vertical-align:middle">v2.004</span>
+            <span class="nav-title">挑战系统 2.0</span><span id="nav-ver" style="margin-left:6px;font-size:11px;color:#8ab;border:1px solid #8ab;border-radius:8px;padding:0 5px;vertical-align:middle">v2.005</span>
         </div>
         <div class="nav-items">
             <button class="nav-btn active" data-view="home" onclick="App.switchView('home')"><span class="nav-icon">🚀</span><span class="nav-text">Let's go</span></button>
@@ -286,6 +286,15 @@
                             </div>
                             <div class="form-hint" style="margin-top:8px">导入数据将强制覆盖本地及云端对应数据</div>
                         </div>
+                        <div class="settings-card" style="margin-top:12px">
+                            <h3 style="margin-bottom:8px">🧾 账本核对</h3>
+                            <div class="form-hint" style="margin-bottom:10px">总账（系统-考试数据，全班逐场合计）与分账（每个学生一本，锚定绝对ID）必须一致；两者同源派生，核不上说明有账被截断</div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                <button class="btn-primary btn-sm" onclick="App.Records.showAudit()">🔍 立即核对</button>
+                                <button class="btn-secondary btn-sm" onclick="App.Ledger.push(null,false);App.Toast.show('已重建全部分账（等待同步上传）','info')">↻ 重建全部分账</button>
+                            </div>
+                            <div id="ledger-audit-result" style="margin-top:10px;font-size:12.5px;color:var(--text-secondary)"></div>
+                        </div>
                         <div class="settings-card" style="margin-top:12px"><div class="settings-actions"><button class="btn-danger btn-sm" onclick="App.Settings.clearRecords()">🗑️ 清空场次数据</button><button class="btn-danger btn-sm" onclick="App.Settings.resetData()">⚠️ 重置所有数据</button></div></div>
                         <div class="settings-card" style="margin-top:12px"><div id="records-list" class="records-list"></div><div class="empty-state inline" id="records-empty"><div class="empty-icon">📝</div><p>暂无记录</p></div></div>
                     </div>
@@ -312,11 +321,11 @@
     <div class="modal-overlay" id="modal-overlay" onclick="App.Modal.closeOnOverlay(event)"><div class="modal" id="modal-container"><div class="modal-header"><h3 id="modal-title">标题</h3><button class="modal-close" onclick="App.Modal.close()">✕</button></div><div class="modal-body" id="modal-body"></div><div class="modal-footer" id="modal-footer"></div></div></div>
     <canvas id="fx-canvas"></canvas>
     <div id="file-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:200;justify-content:center;align-items:center" onclick="if(event.target===this)App.Sync.closeFileManager()">
-        <iframe id="fileManagerFrame" data-src="文件管理.HTML?v=2.004" style="width:780px;max-width:95vw;height:75vh;border:none;border-radius:10px;background:#fff"></iframe>
+        <iframe id="fileManagerFrame" data-src="文件管理.HTML?v=2.005" style="width:780px;max-width:95vw;height:75vh;border:none;border-radius:10px;background:#fff"></iframe>
     </div>
-    <iframe id="fileManagerBg" src="文件管理.HTML?v=2.004" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
-    <script src="demo-data.js?v=2.004"></script>
-    <script src="mode-rules.js?v=2.004"></script>
-    <script src="app.js?v=2.004"></script>
+    <iframe id="fileManagerBg" src="文件管理.HTML?v=2.005" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
+    <script src="demo-data.js?v=2.005"></script>
+    <script src="mode-rules.js?v=2.005"></script>
+    <script src="app.js?v=2.005"></script>
 </body>
 </html>
