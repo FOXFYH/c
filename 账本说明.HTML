@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>挑战答题 · 账本体系说明</title>
+<style>
+  :root{
+    --bg:#0f1220; --card:#181c2e; --line:#2a3050; --text:#e8ecf7; --muted:#9aa4bf;
+    --accent:#6c5ce7; --accent2:#4A90D9; --ok:#2ecc71; --warn:#f0b429; --bad:#e74c3c;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Microsoft YaHei','PingFang SC',sans-serif;
+    background:var(--bg); color:var(--text);
+    line-height:1.75; padding:18px 14px 60px;
+    max-width:900px; margin:0 auto;
+    overflow-x:hidden;
+  }
+  h1{font-size:22px;margin-bottom:6px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  h2{font-size:17px;margin:26px 0 10px;padding-left:9px;border-left:4px solid var(--accent)}
+  h3{font-size:14.5px;margin:16px 0 6px;color:#cfd6ea}
+  p{margin:6px 0;font-size:14px}
+  ul,ol{margin:6px 0 6px 20px;font-size:14px}
+  li{margin:3px 0}
+  code{
+    background:#232842; color:#9be7ff; padding:1px 5px; border-radius:4px;
+    font-family:Consolas,monospace; font-size:12.5px; word-break:break-all;
+  }
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; margin:10px 0;
+  }
+  .tag{display:inline-block;font-size:11.5px;border-radius:8px;padding:1px 8px;margin-right:6px}
+  .tag.light{background:#1d3a2b;color:#7ee2a8;border:1px solid #2b5a41}
+  .tag.heavy{background:#3a2a1d;color:#f0b429;border:1px solid #5a432b}
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;table-layout:fixed}
+  th,td{border:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top;word-break:break-word}
+  th{background:#1e2338;color:#c9d2e8;font-weight:600}
+  .muted{color:var(--muted);font-size:12.5px}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+  .flow{
+    display:flex;flex-direction:column;gap:6px;font-size:13px;
+    background:#141829;border:1px dashed var(--line);border-radius:10px;padding:12px;
+  }
+  .flow div{padding:4px 0}
+  .arrow{color:var(--accent2)}
+  .foot{margin-top:30px;font-size:12px;color:var(--muted);text-align:center}
+  @media (max-width:480px){
+    body{padding:14px 10px 50px}
+    table{font-size:12.5px}
+    th,td{padding:6px}
+  }
+</style>
+</head>
+<body>
+
+<h1>📘 账本体系说明</h1>
+<div class="sub">挑战答题 · 班主任模式 ｜ 说明学生总账、学生详账、全局总账如何分配，以及 Webhook 怎么花</div>
+
+<h2>一、一句话讲清</h2>
+<div class="card">
+  <p>所有账都从<b>同一份「场次流水」</b>派生出来，不各存一份：</p>
+  <p>答完一场 → 记 1 条场次流水（谁、哪份题库、答对几题、得几分）→ 从流水里<b>算</b>出全局总账、每个学生的总账、每个学生的详账。</p>
+  <p class="muted">因为是同一份数据算出来的，所以三本账一定对得上；对不上，就说明有账被截断（软件里有「账本核对」可一键验）。</p>
+</div>
+
+<h2>二、三种账分别是什么</h2>
+
+<h3>1. 全局总账（全班一本，云端 2 条）</h3>
+<div class="card">
+  <p><span class="tag light">轻</span><code>系统-学生信息</code>：全班名单（含绝对ID、姓名、组别）。</p>
+  <p><span class="tag light">轻</span><code>系统-考试数据</code>：全部场次流水（每场的模式、题库、每个参与者成绩）。</p>
+  <p class="muted">用途：班主任本地的唯一权威；换设备登录时靠它恢复全班数据。每场考完立即上传。</p>
+</div>
+
+<h3>2. 学生总账（每人一条）</h3>
+<div class="card">
+  <p><span class="tag light">轻</span><code>总账-&lt;绝对ID&gt;</code></p>
+  <p>内容只有：绝对ID、姓名、组别、总分、正确率、场次、答对/总题。一条几百字节。</p>
+  <p><b>为什么单独做一条：</b>全班排名需要所有人的分数，用<b>一条</b>「批量读取」就能把这几十条轻账一次拿完，不用碰任何详细数据。</p>
+</div>
+
+<h3>3. 学生详账（每人一条，私密）</h3>
+<div class="card">
+  <p><span class="tag heavy">重</span><code>学生-&lt;绝对ID&gt;</code></p>
+  <p>内容：按题库汇总（每份卷子做几次、正确率、得分）、逐场明细（时间/模式/题库/答对/得分）。</p>
+  <p><b>纪律：</b>登录时<b>绝不</b>批量下载详账；只有班主任点名看某个学生、或学生本人登录自己的账时，才单独取那一条。</p>
+</div>
+
+<h2>三、绝对ID（所有账的锚）</h2>
+<div class="card">
+  <ul>
+    <li>学生注册即分配，形如 <code>S</code> + 6位时间 + 4位随机（例 <code>SXXXXXXXX</code>），生成后永不改。</li>
+    <li>历史学生自动补齐：沿用其原有唯一编号作为绝对ID，旧记录一条都不用改。</li>
+    <li>此后改姓名、换小组、换设备，账都还认这个ID，不会串账。</li>
+  </ul>
+</div>
+
+<h2>四、云端表格里长什么样</h2>
+<div class="card">
+  <p>所有账都是「抽奖考试」表里的一行，靠 <code>文件名</code> 前缀区分：</p>
+  <table>
+    <tr><th style="width:34%">文件名</th><th>是什么</th><th style="width:22%">读取方式</th></tr>
+    <tr><td><code>系统-考试数据</code></td><td>全局总账（全部流水）</td><td>登录时 1 条批量读取</td></tr>
+    <tr><td><code>系统-学生信息</code></td><td>全班名单</td><td>登录时 1 条批量读取</td></tr>
+    <tr><td><code>总账-&lt;绝对ID&gt;</code></td><td>该生总分（轻）</td><td>看排名时 1 条批量读取全部</td></tr>
+    <tr><td><code>学生-&lt;绝对ID&gt;</code></td><td>该生详账（重）</td><td>按需单条读取</td></tr>
+  </table>
+  <p>表格右侧有两个自动列：</p>
+  <ul>
+    <li><b>Q 列「总分」</b>：公式自动从总账行取分（<code>=IFERROR(IF(LEFT($C2,3)="总账-",VALUE($J2),""),"")</code>），已预置到第 1000 行。</li>
+    <li><b>S 列汇总区</b>：<code>全班总分合计 =SUM($Q$2:$Q$1000)</code>、<code>总账人数 =COUNT(...)</code>，打开表格直接读。</li>
+  </ul>
+  <p class="muted">为了让云端不用改脚本，总账的分数写在原有「MD5」列（该列原本空着），Q 列公式再引用它。</p>
+</div>
+
+<h2>五、Webhook 怎么安排（关键）</h2>
+<div class="card">
+  <p>原则三条：<b>轻账可批量、重账必按需、能不传就不传。</b></p>
+  <table>
+    <tr><th style="width:30%">时机</th><th>发什么 / 几条</th><th style="width:26%">说明</th></tr>
+    <tr>
+      <td>打开网页 / 登录</td>
+      <td>1 条「读取索引」+ 1 条「批量读取」（只取 4 个系统文件）</td>
+      <td>不拉题库内容、不拉任何详账</td>
+    </tr>
+    <tr>
+      <td>答完一场（开启「考试结束后立即触发同步」）</td>
+      <td>1 条 系统-考试数据 + 每个参与者 1 条 总账-</td>
+      <td>本场 N 人 ≈ N+1 条，确保当场落袋</td>
+    </tr>
+    <tr>
+      <td>同上，但关闭该开关</td>
+      <td>并入常规批量同步，多文件合并提交</td>
+      <td>省请求，但最多等一个同步周期</td>
+    </tr>
+    <tr>
+      <td>看「全班总账排名」</td>
+      <td><b>1 条</b> 批量读取（几十条总账一次带走）</td>
+      <td>不碰详账，这是省钱的核心</td>
+    </tr>
+    <tr>
+      <td>点某个学生看详情</td>
+      <td>用本地已有的流水实时算（0 条）；本地没有该生详账时，才单条拉取</td>
+      <td>按需、单人、绝不全班拉</td>
+    </tr>
+    <tr>
+      <td>常规自动同步</td>
+      <td>本地每 5 秒检查一次（纯本地，0 条）；累计版本差 ≥10 或 5 分钟兜底才真正上传</td>
+      <td>避免空转刷云函数</td>
+    </tr>
+    <tr>
+      <td>退出 / 切后台（开启「退出时触发同步」）</td>
+      <td>最多 2 条（考试数据 + 学生信息）</td>
+      <td>关页面前的最后一次兜底</td>
+    </tr>
+  </table>
+  <p class="muted">上传类操作（同步提交/转正确认）会先抢云端锁、再写、写完释放；读取类不抢锁。</p>
+</div>
+
+<h2>六、数据怎么流（图）</h2>
+<div class="card">
+  <div class="flow">
+    <div>① 学生答题 → 本地写 1 条「场次流水」</div>
+    <div class="arrow">↓ 同一份流水，算三样</div>
+    <div>② 全局总账 <code>系统-考试数据</code>（全班）</div>
+    <div>③ 每人总账 <code>总账-&lt;绝对ID&gt;</code>（轻，可批量读）</div>
+    <div>④ 每人详账 <code>学生-&lt;绝对ID&gt;</code>（重，按需读）</div>
+    <div class="arrow">↓ 云端</div>
+    <div>⑤ 表格 Q 列自动出分 → S 列自动汇总 → 打开表格即看全班总分/人数</div>
+  </div>
+</div>
+
+<h2>七、一致性怎么保证</h2>
+<div class="card">
+  <ul>
+    <li><b>同源派生：</b>三本账都从场次流水算，不各存一份，天然一致。</li>
+    <li><b>账本核对：</b>设置 → 数据管理 → 🧾 账本核对，比对总账与分账的答对数/总题/积分，逐生重算；对不上会点名到学生和绝对ID。</li>
+    <li><b>防重复创建：</b>账本按「文件名唯一」写入，同名只更新不新建；重建也只刷新内容。</li>
+    <li><b>空档保护：</b>本地内容为空时绝不上传，避免用空账盖掉云端。</li>
+    <li><b>关键节点兜底：</b>一场结束立即推总账；失败会红字提示，可点「立即同步」重试。</li>
+  </ul>
+</div>
+
+<h2>八、常见问题</h2>
+<div class="card">
+  <h3>Q：登录会不会一下拉几十条详账？</h3>
+  <p>A：不会。登录只取 4 个系统文件；详账不参与登录同步。</p>
+
+  <h3>Q：全班排名要花多少条？</h3>
+  <p>A：1 条。所有 <code>总账-</code> 一次性批量读取。</p>
+
+  <h3>Q：一场 40 人是不是要 40 条？</h3>
+  <p>A：开启「考试结束后立即同步」时约 41 条（1 条全场 + 40 条个人总账），这是用请求换“当场落袋”；嫌多就关掉该开关，改走合并批量同步。</p>
+
+  <h3>Q：换手机/换浏览器，数据还在吗？</h3>
+  <p>A：在。登录后用 <code>系统-考试数据</code> 恢复全班流水，个人总账/详账也在云端各占一行。</p>
+
+  <h3>Q：学生模式以后怎么加？</h3>
+  <p>A：学生登录只认自己的绝对ID，只读/写自己那两条（总账 + 详账）；他的成绩照样汇入全局总账，班主任这边看得到。</p>
+</div>
+
+<div class="foot">挑战答题 · 账本体系说明 ｜ 随程序版本更新（当前 v2.007 / 文件管理器 v6.17）</div>
+
+</body>
+</html>
