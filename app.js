@@ -3939,7 +3939,9 @@
                         if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在校验云端系统文件…');
                         // 本地已有缓存 → 1.8 秒后先放行显示本地数据，云端校验转后台继续，不再干等十几秒
                         try{
-                            var _hasLocal=(localStorage.getItem('exam_records')!==null)||(localStorage.getItem('exam_students')!==null);
+                            var _st=JSON.parse(localStorage.getItem('exam_students')||'[]');
+                            var _rc=JSON.parse(localStorage.getItem('exam_records')||'[]');
+                            var _hasLocal=((_rc&&_rc.length)||0)>0 || (_st||[]).some(function(s){return !s._demo});
                             if(_hasLocal){
                                 setTimeout(function(){
                                     App.Sync._gateSoftReleased=true;
