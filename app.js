@@ -306,8 +306,23 @@
             if(history.length===0){
                 body+='<div style="text-align:center;color:var(--text-muted);padding:20px">暂无挑战记录</div>';
             }else{
+                // 按题库汇总（含练习模式）
+                var bankSum=App.Records.summarizeByBank?App.Records.summarizeByBank(history):[];
+                if(bankSum.length){
+                    body+='<div style="font-weight:700;font-size:14px;margin:4px 0 8px">📚 按题库汇总</div>';
+                    body+='<div class="sh-bank-sum">';
+                    bankSum.forEach(function(b){
+                        var c=b.pct>=90?'var(--success)':b.pct>=60?'var(--gold)':'var(--danger)';
+                        body+='<div class="sh-bank-row">';
+                        body+='<div class="sh-bank-name" title="'+b.bank+'">'+b.bank+'</div>';
+                        body+='<div class="sh-bank-meta">'+b.times+' 次 · 答对 '+b.correct+'/'+b.total+' · <b style="color:'+c+'">'+b.pct+'%</b> · +'+b.points+'⭐</div>';
+                        body+='</div>';
+                    });
+                    body+='</div>';
+                }
+                body+='<div style="font-weight:700;font-size:14px;margin:14px 0 8px">📅 逐场记录</div>';
                 history.forEach(function(h){
-                    var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':'🎮 未知';
+                    var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':h.mode==='practice'?'📝 练习':h.mode==='smart'?'🧠 智能抽查':h.mode==='group'?'👥 分组':'🎮 未知';
                     var dateStr=new Date(h.date).toLocaleString('zh-CN');
                     var bankStr=h.bankNames.join('、')||'未知题库';
                     body+='<div class="sh-session">';
@@ -2120,7 +2135,7 @@
             empty.classList.remove('show');records.sort(function(a,b){return b.date-a.date});
             var html='';
             records.forEach(function(rec){
-                var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':'🎮 未知';
+                var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':rec.mode==='practice'?'📝 练习':rec.mode==='smart'?'🧠 智能抽查':rec.mode==='group'?'👥 分组':'🎮 未知';
                 var dateStr=new Date(rec.date).toLocaleString('zh-CN');
                 var srs=rec.studentResults||{};var sNames=Object.keys(srs).map(function(k){return srs[k].name});
                 var partLabel=rec.allParticipants?' 👥全员':'';
@@ -2195,7 +2210,7 @@
             var container=document.querySelector('.leaderboard-container h2.section-title');
             empty.classList.remove('show');
             var dateStr=new Date(rec.date).toLocaleString('zh-CN');
-            var modeLabel=rec.mode==='draw'?'多人挑战':rec.mode==='assign'?'单人挑战':rec.mode==='pk'?'PK':rec.mode==='farm'?'打野':rec.mode==='challenge'?'挑战':'未知';
+            var modeLabel=rec.mode==='draw'?'多人挑战':rec.mode==='assign'?'单人挑战':rec.mode==='pk'?'PK':rec.mode==='farm'?'打野':rec.mode==='challenge'?'挑战':rec.mode==='practice'?'练习':rec.mode==='smart'?'智能抽查':rec.mode==='group'?'分组':'未知';
             if(rec.mode==='group'||rec.participationType==='group'){
                 if(container)container.textContent='🏆 历史积分榜 - '+dateStr+' '+modeLabel;
                 App.Exam._renderGroupRanking(rec);
@@ -2221,6 +2236,20 @@
             var records=App.Storage.getRecords();var history=[];
             records.forEach(function(rec){var srs=rec.studentResults||{};if(srs[studentId]){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:srs[studentId].correctCount,totalCount:srs[studentId].totalCount,pointsEarned:srs[studentId].pointsEarned})}else if(rec.allParticipants){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:0,totalCount:0,pointsEarned:0,notDrawn:true})}});
             history.sort(function(a,b){return b.date-a.date});return history;
+        },
+        // 按题库汇总某学生历史：每份题库做了几次、答对多少、正确率、累计得分
+        summarizeByBank:function(history){
+            var map={},order=[];
+            (history||[]).forEach(function(h){
+                if(h.notDrawn)return;
+                var nm=(h.bankNames&&h.bankNames.length)?h.bankNames.join('、'):'未知题库';
+                if(!map[nm]){map[nm]={bank:nm,times:0,correct:0,total:0,points:0,lastDate:0};order.push(nm)}
+                var o=map[nm];
+                o.times++;o.correct+=(h.correctCount||0);o.total+=(h.totalCount||0);o.points+=(h.pointsEarned||0);
+                if(h.date>o.lastDate)o.lastDate=h.date;
+            });
+            return order.map(function(k){var o=map[k];o.pct=o.total>0?Math.round(o.correct/o.total*100):0;return o})
+                        .sort(function(a,b){return b.lastDate-a.lastDate});
         }
     };
 
