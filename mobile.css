@@ -359,17 +359,50 @@ html[data-ui="mobile"] .flb-item { min-width: 0; padding: 8px 2px; }
 html[data-ui="mobile"] .flb-name { font-size: 14px; }
 html[data-ui="mobile"] .remaining-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
-/* 学情/设置里的学生表格：容器内横向滚动，不撑破整页 */
-html[data-ui="mobile"] .student-table-wrap,
+/* 学情（只读成绩表）：竖版改卡片，彻底消除横向滚动 */
+html[data-ui="mobile"] .student-table-wrap { width: 100%; max-width: 100%; overflow-x: hidden; }
 html[data-ui="mobile"] #student-mgmt-wrap {
     width: 100%;
     max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
-html[data-ui="mobile"] .student-table { min-width: 700px; }
-html[data-ui="mobile"] .student-table th,
-html[data-ui="mobile"] .student-table td { padding: 10px 12px; font-size: 13px; }
+html[data-ui="mobile"] .student-table.readonly { min-width: 0; width: 100%; border: 0; background: transparent; }
+html[data-ui="mobile"] .student-table.readonly thead { display: none; }
+html[data-ui="mobile"] .student-table.readonly tbody tr {
+    display: block;
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-card);
+}
+html[data-ui="mobile"] .student-table.readonly td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+    border: 0;
+    font-size: 13px;
+}
+html[data-ui="mobile"] .student-table.readonly td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 12px;
+    flex: 0 0 auto;
+}
+html[data-ui="mobile"] .student-table.readonly td[data-label=""]::before { display: none; }
+html[data-ui="mobile"] .student-table.readonly td:nth-child(1) { justify-content: flex-start; }
+html[data-ui="mobile"] .student-table.readonly td:nth-child(2) { font-size: 16px; font-weight: 700; }
+html[data-ui="mobile"] .student-table.readonly td:last-child { justify-content: flex-end; padding-top: 8px; }
+/* 设置-学生（可编辑）仍可在容器内横滚 */
+html[data-ui="mobile"] .student-table.editable { min-width: 700px; }
+html[data-ui="mobile"] .student-table.editable th,
+html[data-ui="mobile"] .student-table.editable td { padding: 10px 12px; font-size: 13px; }
+/* 成绩详情弹窗：竖版铺满宽度、不横向溢出 */
+html[data-ui="mobile"] .modal { width: calc(100% - 16px); max-width: calc(100% - 16px); }
+html[data-ui="mobile"] #modal-body { overflow-x: hidden; }
 
 /* ---------- 4. 按钮 / 表单：点击区 >= 44px ---------- */
 html[data-ui="mobile"] .btn-primary,
