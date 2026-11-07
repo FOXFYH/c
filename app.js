@@ -3186,7 +3186,7 @@
                             var _sys={'系统-学生信息':1,'系统-考试数据':1,'系统-等级设置':1,'系统-AI配置':1};
                             _ix.forEach(function(f){
                                 if(_sys[f.name]&&(f.isNewFile||((f.e||0)>(f.s||0)))){
-                                    try{ self.forceSaveFile(f.name); }catch(e){}
+                                    try{ self._pushSystemToCloud(f.name); }catch(e){}
                                 }
                             });
                         }catch(e){}
@@ -3427,7 +3427,7 @@
                 if(this._forceTimers[dataType])clearTimeout(this._forceTimers[dataType]);
                 this._forceTimers[dataType]=setTimeout(function(){
                     _self._forceTimers[dataType]=null;
-                    try{ if(App.Sync&&App.Sync.forceSaveFile)App.Sync.forceSaveFile(_forceName); }catch(e){}
+                    try{ if(App.Sync&&App.Sync._pushSystemToCloud)App.Sync._pushSystemToCloud(_forceName); }catch(e){}
                 },1500);
             }
             var isLoggedIn=App.Login&&App.Login.isLoggedIn();
@@ -3568,6 +3568,59 @@
                 return;
             }
             this.postToFileManager({type:'forceSyncFile',name:name});
+        },
+        // 系统文件直传：宿主拿当前内存内容直接推云端，绕开文件管理器的内容缓存，杜绝“传的是旧快照”
+        _pushSystemToCloud:function(name){
+            var self=this;
+            if(!App.Login||!App.Login.isLoggedIn())return;
+            var user=App.Login._username,pwd=App.Login._password;
+            var st=App.Storage.getSettings();
+            var map={
+                '系统-学生信息':['EXAM_SYS_STUDENT_INFO',JSON.stringify(App.Storage.getStudents())],
+                '系统-考试数据':['EXAM_SYS_RECORDS',JSON.stringify(App.Storage.getRecords())],
+                '系统-等级设置':['EXAM_SYS_LEVELS',JSON.stringify(st.levels||[])],
+                '系统-AI配置':['EXAM_SYS_AI_CONFIG',JSON.stringify({aiApiUrl:st.aiApiUrl||'',aiApiKey:st.aiApiKey||'',aiModel:st.aiModel||''})]
+            };
+            var it=map[name];if(!it)return;
+            var fid=it[0]+'__'+user,content=it[1];
+            var idx=[];try{idx=JSON.parse(localStorage.getItem('exam_file_index')||'[]')}catch(e){}
+            var f=idx.find(function(x){return x.id===fid});
+            var s=f?(parseInt(f.s||0)||0):0,e=f?(parseInt(f.e||0)||0):0,isNew=f?!!f.isNewFile:true;
+            if(e<=s)e=s+1;
+            var dev='';try{dev=localStorage.getItem('exam_device_id')||('H'+Date.now().toString(36))}catch(e){}
+            var now=new Date(),pad=function(n){return n<10?'0'+n:''+n};
+            var ts=''+now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+            var folder='FOLDER_SYS__'+user;
+            var data={'拥有者':user,'ID':fid,'文件名':name,'内容':content,'起点号':String(s),'终点号':String(e),'文件夹路径':folder,'最后上传发起时间':ts,'最后编辑时间':ts,'同步时间':ts,'MD5':'','内容字符数':String([...content].length),'创建日期':(f&&f.createTime)||'','文件JSON':JSON.stringify({id:fid,name:name,内容:content,起点号:s,终点号:e,拥有者:user,文件夹路径:folder,创建日期:(f&&f.createTime)||'',最后编辑时间:ts,内容字符数:[...content].length})};
+            var call=function(argv){
+                var body={webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/519302387327/script/V2-6t4db1ZSsEPesqKsD7aj3/sync_task',message:{Context:{argv:argv}}};
+                return fetch('https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+                    .then(function(r){return r.json()}).then(function(j){return (j.data&&j.data.result)||j});
+            };
+            var unlock=function(){try{call({表格名:'抽奖考试',操作:'解锁',用户名:user,密码:pwd,锁登记处:dev})}catch(e){}};
+            var done=function(v){
+                try{
+                    var ix=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                    var ff=ix.find(function(x){return x.id===fid});
+                    if(ff){ff.s=v;ff.e=v;ff.isNewFile=false;ff.cloudOnly=false;ff.contentLength=[...content].length;ff.lastEditTime=ts}
+                    localStorage.setItem('exam_file_index',JSON.stringify(ix));
+                }catch(e){}
+                console.log('[Sync] 系统文件已直传云端：'+name+' v'+v);
+            };
+            call({表格名:'抽奖考试',操作:'同步提交',用户名:user,密码:pwd,锁登记处:dev,ID:fid,起点号:String(s),终点号:String(e),本地新文件标识:isNew?'true':'false',数据:data}).then(function(r){
+                var jr=r&&r.判定结果;
+                if(!r||r.status==='error'){unlock();return}
+                if(jr==='无需上传'){unlock();return}
+                var newS=parseInt(r.终点号||r.起点号||e)||e;
+                if(jr==='全新接收'){done(newS);unlock();return}
+                if(jr==='收为临时'){
+                    return call({表格名:'抽奖考试',操作:'转正确认',用户名:user,密码:pwd,锁登记处:dev,ID:fid,起点号:String(newS)}).then(function(r2){
+                        if(r2&&r2.status==='success')done(newS);
+                        unlock();
+                    });
+                }
+                unlock();
+            }).catch(function(){unlock()});
         },
         syncNow:function(){
             if(App.Login && !App.Login.isLoggedIn()){
