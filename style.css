@@ -4063,7 +4063,21 @@ input:checked + .slider:before {
     }
 }
 
-/* ===== 班主任 / 学生 双身份（v2.008） ===== */
+/* ===== 学情：一行一人 + 手风琴（一次只展开一个） ===== */
+.student-list{display:flex;flex-direction:column;gap:8px}
+.student-row{border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);overflow:hidden}
+.sr-head{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;user-select:none}
+.sr-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--accent-1),var(--accent-2));display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;flex:0 0 auto;overflow:hidden}
+.sr-avatar img{width:100%;height:100%;object-fit:cover}
+.sr-name{font-weight:700;font-size:15px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-points{color:var(--gold);font-size:14px;flex:0 0 auto}
+.sr-arrow{color:var(--text-muted);transition:transform .2s;flex:0 0 auto}
+.student-row.open .sr-arrow{transform:rotate(180deg)}
+.sr-body{display:none;padding:0 12px 10px;border-top:1px dashed var(--border-color)}
+.student-row.open .sr-body{display:block}
+.sr-line{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:13px;color:var(--text-secondary)}
+.sr-line b{color:var(--text-primary)}
+.sr-actions{padding-top:8px;text-align:right}
 #nav-login-status{cursor:pointer}
 #nav-login-status:hover{text-decoration:underline}
 /* 班主任看不到「练习」（练习只能由班主任切到某个学生后进入） */
