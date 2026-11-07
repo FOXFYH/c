@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.17
+  存储测试网页版 · 文件管理器        当前版本 6.19
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,8 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.19 (2026-11-07) 修同步竞态与登录门禁：①批量同步回执只在「上传期间本地没再改」时才清待上传标记，避免旧快照把本地新数据标成已同步；②批量/单文件下载遇到本地未上传改动一律跳过，绝不用云端旧内容覆盖；③上传回执过期判定用当前索引而不用旧快照；④抢锁重试 3→5 次；⑤登录门禁「读取索引」失败时改用「查找 ID 999999999」兜底，避免偶发超时导致一直提示读取不到校验行。
+    6.18 (2026-11-07) 修「本地改动被云端回写盖掉」：索引刷新时把临时行（ID 以 _TL 结尾 / 状态=临时）排除，不再当成正牌文件；本地若残留 _TL 条目且云端已有同名正牌行，作废该临时条目交正牌行重建。根因是首次同步的临时行未被转正，后续编辑全写进临时行、拉取时又用旧内容覆盖本地。
     6.17 (2026-11-07) 新增「一条消息批量读取全班总账」：按本地索引筛出「总账-<绝对ID>」轻账，一次「批量读取」全部取回并回给宿主，用于全班排名；不触碰「学生-<绝对ID>」详细账，避免几十条重账一次拉爆。
     6.16 (2026-11-07) 新增关键节点强制落云：宿主在一场答题结束时发 forceSyncFile，本端把指定文件立刻走两阶段提交上传，不再受「版本差≥10」阈值限制；版本差为 0 时先把终点号顶上去再推，避免被判「无需上传」；本地内容为空则不推，防止用空档盖掉云端。
     6.15 (2026-11-05) ①修「日志」「说明书」两个分页顶部一大片空白：这两个视图原本落在 #mainUI 之外，被当成独立一块挤到屏幕下半截，现启动时挪回主容器，铺满整屏。②新增右上角「横/竖」单字切换按钮，竖版由 html[data-fm="portrait"] 触发（不再绑死 560px 屏宽），可记忆；横版沿用基础 CSS，同一容器两向可用。
@@ -86,7 +88,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.17</title>
+<title>文件管理 v6.19</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -128,7 +130,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.17</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.19</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -1102,7 +1104,7 @@ async function _callCloudAPICore(action,params={}){
   const retryInterval=config.retryInterval||2;
   const fetchTimeout=30000;
   let lockRetryCount=0; // 抢锁重试计数
-  const maxLockRetries=3; // 最多抢锁重试3次
+  const maxLockRetries=5; // 最多抢锁重试5次（多账号同时在线时给对方留出释放时间）
   for(const apiUrl of allUrls){
     let lastError=null;
     let lastIsNetworkError=true;
@@ -3121,10 +3123,13 @@ async function pullAllCloudFilesByIds(ids){
   }
   let idx=getFileIndex();
   let count=0;
+  let skippedPending=0;
   for(const row of r.数据){
     const fid=row['ID'];
     if(!fid||!want.has(fid))continue;
     const existing=idx.find(x=>x.id===fid);
+    // 本地有未上传改动（新文件或终点号>起点号）→ 绝不用云端旧内容覆盖，等本地先同步
+    if(existing&&(existing.isNewFile||((existing.e||0)>(existing.s||0)))){skippedPending++;continue}
     if(isFolderId(fid)){if(existing)existing.cloudOnly=false;continue}
     const cp=parseCharCountStr(row['内容字符数']);
     if(cp&&cp.part>1){await downloadCloudFileById(fid,row['文件名']||'');count++;continue}
@@ -3153,6 +3158,12 @@ async function pullAllCloudFilesByIds(ids){
 }
 
 async function downloadCloudFileById(id,name){
+  const _ent=getFileIndex().find(x=>x.id===id);
+  // 本地有未上传改动 → 跳过下载，保护本地改动不被云端旧版本覆盖
+  if(_ent&&(_ent.isNewFile||((_ent.e||0)>(_ent.s||0)))){
+    console.log('[Sync] 跳过下载（本地有未上传改动）：'+(name||id));
+    return;
+  }
   const cloudResult=await findFileInCloudById(id);
   if(!cloudResult.networkOk){toast('网络异常，无法下载');return}
   if(!cloudResult.file){toast('云端文件不存在');return}
@@ -3964,8 +3975,12 @@ async function batchSync(skipLock){
               if(判==='无需上传'){noUpdate++;}
               else if(判==='全新接收'||判==='收为临时'){
                 const newS=parseInt(r.终点号||r.起点号||m.E)||m.E;
-                const ff=idx.find(x=>x.id===r.ID);
-                if(ff){ff.s=newS;setFileIndex(idx)}clearNewFileFlag(r.ID);
+                const curIdx=getFileIndex();
+                const ff=curIdx.find(x=>x.id===r.ID);
+                const snapE=parseInt(m.E||0)||0;
+                const curE=ff?(parseInt(ff.e||0)||0):0;
+                // 上传期间本地又改过（当前终点号已超过提交时的快照）→ 保留待上传状态，绝不清脏标记
+                if(ff&&curE<=snapE){ff.s=newS;setFileIndex(curIdx);clearNewFileFlag(r.ID);}
                 setLastSyncTime(Date.now());
                 if(判==='全新接收'){uploaded++;}
                 else{promoteList.push({ID:r.ID,起点号:String(newS)});}
@@ -4275,6 +4290,15 @@ async function refreshCloudIndex(){
       }
     }
     if(folderUpdatedCount>0)setFileIndex(idx0);
+    // 临时行（ID 以 _TL 结尾）不是正牌：云端已有同名正牌行时，本地 _TL 条目连缓存一并作废，交给正牌行重建
+    const isTempRow=(x)=>/_TL$/.test(String((x&&x.ID)||'').trim())||String((x&&x.状态)||'').trim()==='临时';
+    const officialByName={};
+    cloudFiles.forEach(cf=>{if(cf.ID&&!isTempRow(cf)&&cf.文件名)officialByName[cf.文件名]=cf});
+    const tempLocalIds=getFileIndex().filter(it=>it.id&&/_TL$/.test(String(it.id))&&officialByName[it.name]).map(it=>it.id);
+    if(tempLocalIds.length){
+      tempLocalIds.forEach(id=>{try{deleteFileFromLocal(id)}catch(e){}});
+      setFileIndex(getFileIndex().filter(it=>tempLocalIds.indexOf(it.id)<0));
+    }
     // 删除云端不存在的本地非新文件/文件夹
     const cloudIds=new Set(cloudFiles.filter(cf=>cf.ID).map(cf=>cf.ID));
     const idx=getFileIndex();
@@ -4291,6 +4315,7 @@ async function refreshCloudIndex(){
     let addedCount=0;
     for(const cf of cloudFiles){
       if(!cf.ID||cf.ID.trim()===''||localIds.has(cf.ID))continue;
+      if(isTempRow(cf))continue;
       // 跳过拆分片段
       const cp=parseCharCountStr(cf.内容字符数);if(cp&&cp.part>1)continue;
       if(isFolderId(cf.ID)){
@@ -4565,6 +4590,14 @@ window.addEventListener('message',function(e){
         try{
           const idxRes=await callCloudAPI('读取索引',{});
           if(!idxRes||idxRes.status!=='success'){
+            // 兜底：索引偶发超时/失败时，单独按 ID 查验证行，避免登录被卡死
+            try{
+              const vr=await callCloudAPI('查找',{列名:'ID',关键字:'999999999'});
+              if(vr&&vr.status==='success'&&Array.isArray(vr.数据)&&vr.数据.length){
+                notifyParent('loginGateResult',{ok:true,rows:vr.数据,contents:{},tongzhi:'索引失败，已用验证行兜底'});
+                return;
+              }
+            }catch(e2){}
             notifyParent('loginGateResult',{ok:false,rows:[],contents:{},tongzhi:(idxRes&&idxRes.tongzhi)||''});
             return;
           }
