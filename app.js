@@ -650,6 +650,14 @@
             this.renderRulesPanel(mode,lastPT);
             if(lastPT==='group')this.renderGroupSelect();
             else this.renderStudentSelect();
+            // 学生模式练习：进入即锁定本人，避免列表重绘后丢失选中
+            if(isPractice&&App.Role&&App.Role.isStudent()){
+                var _only=document.querySelector('.student-select-item');
+                if(_only&&!_only.classList.contains('selected')){
+                    _only.classList.add('selected');
+                    var _cm=_only.querySelector('.check-mark');if(_cm)_cm.textContent='✓';
+                }
+            }
             App.Questions.renderBankSelect();
             var bankBar=document.getElementById('exam-bank-bar');
             if(bankBar)bankBar.style.display=isLottery?'none':'';
@@ -815,6 +823,10 @@
             var mode=this.currentMode;
             var pType=this.participationType;
             var selectedIds=this.getSelectedStudentIds();
+            // 学生模式练习：即使界面选中态丢了，也默认锁定当前扮演的学生
+            if(mode==='practice'&&App.Role&&App.Role.isStudent()&&selectedIds.length!==1){
+                selectedIds=[App.Role.actingId()];
+            }
             var groupNames=[];
             var examStudents;
             var isPractice=mode==='practice';
@@ -2900,7 +2912,7 @@
             },
             processImport:function(text){
                 var lines=text.split('\n'),students=App.Storage.getStudents(),count=0;
-                lines.forEach(function(line){line=line.trim();if(!line)return;var parts=line.split(','),name=parts[0].trim(),gender=parts[1]?parts[1].trim():'',group=parts[2]?parts[2].trim():'';if(name){var exists=students.some(function(s){return s.name===name});if(!exists){students.push({id:genId(),name:name,avatar:'',gender:gender,group:group,createdAt:Date.now()});count++}}});
+                lines.forEach(function(line){line=line.trim();if(!line)return;var parts=line.split(','),name=parts[0].trim(),gender=parts[1]?parts[1].trim():'',group=parts[2]?parts[2].trim():'';if(name){var exists=students.some(function(s){return s.name===name});if(!exists){var sid=App.Ledger?App.Ledger.genAbsId():genId();students.push({id:sid,absId:sid,name:name,avatar:'',gender:gender,group:group,createdAt:Date.now()});count++}}});
                 App.Storage.setStudents(students);App.Modal.close();this.render();App.Students.render();App.Toast.show('成功导入 '+count+' 名学生','success');
             }
         }
@@ -3280,6 +3292,24 @@
         },
         _applyContentToApp:function(dataType,content){
             try{
+                if(content===undefined||content===null||String(content).trim()==='')return;
+                // 本地有未上传改动时，拒绝云端旧内容覆盖（防止同步回写把刚改的数据打回旧版）
+                try{
+                    var _fid=this._getFileIdForDataType(dataType);
+                    if(_fid){
+                        var _idx=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                        var _ent=_idx.find(function(x){return x.id===_fid});
+                        if(_ent&&(_ent.isNewFile||((_ent.e||0)>(_ent.s||0)))){
+                            console.log('[Sync] 本地有未上传改动，忽略云端旧内容：'+dataType);
+                            return;
+                        }
+                    }
+                }catch(_e){}
+                // 本地 30 秒内刚改过 → 暂时拒绝云端回包，避免同步竞态覆盖刚录入的数据
+                if(this._localEditAt&&this._localEditAt[dataType]&&(Date.now()-this._localEditAt[dataType]<30000)){
+                    console.log('[Sync] 本地刚改过，暂不接受云端覆盖：'+dataType);
+                    return;
+                }
                 var data=JSON.parse(content);
                 App.Storage._syncSilent=true;
                 try{
@@ -3356,6 +3386,20 @@
         },
         notifyChange:function(dataType,data){
             if(!this.ready)return;
+            // 记录本地最近一次改动时刻：15 秒内拒绝云端旧回包覆盖，防同步竞态把刚改的数据打回旧版
+            this._localEditAt=this._localEditAt||{};
+            this._localEditAt[dataType]=Date.now();
+            // 系统文件一改就（1.5 秒防抖后）强制落云，不等「版本差≥10」或 5 分钟兜底
+            var _forceName={students:'系统-学生信息',records:'系统-考试数据',levels:'系统-等级设置',aiConfig:'系统-AI配置'}[dataType];
+            if(_forceName&&App.Login&&App.Login.isLoggedIn()){
+                this._forceTimers=this._forceTimers||{};
+                var _self=this;
+                if(this._forceTimers[dataType])clearTimeout(this._forceTimers[dataType]);
+                this._forceTimers[dataType]=setTimeout(function(){
+                    _self._forceTimers[dataType]=null;
+                    try{ if(App.Sync&&App.Sync.forceSaveFile)App.Sync.forceSaveFile(_forceName); }catch(e){}
+                },1500);
+            }
             var isLoggedIn=App.Login&&App.Login.isLoggedIn();
             var prefix='exam';
             if(dataType==='banks'){
@@ -3687,6 +3731,8 @@
                     var r=rows[j];
                     var nm=String(r.文件名||'');
                     var ow=String(r.拥有者||'').trim();
+                    // 临时行(_TL)不是正牌，绝不参与门禁与内容对齐
+                    if(/_TL$/.test(String(r.ID||'').trim()))continue;
                     if(nm.indexOf('系统-')===0&&(!ow||ow===user))sysRows.push(r);
                 }
                 var prefix='exam';
@@ -3694,10 +3740,27 @@
                 var cloudNameMap={};
                 sysRows.forEach(function(r){cloudNameMap[String(r.文件名||'')]=r});
                 var std=[['EXAM_SYS_STUDENT_INFO','系统-学生信息'],['EXAM_SYS_RECORDS','系统-考试数据'],['EXAM_SYS_LEVELS','系统-等级设置'],['EXAM_SYS_AI_CONFIG','系统-AI配置']];
-                var missing=std.filter(function(s){return !cloudNameMap[s[1]]}).map(function(s){return s[0]});
+                var missing=std.filter(function(s){
+                    var cr=cloudNameMap[s[1]];
+                    if(!cr)return true;
+                    // 云端行存在但内容为空（只有建行、没传过内容）→ 也按缺失补建，否则永远拉回空档
+                    var cc=(msg.contents&&msg.contents[String(cr.ID)])||'';
+                    return !String(cc).trim();
+                }).map(function(s){return s[0]});
                 if(missing.length>0){
                     // 精确到单个文件：云端缺哪个系统文件，本地才补建哪个
                     App.Sync.ensureAccountSystemFiles(true,missing);
+                    // 补建后若索引里仍缺（首次同步偶发被刷新覆盖），6 秒后再补一次
+                    setTimeout(function(){
+                        try{
+                            var ix=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
+                            var still=missing.filter(function(k){return !ix.some(function(x){return String(x.id||'').indexOf(k)===0})});
+                            if(still.length){
+                                console.log('[Gate] 系统文件补建重试：'+still.join(','));
+                                App.Sync.ensureAccountSystemFiles(true,still);
+                            }
+                        }catch(e){}
+                    },6000);
                 }
                 if(sysRows.length>0){
                     var dtMap={'系统-学生信息':'students','系统-考试数据':'records','系统-等级设置':'levels','系统-AI配置':'aiConfig'};
@@ -3780,10 +3843,10 @@
                             var gateTimer=setInterval(function(){
                                 gateTries++;
                                 App.Sync.postToFileManager({type:'loginGateReadAll'});
-                                if(App.Sync._gateDone||gateTries>=8)clearInterval(gateTimer);
+                                if(App.Sync._gateDone||gateTries>=12)clearInterval(gateTimer);
                             },3000);
                             App.Sync.postToFileManager({type:'loginGateReadAll'});
-                            // 兜底：40 秒仍未通过则提示，避免永远挡着
+                            // 兜底：60 秒仍未通过则提示，避免永远挡着
                             setTimeout(function(){
                                 if(!App.Sync._gateDone){
                                     var t=document.getElementById('gate-text');
@@ -3792,7 +3855,7 @@
                                     var m=document.getElementById('gate-mask');
                                     if(m)m.style.display='none';
                                 }
-                            },40000);
+                            },60000);
                         }
                     }
                 });
