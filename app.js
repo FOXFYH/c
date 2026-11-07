@@ -268,25 +268,27 @@
             });
             var html=filterHTML;
             var avMap=buildAvatarCharMap(filtered);
-            html+='<table class="student-table readonly"><thead><tr>';
-            html+='<th>头像</th><th>姓名</th><th>积分</th><th>等级</th><th>正确率</th><th>正确/总题</th><th>性别</th><th>小组</th><th>场次</th><th>详情</th>';
-            html+='</tr></thead><tbody>';
+            html+='<div class="student-list">';
             filtered.forEach(function(s){
                 var lv=getLevel(s.totalPoints);
-                html+='<tr data-id="'+s.id+'">';
-                html+='<td data-label=""><div class="st-avatar-cell">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div></td>';
-                html+='<td class="st-name-readonly" data-label="姓名" style="cursor:pointer" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看该生详情">'+s.name+'</td>';
-                html+='<td class="st-points-readonly" data-label="积分" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看积分详情">⭐ '+s.totalPoints+'</td>';
-                html+='<td data-label="等级"><span class="st-level-badge">'+lv.name+'</span></td>';
-                html+='<td data-label="正确率">'+(s.totalCount>0?s.accuracy+'%':'-')+'</td>';
-                html+='<td data-label="正确/总题">'+(s.totalCount>0?s.totalCorrect+'/'+s.totalCount:'-')+'</td>';
-                html+='<td data-label="性别">'+(s.gender||'-')+'</td>';
-                html+='<td data-label="小组">'+(s.group||'-')+'</td>';
-                html+='<td data-label="场次">'+s.sessions+'</td>';
-                html+='<td data-label=""><button class="btn-secondary btn-sm" onclick="App.Students.showPointsDetail(\''+s.id+'\')">查看</button></td>';
-                html+='</tr>';
+                html+='<div class="student-row" data-id="'+s.id+'">';
+                html+='<div class="sr-head" onclick="App.Students.toggleRow(this)">';
+                html+='<span class="sr-avatar">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</span>';
+                html+='<span class="sr-name">'+s.name+'</span>';
+                html+='<span class="sr-points">⭐ '+s.totalPoints+'</span>';
+                html+='<span class="sr-arrow">▾</span>';
+                html+='</div>';
+                html+='<div class="sr-body">';
+                html+='<div class="sr-line"><span>等级</span><b>'+lv.name+'</b></div>';
+                html+='<div class="sr-line"><span>正确率</span><b>'+(s.totalCount>0?s.accuracy+'%':'-')+'</b></div>';
+                html+='<div class="sr-line"><span>正确/总题</span><b>'+(s.totalCount>0?s.totalCorrect+'/'+s.totalCount:'-')+'</b></div>';
+                html+='<div class="sr-line"><span>性别</span><b>'+(s.gender||'-')+'</b></div>';
+                html+='<div class="sr-line"><span>小组</span><b>'+(s.group||'-')+'</b></div>';
+                html+='<div class="sr-line"><span>场次</span><b>'+s.sessions+'</b></div>';
+                html+='<div class="sr-actions"><button class="btn-secondary btn-sm" onclick="event.stopPropagation();App.Students.showPointsDetail(\''+s.id+'\')">查看完整详情</button></div>';
+                html+='</div></div>';
             });
-            html+='</tbody></table>';
+            html+='</div>';
             wrap.innerHTML=html;
             if(App.Students&&App.Students.renderRanking)App.Students.renderRanking();
         },
@@ -315,6 +317,15 @@
             });
             html+='</div>';
             el.innerHTML=html;
+        },
+        // 学情：一次只展开一个学生
+        toggleRow:function(el){
+            var row=el&&el.closest?el.closest('.student-row'):null;
+            if(!row)return;
+            var open=row.classList.contains('open');
+            document.querySelectorAll('.student-row.open').forEach(function(r){r.classList.remove('open')});
+            if(!open)row.classList.add('open');
+            if(App.Effects&&App.Effects.playClick)App.Effects.playClick();
         },
         showPointsDetail:function(id){
             var students=App.Storage.getStudents();
