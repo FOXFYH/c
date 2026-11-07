@@ -3941,7 +3941,8 @@
                         try{
                             var _st=JSON.parse(localStorage.getItem('exam_students')||'[]');
                             var _rc=JSON.parse(localStorage.getItem('exam_records')||'[]');
-                            var _hasLocal=((_rc&&_rc.length)||0)>0 || (_st||[]).some(function(s){return !s._demo});
+                            var _hasReal=(_st||[]).filter(function(s){return s&&s.id&&String(s.id).indexOf('demo_')!==0});
+                            var _hasLocal=((_rc&&_rc.length)||0)>0 || _hasReal.length>0;
                             if(_hasLocal){
                                 setTimeout(function(){
                                     App.Sync._gateSoftReleased=true;
