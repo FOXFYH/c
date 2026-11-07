@@ -83,7 +83,7 @@
             if(!this._syncSilent)App.Sync.notifyChange('banks',b)
         },
         getRecords:function(){return this.get('records',[])},
-        setRecords:function(r){this.set('records',r);if(!this._syncSilent){App.Sync.notifyChange('records',r);if(App.Sync.forceSaveFile)App.Sync.forceSaveFile('系统-考试数据')}},
+        setRecords:function(r){this.set('records',r);if(!this._syncSilent){App.Sync.notifyChange('records',r);if(App.Sync.forceSaveFile&&App.Sync._pref('on_exam_end'))App.Sync.forceSaveFile('系统-考试数据')}},
         getExamProgress:function(){return this.get('examProgress',null)},
         setExamProgress:function(p){this.set('examProgress',p)},
         clearExamProgress:function(){localStorage.removeItem('exam_examProgress')},
@@ -2443,6 +2443,10 @@
             App.Toast.show('音效设置已保存','success');
         },
         loadSyncSettings:function(){
+            var e=document.getElementById('sync-on-exam-end');
+            var x=document.getElementById('sync-on-exit');
+            if(e)e.checked=this._pref('on_exam_end');
+            if(x)x.checked=this._pref('on_exit');
             this.updateSyncStatus();
         },
         saveSyncSettings:function(){
@@ -2941,7 +2945,10 @@
                     self.postToFileManager({type:'mainActivated'});
                     self._ensureCoreStars();
                 }
+                if(document.hidden&&self.ready){ self.syncOnExit(); }
             });
+            window.addEventListener('pagehide',function(){ if(App.Sync)App.Sync.syncOnExit(); });
+            window.addEventListener('beforeunload',function(){ if(App.Sync)App.Sync.syncOnExit(); });
             setTimeout(function(){
                 self.migrateOldData();
                 self._sendInitAndAuth();   // 首屏唯一一条握手；索引同步由 initSession 在管理器内触发一次
@@ -3252,6 +3259,22 @@
                     if(isLoggedIn)this.postToFileManager({type:'syncAllFiles'});
                 }
             }
+        },
+        // 同步开关（默认开）：on_exam_end=考试结束立即同步，on_exit=退出/切后台时同步
+        _pref:function(k){
+            try{var v=localStorage.getItem('exam_sync_'+k);return v===null?true:v==='1'}catch(e){return true}
+        },
+        setPref:function(k,on){
+            try{localStorage.setItem('exam_sync_'+k,on?'1':'0')}catch(e){}
+        },
+        // 退出/切后台时补一次：只推有本地改动的系统文件，尽力而为
+        syncOnExit:function(){
+            if(!this._pref('on_exit'))return;
+            if(App.Login&&!App.Login.isLoggedIn())return;
+            if(!this._anyFrameReady)return;
+            ['系统-考试数据','系统-学生信息'].forEach(function(nm){
+                App.Sync.postToFileManager({type:'forceSyncFile',name:nm});
+            });
         },
         // 关键节点保存：一场答题结束立刻点名让文件管理器把该文件推上云，不等「版本差≥10」
         forceSaveFile:function(name){
