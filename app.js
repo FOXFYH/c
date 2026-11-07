@@ -3002,6 +3002,7 @@
     App.Sync = {
         frame:null,
         ready:false,
+        _sessionReady:false,
         _isFileManagerOpen:false,
         _currentFileName:'',
         _pulling:false,
@@ -3037,6 +3038,7 @@
                         }
                         break;
                     case 'sessionReady':
+                        self._sessionReady=true;
                         // H9二次：索引建好后主动拉一次，别等 syncComplete 再拉（否则通知被拆成两帧）
                         setTimeout(function(){ self.pullAllCloudContent(); },3000);
                         setTimeout(function(){ self.pullAllCloudContent(); },6500);
@@ -3174,6 +3176,18 @@
                 self._sendInitAndAuth();   // 首屏唯一一条握手；索引同步由 initSession 在管理器内触发一次
                 self.ready=true;
                 self._ensureCoreStars();
+                // 握手保底：fmReady 可能在监听器挂上之前就发丢了，每 4 秒补发一次 initSession，直到 sessionReady
+                if(!self._hsTimer){
+                    self._hsTimer=setInterval(function(){
+                        if(self._sessionReady){clearInterval(self._hsTimer);self._hsTimer=null;return}
+                        try{
+                            var m={target:'fileManager',type:'initSession',appPrefix:'exam',syncOnReady:true};
+                            if(App.Login&&App.Login.isLoggedIn()){m.username=App.Login._username;m.password=App.Login._password}
+                            self.postToFileManager(m);
+                        }catch(e){}
+                    },4000);
+                    setTimeout(function(){ if(self._hsTimer){clearInterval(self._hsTimer);self._hsTimer=null} },90000);
+                }
             },1500);
         },
         getFrame:function(){
