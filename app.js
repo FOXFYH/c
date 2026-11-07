@@ -3882,7 +3882,7 @@
                     return cl>0 && !String((msg.contents&&msg.contents[String(r.ID)])||'').trim();
                 });
                 if(missContent){
-                    App.Sync._showGate('正在读取云端系统文件…');
+                    if(!App.Sync._gateSoftReleased)App.Sync._showGate('正在读取云端系统文件…');
                     return;
                 }
                 App.Sync._gateBlocked=false;
@@ -3893,7 +3893,7 @@
                     var idx2=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
                     pending=idx2.some(function(x){return String(x.id).indexOf('EXAM_SYS')===0&&((x.isNewFile)||((x.e||0)>(x.s||0)))});
                 }catch(e){}
-                if(pending)App.Sync._showGate('系统文件正在对齐云端…');
+                if(pending&&!App.Sync._gateSoftReleased)App.Sync._showGate('系统文件正在对齐云端…');
                 else App.Sync._hideGate();
                 console.log('[Gate] 云端校验通过，系统文件 '+sysRows.length+' 个');
             }catch(e){console.error('[Gate] 校验异常:',e)}
@@ -3937,6 +3937,17 @@
                     }else{
                         // 登录门禁：只校验系统文件；题库文件按需下载。一致后才放行
                         if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在校验云端系统文件…');
+                        // 本地已有缓存 → 1.8 秒后先放行显示本地数据，云端校验转后台继续，不再干等十几秒
+                        try{
+                            var _hasLocal=(localStorage.getItem('exam_records')!==null)||(localStorage.getItem('exam_students')!==null);
+                            if(_hasLocal){
+                                setTimeout(function(){
+                                    App.Sync._gateSoftReleased=true;
+                                    if(App.Sync._hideGate)App.Sync._hideGate();
+                                    if(App.Toast)App.Toast.show('云端校验在后台继续，先显示本地数据','info');
+                                },1800);
+                            }
+                        }catch(e){}
                         if(App.Sync&&App.Sync.postToFileManager){
                             var gateTries=0;
                             var gateTimer=setInterval(function(){
