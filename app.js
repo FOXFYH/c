@@ -619,7 +619,8 @@
             var lastPT=settings.lastParticipationType||'personal';
             this.participationType=lastPT;
             var isLottery=mode==='lottery';
-            if(isLottery){this.participationType='personal';lastPT='personal'}
+            // 抽签与练习都只能个人参与：即使上一次是小组，也强制切回个人，否则练习看不到学生列表
+            if(isLottery||mode==='practice'){this.participationType='personal';lastPT='personal'}
             document.getElementById('exam-mode-select').classList.add('hidden');
             document.getElementById('exam-setup').classList.remove('hidden');
             var titleEl=document.getElementById('setup-mode-title');
@@ -652,11 +653,15 @@
             else this.renderStudentSelect();
             // 学生模式练习：进入即锁定本人，避免列表重绘后丢失选中
             if(isPractice&&App.Role&&App.Role.isStudent()){
-                var _only=document.querySelector('.student-select-item');
-                if(_only&&!_only.classList.contains('selected')){
-                    _only.classList.add('selected');
-                    var _cm=_only.querySelector('.check-mark');if(_cm)_cm.textContent='✓';
-                }
+                [0,300,900].forEach(function(ms){
+                    setTimeout(function(){
+                        var _only=document.querySelector('.student-select-item');
+                        if(_only&&!_only.classList.contains('selected')){
+                            _only.classList.add('selected');
+                            var _cm=_only.querySelector('.check-mark');if(_cm)_cm.textContent='✓';
+                        }
+                    },ms);
+                });
             }
             App.Questions.renderBankSelect();
             var bankBar=document.getElementById('exam-bank-bar');
