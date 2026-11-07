@@ -83,7 +83,7 @@
             if(!this._syncSilent)App.Sync.notifyChange('banks',b)
         },
         getRecords:function(){return this.get('records',[])},
-        setRecords:function(r){this.set('records',r);if(!this._syncSilent)App.Sync.notifyChange('records',r)},
+        setRecords:function(r){this.set('records',r);if(!this._syncSilent){App.Sync.notifyChange('records',r);if(App.Sync.forceSaveFile)App.Sync.forceSaveFile('系统-考试数据')}},
         getExamProgress:function(){return this.get('examProgress',null)},
         setExamProgress:function(p){this.set('examProgress',p)},
         clearExamProgress:function(){localStorage.removeItem('exam_examProgress')},
@@ -2814,6 +2814,11 @@
                             var _pd=self._pendingBankDeletes;self._pendingBankDeletes=[];
                             _pd.forEach(function(m){self.postToFileManager(m)});
                         }
+                        // 帧就绪前攒下的关键节点保存请求，就绪后补发
+                        if(self._pendingForceSaves&&self._pendingForceSaves.length){
+                            var _pfs=self._pendingForceSaves;self._pendingForceSaves=[];
+                            _pfs.forEach(function(nm){self.postToFileManager({type:'forceSyncFile',name:nm})});
+                        }
                         break;
                     case 'sessionReady':
                         // H9二次：索引建好后主动拉一次，别等 syncComplete 再拉（否则通知被拆成两帧）
@@ -2851,6 +2856,11 @@
                         break;
                     case 'syncToast':
                         if(!self._isFileManagerOpen)App.Toast.show(msg.message||'','info');
+                        break;
+                    case 'forceSyncResult':
+                        // 关键节点保存结果：成功只记日志，失败必须让老师看见
+                        console.log('[Save] 关键节点保存:',msg.name,msg.ok,msg.status||msg.reason||'',msg.message||'');
+                        if(!msg.ok&&msg.reason!=='empty_local')App.Toast.show('「'+(msg.name||'数据')+'」未能保存到云端：'+((msg.message||msg.reason||'未知原因'))+'，请点「☁️ 立即同步」重试','error');
                         break;
                     case 'registerResult':
                         console.log('[Sync] 注册结果:',msg.success,msg.name,msg.id);
@@ -3242,6 +3252,17 @@
                     if(isLoggedIn)this.postToFileManager({type:'syncAllFiles'});
                 }
             }
+        },
+        // 关键节点保存：一场答题结束立刻点名让文件管理器把该文件推上云，不等「版本差≥10」
+        forceSaveFile:function(name){
+            if(!name)return;
+            if(App.Login&&!App.Login.isLoggedIn())return;
+            if(!this._anyFrameReady){
+                this._pendingForceSaves=this._pendingForceSaves||[];
+                this._pendingForceSaves.push(name);
+                return;
+            }
+            this.postToFileManager({type:'forceSyncFile',name:name});
         },
         syncNow:function(){
             if(App.Login && !App.Login.isLoggedIn()){
