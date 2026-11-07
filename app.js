@@ -274,16 +274,16 @@
             filtered.forEach(function(s){
                 var lv=getLevel(s.totalPoints);
                 html+='<tr data-id="'+s.id+'">';
-                html+='<td><div class="st-avatar-cell">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div></td>';
-                html+='<td class="st-name-readonly" style="cursor:pointer" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看该生详情">'+s.name+'</td>';
-                html+='<td class="st-points-readonly" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看积分详情">⭐ '+s.totalPoints+'</td>';
-                html+='<td><span class="st-level-badge">'+lv.name+'</span></td>';
-                html+='<td>'+(s.totalCount>0?s.accuracy+'%':'-')+'</td>';
-                html+='<td>'+(s.totalCount>0?s.totalCorrect+'/'+s.totalCount:'-')+'</td>';
-                html+='<td>'+(s.gender||'-')+'</td>';
-                html+='<td>'+(s.group||'-')+'</td>';
-                html+='<td>'+s.sessions+'</td>';
-                html+='<td><button class="btn-secondary btn-sm" onclick="App.Students.showPointsDetail(\''+s.id+'\')">查看</button></td>';
+                html+='<td data-label=""><div class="st-avatar-cell">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div></td>';
+                html+='<td class="st-name-readonly" data-label="姓名" style="cursor:pointer" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看该生详情">'+s.name+'</td>';
+                html+='<td class="st-points-readonly" data-label="积分" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看积分详情">⭐ '+s.totalPoints+'</td>';
+                html+='<td data-label="等级"><span class="st-level-badge">'+lv.name+'</span></td>';
+                html+='<td data-label="正确率">'+(s.totalCount>0?s.accuracy+'%':'-')+'</td>';
+                html+='<td data-label="正确/总题">'+(s.totalCount>0?s.totalCorrect+'/'+s.totalCount:'-')+'</td>';
+                html+='<td data-label="性别">'+(s.gender||'-')+'</td>';
+                html+='<td data-label="小组">'+(s.group||'-')+'</td>';
+                html+='<td data-label="场次">'+s.sessions+'</td>';
+                html+='<td data-label=""><button class="btn-secondary btn-sm" onclick="App.Students.showPointsDetail(\''+s.id+'\')">查看</button></td>';
                 html+='</tr>';
             });
             html+='</tbody></table>';
