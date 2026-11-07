@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.16
+  存储测试网页版 · 文件管理器        当前版本 6.17
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.17 (2026-11-07) 新增「一条消息批量读取全班总账」：按本地索引筛出「总账-<绝对ID>」轻账，一次「批量读取」全部取回并回给宿主，用于全班排名；不触碰「学生-<绝对ID>」详细账，避免几十条重账一次拉爆。
     6.16 (2026-11-07) 新增关键节点强制落云：宿主在一场答题结束时发 forceSyncFile，本端把指定文件立刻走两阶段提交上传，不再受「版本差≥10」阈值限制；版本差为 0 时先把终点号顶上去再推，避免被判「无需上传」；本地内容为空则不推，防止用空档盖掉云端。
     6.15 (2026-11-05) ①修「日志」「说明书」两个分页顶部一大片空白：这两个视图原本落在 #mainUI 之外，被当成独立一块挤到屏幕下半截，现启动时挪回主容器，铺满整屏。②新增右上角「横/竖」单字切换按钮，竖版由 html[data-fm="portrait"] 触发（不再绑死 560px 屏宽），可记忆；横版沿用基础 CSS，同一容器两向可用。
     6.14 (2026-11-05) 手机竖版界面重做：电脑那两排大按钮在手机上全部隐藏，改为顶部单行 5 个紧凑小按钮（同步/刷新/新建/打开/更多），其余 9 个操作收进底部「更多」抽屉；文件列表改为两行小卡片（首行图标+文件名，次行版本号/字数/状态，右侧星标与删除），文件区占满剩余高度；底部凭据条压成单行。电脑横版不变。
@@ -85,7 +86,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.16</title>
+<title>文件管理 v6.17</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -127,7 +128,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.16</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.17</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -2007,6 +2008,15 @@ function toggleMoreSheet(open){
 }
 function moreClose(){toggleMoreSheet(false)}
 
+// 总账文件：把总分写进云端 MD5 列，供表格「总分」公式列与 SUM 汇总读取（不改云脚本）
+function ledgerPointsOf(name,content){
+  try{
+    if(String(name||'').indexOf('总账-')!==0)return '';
+    const o=JSON.parse(content||'{}');
+    return (o&&o.points!==undefined)?String(o.points):'';
+  }catch(e){return ''}
+}
+
 function renderFileList(){
   const list=document.getElementById('fileList');
   const idx=getFileIndex().sort((a,b)=>b.time-a.time||a.name.localeCompare(b.name));
@@ -3734,7 +3744,7 @@ async function syncOneFileTwoPhase(f){
       '最后上传发起时间':formatBeijingTime(netTime),
       '最后编辑时间':f.lastEditTime||formatBeijingTime(netTime),
       '同步时间':formatBeijingTime(netTime),
-      'MD5':'',
+      'MD5':ledgerPointsOf(f.name,content),
       '内容字符数':String(countChars(content)),
       '创建日期':f.createTime||'',
       // 云端主体：整个文件JSON（含内容、S/E、文件名、路径、拥有者、时间戳等全部信息）
@@ -3930,7 +3940,7 @@ async function batchSync(skipLock){
           '最后上传发起时间':formatBeijingTime(netTime),
           '最后编辑时间':f.lastEditTime||formatBeijingTime(netTime),
           '同步时间':formatBeijingTime(netTime),
-          'MD5':'',
+          'MD5':ledgerPointsOf(f.name,content),
           '内容字符数':String(countChars(content)),
           '创建日期':f.createTime||'',
           '文件JSON':JSON.stringify({id:f.id,name:f.name,内容:content,起点号:S,终点号:E,拥有者:f.owner||'',文件夹路径:f.folder||'',创建日期:f.createTime||'',最后编辑时间:f.lastEditTime||formatBeijingTime(netTime),内容字符数:countChars(content)})
@@ -4800,6 +4810,32 @@ window.addEventListener('message',function(e){
         }catch(e){
           notifyParent('forceSyncResult',{name:nm,ok:false,reason:'exception',message:e.message});
           toast('云端保存异常：'+nm+'（'+e.message+'）');
+        }
+      })();
+      break;
+
+    // 一条消息批量读取全班总账（只读轻账「总账-<绝对ID>」，不碰详细账）
+    case 'pullLedgerSummaries':
+      (async function(){
+        try{
+          const idx=getFileIndex().filter(f=>!isFolderItem(f)&&String(f.name||'').indexOf('总账-')===0&&f.id);
+          if(!idx.length){notifyParent('ledgerSummaries',{items:[],tongzhi:'本地还没有总账文件'});return}
+          const rd=await callCloudAPI('批量读取',{ID列表:idx.map(f=>f.id)});
+          if(!rd||rd.status!=='success'){
+            notifyParent('ledgerSummaries',{items:[],tongzhi:(rd&&rd.tongzhi)||'读取失败'});
+            return;
+          }
+          const items=[];
+          for(const row of (rd.数据||[])){
+            let c=extractCloudContent(row);
+            if(!c){try{c=(JSON.parse(row['文件JSON']||'{}').内容)||''}catch(e){}}
+            if(!c)continue;
+            try{const o=JSON.parse(c);if(o&&o.absId)items.push(o)}catch(e){}
+          }
+          notifyParent('ledgerSummaries',{items:items,tongzhi:''});
+          toast('已批量读取总账 '+items.length+' 条');
+        }catch(e){
+          notifyParent('ledgerSummaries',{items:[],tongzhi:e.message});
         }
       })();
       break;
