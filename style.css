@@ -4062,3 +4062,23 @@ input:checked + .slider:before {
         align-items: stretch;
     }
 }
+
+/* ===== 班主任 / 学生 双身份（v2.008） ===== */
+#nav-login-status{cursor:pointer}
+#nav-login-status:hover{text-decoration:underline}
+/* 班主任看不到「练习」（练习只能由班主任切到某个学生后进入） */
+body.role-teacher .mode-card[data-mode="practice"]{display:none}
+/* 学生模式只保留单人可完成的模式 */
+body.role-student .mode-card:not([data-mode="practice"]){display:none}
+/* 班主任专属的操作整块隐藏 */
+body.role-student [data-teacher-only],
+body.role-student .teacher-only{display:none!important}
+body.role-student #stab-levels,
+body.role-student #stab-ai,
+body.role-student #stab-students,
+body.role-student #stab-records,
+body.role-student #stab-sync{display:none!important}
+/* 学生模式顶部身份提示条 */
+#role-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin:0 auto 10px;max-width:1100px;border-radius:10px;background:rgba(231,126,34,.12);border:1px solid rgba(231,126,34,.35);font-size:13px}
+body.role-student #role-bar{display:flex}
+#role-bar .role-back{margin-left:auto}
