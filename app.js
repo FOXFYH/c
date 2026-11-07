@@ -2670,8 +2670,8 @@
         loadSyncSettings:function(){
             var e=document.getElementById('sync-on-exam-end');
             var x=document.getElementById('sync-on-exit');
-            if(e)e.checked=this._pref('on_exam_end');
-            if(x)x.checked=this._pref('on_exit');
+            if(e)e.checked=App.Sync._pref('on_exam_end');
+            if(x)x.checked=App.Sync._pref('on_exit');
             this.updateSyncStatus();
         },
         saveSyncSettings:function(){
