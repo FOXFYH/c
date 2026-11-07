@@ -3176,6 +3176,22 @@
                 self._sendInitAndAuth();   // 首屏唯一一条握手；索引同步由 initSession 在管理器内触发一次
                 self.ready=true;
                 self._ensureCoreStars();
+                // 系统文件补传：另一台设备占着云端写锁时先保住本地，每 60 秒重试一次，锁一空就自动补传
+                if(!self._pendingSyncTimer){
+                    self._pendingSyncTimer=setInterval(function(){
+                        if(!App.Login||!App.Login.isLoggedIn())return;
+                        if(!self._anyFrameReady)return;
+                        try{
+                            var _ix=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                            var _sys={'系统-学生信息':1,'系统-考试数据':1,'系统-等级设置':1,'系统-AI配置':1};
+                            _ix.forEach(function(f){
+                                if(_sys[f.name]&&(f.isNewFile||((f.e||0)>(f.s||0)))){
+                                    try{ self.forceSaveFile(f.name); }catch(e){}
+                                }
+                            });
+                        }catch(e){}
+                    },60000);
+                }
                 // 握手保底：fmReady 可能在监听器挂上之前就发丢了，每 4 秒补发一次 initSession，直到 sessionReady
                 if(!self._hsTimer){
                     self._hsTimer=setInterval(function(){
