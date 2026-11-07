@@ -288,6 +288,33 @@
             });
             html+='</tbody></table>';
             wrap.innerHTML=html;
+            if(App.Students&&App.Students.renderRanking)App.Students.renderRanking();
+        },
+        // 全班总账排名：优先用云端批量读回的总账，没有就用本地统计
+        renderRanking:function(){
+            var el=document.getElementById('ledger-rank');
+            if(!el)return;
+            var cache=App.Ledger?App.Ledger.getCachedSummaries():{at:0,items:[]};
+            var rows=cache.items&&cache.items.length?cache.items.map(function(x){
+                return {name:x.name||'',absId:x.absId||'',points:x.points||0,accuracy:x.accuracy||0,sessions:x.sessions||0,fromCloud:true};
+            }):App.Storage.getStudents().map(function(s){
+                var st=getStudentStats(s.id)||{totalPoints:0,accuracy:0,sessions:0};
+                return {name:s.name,absId:App.Ledger?App.Ledger.absIdOf(s):s.id,points:st.totalPoints||0,accuracy:st.accuracy||0,sessions:st.sessions||0,fromCloud:false};
+            });
+            if(!rows.length){el.innerHTML='<span style="color:var(--text-muted)">暂无学生</span>';return}
+            rows.sort(function(a,b){return b.points-a.points});
+            var when=cache.at?new Date(cache.at).toLocaleTimeString('zh-CN'):'';
+            var html='<div style="color:var(--text-muted);font-size:12px;margin-bottom:6px">'+(cache.at?('☁️ 云端总账 · '+when+' 读取 · '+rows.length+' 人'):'📱 本地统计（点右上角从云端批量读取）')+'</div>';
+            html+='<div style="display:flex;flex-direction:column;gap:2px">';
+            rows.forEach(function(r,i){
+                var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
+                html+='<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05)">';
+                html+='<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+medal+' '+r.name+'</span>';
+                html+='<span style="flex:0 0 auto;color:var(--text-muted)">'+r.points+'⭐ · '+r.accuracy+'% · '+r.sessions+'场</span>';
+                html+='</div>';
+            });
+            html+='</div>';
+            el.innerHTML=html;
         },
         showPointsDetail:function(id){
             var students=App.Storage.getStudents();
@@ -2301,9 +2328,19 @@
             return changed;
         },
         absIdOf:function(student){return (student&&(student.absId||student.id))||''},
-        fileNameOf:function(student){return '学生-'+this.absIdOf(student)},
-        // 一本分账：个人信息 + 按题库汇总 + 逐场明细
-        build:function(student){
+        detailNameOf:function(student){return '学生-'+this.absIdOf(student)},
+        summaryNameOf:function(student){return '总账-'+this.absIdOf(student)},
+        // 总账（轻）：只有总分/正确率/场次，几十条可一条批量读取
+        buildSummary:function(student){
+            var st=getStudentStats(student.id)||{totalPoints:0,accuracy:0,sessions:0,totalCorrect:0,totalCount:0};
+            return JSON.stringify({
+                absId:this.absIdOf(student),name:student.name||'',group:student.group||'',
+                points:st.totalPoints||0,accuracy:st.accuracy||0,sessions:st.sessions||0,
+                correct:st.totalCorrect||0,total:st.totalCount||0,updatedAt:Date.now()
+            });
+        },
+        // 详细账（重）：按题库汇总 + 逐场明细，班主任点名才拉
+        buildDetail:function(student){
             var history=App.Records.getStudentHistory(student.id);
             var banks=App.Records.summarizeByBank?App.Records.summarizeByBank(history):[];
             var st=getStudentStats(student.id)||{totalPoints:0,accuracy:0,sessions:0,totalCorrect:0,totalCount:0};
@@ -2315,25 +2352,48 @@
                 updatedAt:Date.now()
             });
         },
-        // 写入本地并登记为云端文件；saveNow=true 时立刻推上云（关键节点用）
-        push:function(studentIds,saveNow){
+        // 写入本地并登记为云端文件（同名只更新不新建，防重复）。
+        // opts: {ids:[学生id], summary:true, detail:false, saveNow:false}
+        push:function(ids,opts){
             if(!App.Sync||!App.Sync._pushContent)return 0;
+            opts=opts||{};
             var students=App.Storage.getStudents(),self=this,n=0;
             students.forEach(function(s){
-                if(studentIds&&studentIds.length&&studentIds.indexOf(s.id)<0)return;
-                var nm=self.fileNameOf(s);
-                App.Sync._pushContent(nm,self.build(s));
-                n++;
-                if(saveNow&&App.Sync.forceSaveFile)App.Sync.forceSaveFile(nm);
+                if(ids&&ids.length&&ids.indexOf(s.id)<0)return;
+                if(opts.summary!==false){
+                    var sn=self.summaryNameOf(s);
+                    App.Sync._pushContent(sn,self.buildSummary(s));n++;
+                    if(opts.saveNow&&App.Sync.forceSaveFile)App.Sync.forceSaveFile(sn);
+                }
+                if(opts.detail){
+                    var dn=self.detailNameOf(s);
+                    App.Sync._pushContent(dn,self.buildDetail(s));n++;
+                    if(opts.saveNowDetail&&App.Sync.forceSaveFile)App.Sync.forceSaveFile(dn);
+                }
             });
             return n;
         },
-        // 一场考试结束：只推本场参与者（班主任模式：全局信息已由系统-考试数据同步，这里补个人分账）
+        // 一场考试结束：总账即时落云（轻、必定要）；详细账只在本地刷新，走常规同步慢慢传
         onRecordsChanged:function(records){
             var last=(records&&records.length)?records[records.length-1]:null;
             if(!last)return 0;
             var ids=Object.keys(last.studentResults||{});
-            return this.push(ids,true);
+            return this.push(ids,{summary:true,detail:true,saveNow:App.Sync._pref('on_exam_end')});
+        },
+        // 一条消息批量读取全班总账（只读轻账，几十行一次拿完）
+        pullAllSummaries:function(){
+            if(!App.Sync||!App.Sync.postToFileManager)return;
+            App.Sync.postToFileManager({type:'pullLedgerSummaries'});
+        },
+        cacheSummaries:function(items){
+            try{localStorage.setItem('exam_ledger_summaries',JSON.stringify({at:Date.now(),items:items||[]}))}catch(e){}
+            if(App.Students&&App.Students.renderRanking)App.Students.renderRanking();
+        },
+        getCachedSummaries:function(){
+            try{
+                var o=JSON.parse(localStorage.getItem('exam_ledger_summaries')||'{}');
+                return {at:o.at||0,items:o.items||[]};
+            }catch(e){return {at:0,items:[]}}
         },
         // 账本核对：总账（records 逐条累加）vs 分账（每生累计），并逐生重算校验
         audit:function(){
@@ -2784,8 +2844,8 @@
                 this.render();
                 App.Students.render();
                 App.Leaderboard.render();
-                // 学生信息变更：刷新每人的分账（姓名/组别等个人信息同步进账本）
-                if(App.Ledger)App.Ledger.push(null,false);
+                // 学生信息变更：刷新每人的总账与详账（姓名/组别同步进账本）
+                if(App.Ledger)App.Ledger.push(null,{summary:true,detail:true});
                 App.Toast.show('学生信息已保存','success');
                 App.Effects.playClick();
             },
@@ -3000,6 +3060,12 @@
                         break;
                     case 'syncToast':
                         if(!self._isFileManagerOpen)App.Toast.show(msg.message||'','info');
+                        break;
+                    case 'ledgerSummaries':
+                        // 一条消息批量读回的全班总账：缓存后刷新排名
+                        App.Ledger.cacheSummaries(msg.items||[]);
+                        if(msg.tongzhi)App.Toast.show('总账读取：'+msg.tongzhi,'warning');
+                        else if(!(msg.items||[]).length)App.Toast.show('云端暂无总账，请先让学生做一场或点「重建全部账本」','info');
                         break;
                     case 'forceSyncResult':
                         // 关键节点保存结果：成功只记日志，失败必须让老师看见
