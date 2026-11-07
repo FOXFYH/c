@@ -3253,30 +3253,36 @@ input:checked + .slider:before {
     font-size: 12px;
     color: var(--text-secondary);
 }
-/* 学情详情：按题库汇总 */
+/* 学情详情：按题库汇总（手机上不许横向溢出） */
 .sh-bank-sum {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
+    max-width: 100%;
 }
 .sh-bank-row {
     padding: 8px 10px;
     border-radius: var(--radius-sm);
     background: var(--bg-main);
     border: 1px solid var(--border-color);
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 .sh-bank-name {
     font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .sh-bank-meta {
     font-size: 12px;
     color: var(--text-muted);
     margin-top: 2px;
+    overflow-wrap: anywhere;
 }
 
 .mode-cards {
