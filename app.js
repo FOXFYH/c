@@ -83,7 +83,7 @@
             if(!this._syncSilent)App.Sync.notifyChange('banks',b)
         },
         getRecords:function(){return this.get('records',[])},
-        setRecords:function(r){this.set('records',r);if(!this._syncSilent){App.Sync.notifyChange('records',r);if(App.Sync.forceSaveFile&&App.Sync._pref('on_exam_end'))App.Sync.forceSaveFile('系统-考试数据')}},
+        setRecords:function(r){this.set('records',r);if(!this._syncSilent){App.Sync.notifyChange('records',r);if(App.Sync.forceSaveFile&&App.Sync._pref('on_exam_end'))App.Sync.forceSaveFile('系统-考试数据');if(App.Ledger)App.Ledger.onRecordsChanged(r)}},
         getExamProgress:function(){return this.get('examProgress',null)},
         setExamProgress:function(p){this.set('examProgress',p)},
         clearExamProgress:function(){localStorage.removeItem('exam_examProgress')},
@@ -269,13 +269,13 @@
             var html=filterHTML;
             var avMap=buildAvatarCharMap(filtered);
             html+='<table class="student-table readonly"><thead><tr>';
-            html+='<th>头像</th><th>姓名</th><th>积分</th><th>等级</th><th>正确率</th><th>正确/总题</th><th>性别</th><th>小组</th><th>场次</th>';
+            html+='<th>头像</th><th>姓名</th><th>积分</th><th>等级</th><th>正确率</th><th>正确/总题</th><th>性别</th><th>小组</th><th>场次</th><th>详情</th>';
             html+='</tr></thead><tbody>';
             filtered.forEach(function(s){
                 var lv=getLevel(s.totalPoints);
                 html+='<tr data-id="'+s.id+'">';
                 html+='<td><div class="st-avatar-cell">'+(s.avatar?'<img src="'+s.avatar+'">':(avMap[s.id]||s.name.charAt(0)))+'</div></td>';
-                html+='<td class="st-name-readonly">'+s.name+'</td>';
+                html+='<td class="st-name-readonly" style="cursor:pointer" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看该生详情">'+s.name+'</td>';
                 html+='<td class="st-points-readonly" onclick="App.Students.showPointsDetail(\''+s.id+'\')" title="点击查看积分详情">⭐ '+s.totalPoints+'</td>';
                 html+='<td><span class="st-level-badge">'+lv.name+'</span></td>';
                 html+='<td>'+(s.totalCount>0?s.accuracy+'%':'-')+'</td>';
@@ -283,6 +283,7 @@
                 html+='<td>'+(s.gender||'-')+'</td>';
                 html+='<td>'+(s.group||'-')+'</td>';
                 html+='<td>'+s.sessions+'</td>';
+                html+='<td><button class="btn-secondary btn-sm" onclick="App.Students.showPointsDetail(\''+s.id+'\')">查看</button></td>';
                 html+='</tr>';
             });
             html+='</tbody></table>';
@@ -299,6 +300,7 @@
             body+='<div style="text-align:center;margin-bottom:20px">';
             body+='<div class="lb-avatar" style="width:64px;height:64px;font-size:28px;margin:0 auto 10px">'+(student.avatar?'<img src="'+student.avatar+'">':(buildAvatarCharMap([student])[student.id]||student.name.charAt(0)))+'</div>';
             body+='<div style="font-size:22px;font-weight:800">'+student.name+'</div>';
+            body+='<div style="font-size:12px;color:var(--text-muted);margin-top:2px">绝对ID：'+(App.Ledger?App.Ledger.absIdOf(student):student.id)+'</div>';
             body+='<div style="color:var(--gold);font-weight:600">'+lv.name+' - '+lv.comment+'</div>';
             body+='<div style="font-size:28px;font-weight:900;color:var(--accent-2);margin-top:8px">⭐ '+st.totalPoints+' 分</div>';
             body+='<div style="font-size:14px;color:var(--text-muted);margin-top:4px">正确率 '+st.accuracy+'% · 共参加 '+st.sessions+' 场挑战</div>';
@@ -2225,6 +2227,26 @@
                 list.innerHTML=existing+'<div class="round-leaderboard-hint" onclick="App.Leaderboard.render()">👆 点击返回总积分榜</div>';
             }
         },
+        // 账本核对结果展示（数据管理页）
+        showAudit:function(){
+            var el=document.getElementById('ledger-audit-result');
+            var r=App.Ledger?App.Ledger.audit():null;
+            if(!r){if(el)el.textContent='核对不可用（缺少账本模块）';return}
+            var ok='var(--success)',bad='var(--danger)';
+            var html='';
+            html+='<div style="font-weight:700;color:'+(r.ok?ok:bad)+';margin-bottom:6px">'+(r.ok?'✅ 总账与分账一致':'⚠️ 发现不一致，需检查')+'</div>';
+            html+='<div>总账：答对 '+r.total.correct+' / 总题 '+r.total.total+' · 积分 '+r.total.points+'</div>';
+            html+='<div>分账：答对 '+r.ledger.correct+' / 总题 '+r.ledger.total+' · 积分 '+r.ledger.points+'</div>';
+            html+='<div style="color:var(--text-muted);margin-top:4px">学生 '+r.students+' 人 · 场次 '+r.records+' 场</div>';
+            if(r.mismatches.length){
+                html+='<div style="margin-top:8px;font-weight:600">对不上的学生（'+r.mismatches.length+'）：</div>';
+                r.mismatches.forEach(function(m){
+                    html+='<div>· '+m.name+'（'+m.absId+'） 账本 '+m.stats.c+'/'+m.stats.t+'/'+m.stats.p+' vs 重算 '+m.recalc.c+'/'+m.recalc.t+'/'+m.recalc.p+'</div>';
+                });
+            }
+            if(el)el.innerHTML=html;
+            App.Toast.show(r.ok?'账本核对通过':'账本核对发现问题',r.ok?'success':'error');
+        },
         deleteRecord:function(recordId){
             if(!confirm('确定要删除此记录吗？删除后相关学生的积分将重新计算。'))return;
             var records=App.Storage.getRecords();records=records.filter(function(r){return r.id!==recordId});
@@ -2250,6 +2272,92 @@
             });
             return order.map(function(k){var o=map[k];o.pct=o.total>0?Math.round(o.correct/o.total*100):0;return o})
                         .sort(function(a,b){return b.lastDate-a.lastDate});
+        }
+    };
+
+    // ========== 绝对 ID 与「每学生一本分账」 ==========
+    // 规则：学生注册即分配绝对ID，此后永不更改；学生的一切追踪（分账、云端分行）都锚定它。
+    // 总账＝系统-学生信息 + 系统-考试数据（全班）；分账＝每生一本「学生-<绝对ID>」，两者同源派生，可核对。
+    App.Ledger = {
+        genAbsId:function(){
+            var t=Date.now().toString(36).toUpperCase();
+            var pool='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',r='';
+            for(var i=0;i<4;i++)r+=pool.charAt(Math.floor(Math.random()*pool.length));
+            return 'S'+t.slice(-6)+r;
+        },
+        // 补齐历史学生：优先沿用原 id 作为绝对ID（保证旧记录仍对得上），原 id 缺失才新生成
+        ensureAbsIds:function(){
+            var students=App.Storage.getStudents();var changed=false;var used={};
+            students.forEach(function(s){if(s.absId)used[s.absId]=1});
+            students.forEach(function(s){
+                if(s.absId)return;
+                var cand=(s.id&&!used[s.id])?s.id:'';
+                if(!cand){cand=this.genAbsId();used[cand]=1}
+                s.absId=cand;
+                if(!s.id)s.id=cand;
+                changed=true;
+            }.bind(this));
+            if(changed)App.Storage.setStudents(students);
+            return changed;
+        },
+        absIdOf:function(student){return (student&&(student.absId||student.id))||''},
+        fileNameOf:function(student){return '学生-'+this.absIdOf(student)},
+        // 一本分账：个人信息 + 按题库汇总 + 逐场明细
+        build:function(student){
+            var history=App.Records.getStudentHistory(student.id);
+            var banks=App.Records.summarizeByBank?App.Records.summarizeByBank(history):[];
+            var st=getStudentStats(student.id)||{totalPoints:0,accuracy:0,sessions:0,totalCorrect:0,totalCount:0};
+            return JSON.stringify({
+                absId:this.absIdOf(student),name:student.name||'',gender:student.gender||'',group:student.group||'',
+                stats:{totalPoints:st.totalPoints,accuracy:st.accuracy,sessions:st.sessions,correct:st.totalCorrect,total:st.totalCount},
+                banks:banks.map(function(b){return {bank:b.bank,times:b.times,correct:b.correct,total:b.total,pct:b.pct,points:b.points}}),
+                sessions:history.slice(0,200).map(function(h){return {date:h.date,mode:h.mode,banks:h.bankNames,pct:(h.totalCount>0?Math.round(h.correctCount/h.totalCount*100):0),correct:h.correctCount,total:h.totalCount,points:h.pointsEarned,notDrawn:!!h.notDrawn}}),
+                updatedAt:Date.now()
+            });
+        },
+        // 写入本地并登记为云端文件；saveNow=true 时立刻推上云（关键节点用）
+        push:function(studentIds,saveNow){
+            if(!App.Sync||!App.Sync._pushContent)return 0;
+            var students=App.Storage.getStudents(),self=this,n=0;
+            students.forEach(function(s){
+                if(studentIds&&studentIds.length&&studentIds.indexOf(s.id)<0)return;
+                var nm=self.fileNameOf(s);
+                App.Sync._pushContent(nm,self.build(s));
+                n++;
+                if(saveNow&&App.Sync.forceSaveFile)App.Sync.forceSaveFile(nm);
+            });
+            return n;
+        },
+        // 一场考试结束：只推本场参与者（班主任模式：全局信息已由系统-考试数据同步，这里补个人分账）
+        onRecordsChanged:function(records){
+            var last=(records&&records.length)?records[records.length-1]:null;
+            if(!last)return 0;
+            var ids=Object.keys(last.studentResults||{});
+            return this.push(ids,true);
+        },
+        // 账本核对：总账（records 逐条累加）vs 分账（每生累计），并逐生重算校验
+        audit:function(){
+            var students=App.Storage.getStudents(),records=App.Storage.getRecords();
+            var total={correct:0,total:0,points:0};
+            records.forEach(function(r){
+                var srs=r.studentResults||{};
+                Object.keys(srs).forEach(function(k){
+                    var sr=srs[k];
+                    total.correct+=sr.correctCount||0;total.total+=sr.totalCount||0;total.points+=sr.pointsEarned||0;
+                });
+            });
+            var led={correct:0,total:0,points:0},rows=[];
+            students.forEach(function(s){
+                var st=getStudentStats(s.id)||{totalCorrect:0,totalCount:0,totalPoints:0};
+                led.correct+=st.totalCorrect||0;led.total+=st.totalCount||0;led.points+=st.totalPoints||0;
+                var h=App.Records.getStudentHistory(s.id),c=0,t=0,p=0;
+                h.forEach(function(x){if(x.notDrawn)return;c+=x.correctCount||0;t+=x.totalCount||0;p+=x.pointsEarned||0});
+                if((st.totalCorrect||0)!==c||(st.totalCount||0)!==t||(st.totalPoints||0)!==p){
+                    rows.push({name:s.name,absId:this.absIdOf(s),stats:{c:st.totalCorrect||0,t:st.totalCount||0,p:st.totalPoints||0},recalc:{c:c,t:t,p:p}});
+                }
+            }.bind(this));
+            return {ok:rows.length===0&&total.correct===led.correct&&total.total===led.total&&total.points===led.points,
+                    total:total,ledger:led,mismatches:rows,students:students.length,records:records.length};
         }
     };
 
@@ -2676,12 +2784,15 @@
                 this.render();
                 App.Students.render();
                 App.Leaderboard.render();
+                // 学生信息变更：刷新每人的分账（姓名/组别等个人信息同步进账本）
+                if(App.Ledger)App.Ledger.push(null,false);
                 App.Toast.show('学生信息已保存','success');
                 App.Effects.playClick();
             },
             addRow:function(){
                 var students=App.Storage.getStudents();
-                var newStudent={id:genId(),name:'新学生',avatar:'',gender:'',group:'',createdAt:Date.now()};
+                var absId=App.Ledger?App.Ledger.genAbsId():genId();
+                var newStudent={id:absId,absId:absId,name:'新学生',avatar:'',gender:'',group:'',createdAt:Date.now()};
                 students.push(newStudent);
                 App.Storage.setStudents(students);
                 this.render();
@@ -2980,6 +3091,8 @@
             window.addEventListener('beforeunload',function(){ if(App.Sync)App.Sync.syncOnExit(); });
             setTimeout(function(){
                 self.migrateOldData();
+                // 绝对ID：历史学生补齐（沿用原 id，旧记录不受影响）
+                if(App.Ledger)App.Ledger.ensureAbsIds();
                 self._sendInitAndAuth();   // 首屏唯一一条握手；索引同步由 initSession 在管理器内触发一次
                 self.ready=true;
                 self._ensureCoreStars();
