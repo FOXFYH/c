@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.20
+  存储测试网页版 · 文件管理器        当前版本 6.21
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.21 (2026-11-07) 登录门禁的 4 个系统文件改为「并行单文件读取」：既避开云端函数 3 秒上限，又把门禁等待从 20 多秒压到 2~3 秒；配合 6.20 的逐文件重试，冷启动也能稳定拿到云端内容。
     6.20 (2026-11-07) 登录门禁取内容改为「逐个系统文件读取 + 每个重试3次」：云端函数有 3 秒执行上限，一次批量读多个系统文件容易整体超时，导致门禁虽然过了但内容为空、界面只剩演示数据。配合表格收缩到 67 行，读取索引稳定在 2 秒内。
     6.19 (2026-11-07) 修同步竞态与登录门禁：①批量同步回执只在「上传期间本地没再改」时才清待上传标记，避免旧快照把本地新数据标成已同步；②批量/单文件下载遇到本地未上传改动一律跳过，绝不用云端旧内容覆盖；③上传回执过期判定用当前索引而不用旧快照；④抢锁重试 3→5 次；⑤登录门禁「读取索引」失败时改用「查找 ID 999999999」兜底，避免偶发超时导致一直提示读取不到校验行。
     6.18 (2026-11-07) 修「本地改动被云端回写盖掉」：索引刷新时把临时行（ID 以 _TL 结尾 / 状态=临时）排除，不再当成正牌文件；本地若残留 _TL 条目且云端已有同名正牌行，作废该临时条目交正牌行重建。根因是首次同步的临时行未被转正，后续编辑全写进临时行、拉取时又用旧内容覆盖本地。
@@ -89,7 +90,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.20</title>
+<title>文件管理 v6.21</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -131,7 +132,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.20</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.21</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -4610,10 +4611,8 @@ window.addEventListener('message',function(e){
           });
           const contents={};
           const ids=sysRows.map(function(r){return r.ID}).filter(Boolean);
-          // 逐个读系统文件：云端函数有 3 秒执行上限，一次批量读多个容易整体超时；
-          // 单文件读更稳，失败再重试 2 次，避免门禁通过却拿不到内容（界面只剩演示数据）
-          for(const fid of ids){
-            let got='';
+          // 逐个文件读但并行发出：云端函数有 3 秒执行上限，单文件读最稳；并行可把门禁等待压到 2~3 秒
+          async function readSysOne(fid){
             for(let t=0;t<3;t++){
               try{
                 const rd=await callCloudAPI('批量读取',{ID列表:[fid]});
@@ -4621,13 +4620,14 @@ window.addEventListener('message',function(e){
                   const row=rd.数据[0];
                   let c=extractCloudContent(row);
                   if(!c){try{c=(JSON.parse(row['文件JSON']||'{}').内容)||''}catch(e){}}
-                  got=c||'';
-                  break;
+                  return c||'';
                 }
               }catch(e){}
             }
-            contents[fid]=got;
+            return '';
           }
+          const _pairs=await Promise.all(ids.map(function(fid){return readSysOne(fid).then(function(c){return {fid:fid,content:c}}) }));
+          for(const _p of _pairs)contents[_p.fid]=_p.content;
           notifyParent('loginGateResult',{ok:true,rows:rows,contents:contents,tongzhi:''});
         }catch(e){
           notifyParent('loginGateResult',{ok:false,rows:[],contents:{},error:String((e&&e.message)||e)});
