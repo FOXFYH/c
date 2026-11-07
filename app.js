@@ -801,7 +801,7 @@
         },
         toggleGroupSelect:function(el){el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         getSelectedGroupNames:function(){var names=[];document.querySelectorAll('.group-select-item.selected').forEach(function(el){names.push(el.dataset.groupName)});return names},
-        renderStudentSelect:function(){var students=App.Storage.getStudents();var list=document.getElementById('exam-student-list');if(students.length===0){list.innerHTML='<p style="color:var(--text-muted);text-align:center;">暂无学生，请先在设置→学生中添加</p>';return}var html='';students.forEach(function(s){html+='<div class="student-select-item" data-student-id="'+s.id+'" onclick="App.Exam.toggleStudentSelect(this)"><span>'+(s.avatar?'<img src="'+s.avatar+'" style="width:20px;height:20px;border-radius:50%;vertical-align:middle"> ':'')+' '+s.name+'</span><span class="check-mark"></span></div>'});list.innerHTML=html},
+        renderStudentSelect:function(){var students=App.Storage.getStudents();if(App.Role&&App.Role.isStudent()){var me=App.Role.student();students=me?[me]:[]}var list=document.getElementById('exam-student-list');if(students.length===0){list.innerHTML='<p style="color:var(--text-muted);text-align:center;">暂无学生，请先在设置→学生中添加</p>';return}var html='';students.forEach(function(s){html+='<div class="student-select-item" data-student-id="'+s.id+'" onclick="App.Exam.toggleStudentSelect(this)"><span>'+(s.avatar?'<img src="'+s.avatar+'" style="width:20px;height:20px;border-radius:50%;vertical-align:middle"> ':'')+' '+s.name+'</span><span class="check-mark"></span></div>'});list.innerHTML=html;if(App.Role&&App.Role.isStudent()){var only=list.querySelector('.student-select-item');if(only){only.classList.add('selected');var cm=only.querySelector('.check-mark');if(cm)cm.textContent='✓'}}},
         toggleStudentSelect:function(el){var mode=this.currentMode;if(mode==='practice'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{document.querySelectorAll('.student-select-item.selected').forEach(function(other){if(other!==el){other.classList.remove('selected');other.querySelector('.check-mark').textContent=''}});el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else if(mode==='pk'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{var count=document.querySelectorAll('.student-select-item.selected').length;if(count>=8){App.Toast.show('PK最多选择8名选手','warning');return}el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else{el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':''}App.Effects.playClick()},
         getSelectedStudentIds:function(){var ids=[];document.querySelectorAll('.student-select-item.selected').forEach(function(el){ids.push(el.dataset.studentId)});return ids},
         selectAllStudents:function(){var mode=this.currentMode;var items=document.querySelectorAll('.student-select-item');var allSelected=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSelected=false});if(allSelected){items.forEach(function(el){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''})}else if(mode==='practice'){App.Toast.show('练习模式仅限选择1人','warning')}else if(mode==='pk'){var count=document.querySelectorAll('.student-select-item.selected').length;items.forEach(function(el){if(!el.classList.contains('selected')&&count<8){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓';count++}})}else{items.forEach(function(el){if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}})}App.Effects.playClick()},
@@ -3925,6 +3925,110 @@
         }
     };
 
+    // ========== 双身份：班主任 / 学生 ==========
+    // 班主任：完整课堂功能；点顶栏账号可临时「扮演」班里任意学生（等同学生模式）。
+    // 学生模式：只保留单人可完成的练习，设置只留学生用得上的项。
+    // 未来学生账号登录：调用 App.Role.setCanSwitch(false) 即禁止自由切换。
+    App.Role = {
+        KEY: 'exam_acting_student',
+        ACCOUNT_KEY: 'exam_account_type',
+        _canSwitch: true,
+        init: function(){
+            try{ this._canSwitch = (localStorage.getItem(this.ACCOUNT_KEY) || 'teacher') !== 'student'; }catch(e){ this._canSwitch = true; }
+            if(this.actingId() && !this.student()){ try{ localStorage.removeItem(this.KEY); }catch(e){} }
+            this.apply();
+        },
+        actingId: function(){ try{ return localStorage.getItem(this.KEY) || ''; }catch(e){ return ''; } },
+        student: function(){
+            var id = this.actingId();
+            if(!id) return null;
+            var list = App.Storage.getStudents() || [];
+            for(var i=0;i<list.length;i++){ if(list[i].id === id) return list[i]; }
+            return null;
+        },
+        isStudent: function(){ return !!this.student(); },
+        setCanSwitch: function(v){ this._canSwitch = !!v; this.apply(); },
+        canSwitch: function(){ return this._canSwitch; },
+        _examRunning: function(){
+            var p = document.getElementById('exam-playing');
+            return !!(p && !p.classList.contains('hidden'));
+        },
+        actAs: function(id){
+            if(!this._canSwitch){ App.Toast.show('学生账号不能切换身份','warning'); return; }
+            if(this._examRunning()){ App.Toast.show('请先结束当前答题，再切换身份','warning'); return; }
+            var list = App.Storage.getStudents() || [], hit = null;
+            for(var i=0;i<list.length;i++){ if(list[i].id === id){ hit = list[i]; break; } }
+            if(!hit){ App.Toast.show('找不到该学生','warning'); return; }
+            try{ localStorage.setItem(this.KEY, id); }catch(e){}
+            App.Modal.close();
+            this.apply();
+            App.switchView('home');
+            App.Toast.show('已切换为「' + hit.name + '」的学生模式','success');
+        },
+        backToTeacher: function(){
+            if(!this._canSwitch){ App.Toast.show('学生账号不能切换身份','warning'); return; }
+            if(this._examRunning()){ App.Toast.show('请先结束当前答题，再切回班主任','warning'); return; }
+            try{ localStorage.removeItem(this.KEY); }catch(e){}
+            App.Modal.close();
+            this.apply();
+            App.switchView('home');
+            App.Toast.show('已回到班主任模式','success');
+        },
+        openSwitcher: function(){
+            if(App.Login && !App.Login.isLoggedIn()){ App.Toast.show('请先登录','warning'); return; }
+            var me = this.student();
+            if(!this._canSwitch){
+                App.Modal.open('当前身份',
+                    '<p style="text-align:center;padding:10px 0">当前为学生：<b>' + (me ? me.name : '') + '</b><br><span style="color:var(--text-muted);font-size:13px">学生账号不能切换身份</span></p>',
+                    '<button class="btn-secondary" onclick="App.Modal.close()">关闭</button>');
+                return;
+            }
+            var list = App.Storage.getStudents() || [];
+            var body = '<p style="margin-bottom:10px;font-size:13px;color:var(--text-secondary)">当前身份：<b>' +
+                (me ? ('🎒 ' + me.name + '（学生）') : ('👤 ' + (App.Login.getUsername() || '') + '（班主任）')) + '</b></p>';
+            if(list.length === 0){
+                body += '<p style="color:var(--text-muted)">还没有学生，请先在 设置 → 学生 里添加。</p>';
+            }else{
+                body += '<p style="margin:4px 0 8px;font-size:13px">点名字即可临时扮演该学生（学生模式只能练习）：</p>';
+                body += '<div style="display:flex;flex-wrap:wrap;gap:8px;max-height:46vh;overflow:auto">';
+                list.forEach(function(s){
+                    var on = me && me.id === s.id;
+                    var nm = String(s.name || '').replace(/</g,'&lt;');
+                    var sid = String(s.id).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                    body += '<button class="' + (on ? 'btn-glow' : 'btn-secondary') + ' btn-sm" onclick="App.Role.actAs(\'' + sid + '\')">' + (on ? '✓ ' : '') + nm + '</button>';
+                });
+                body += '</div>';
+            }
+            var footer = '<button class="btn-secondary" onclick="App.Modal.close()">关闭</button>';
+            if(me) footer += '<button class="btn-primary" onclick="App.Role.backToTeacher()">↩ 回到班主任</button>';
+            App.Modal.open('切换身份', body, footer);
+        },
+        apply: function(){
+            var me = this.student();
+            var studentMode = !!me;
+            document.body.classList.toggle('role-student', studentMode);
+            document.body.classList.toggle('role-teacher', !studentMode);
+            var bar = document.getElementById('role-bar-name');
+            if(bar) bar.textContent = me ? me.name : '';
+            var nav = document.getElementById('nav-login-status');
+            if(nav && App.Login && App.Login.isLoggedIn()){
+                if(studentMode){ nav.textContent = '🎒 ' + me.name; nav.style.color = '#e67e22'; }
+                else { nav.textContent = '👤 ' + App.Login.getUsername(); nav.style.color = '#27ae60'; }
+            }
+            if(studentMode){
+                var active = document.querySelector('.settings-panel.active');
+                var tid = active && active.id;
+                if(tid === 'stab-levels' || tid === 'stab-ai' || tid === 'stab-students' || tid === 'stab-records' || tid === 'stab-sync'){
+                    App.Settings.switchTab('exam');
+                }
+            }
+            var setup = document.getElementById('exam-setup');
+            if(setup && !setup.classList.contains('hidden') && App.Exam && App.Exam.currentMode === 'practice'){
+                App.Exam.renderStudentSelect();
+            }
+        }
+    };
+
     App.init = function(){
         App.Storage.ensureDefaults();
         App.Login.init();
@@ -3938,6 +4042,7 @@
         App.Settings.loadSoundSettings();
         App.Settings.loadAISettings();
         App.Settings.loadExamSettings();
+        App.Role.init();
         var progress=App.Storage.getExamProgress();
         if(progress&&progress.questions&&progress.questions.length>0){
             App.Exam.checkResumableExam();
