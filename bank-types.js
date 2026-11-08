@@ -16,20 +16,41 @@
         TYPES:TYPES,
         ALL:['single','pinyin','reading','fill'],
         of:function(bank){var t=bank&&bank.type;if(TYPES[t])return t;return this.guess(bank)},
-        // 题库文件名类型后缀：云端文件即使没下载，也能从文件名看出类型
-        SUFFIX:{single:'.__single',pinyin:'.__pinyin',reading:'.__reading',fill:'.__fill'},
-        suffixOf:function(type){return this.SUFFIX[type]||''},
-        stripSuffix:function(name){
-            return String(name||'').replace(/\.__(single|pinyin|reading|fill)$/,'');
+        // 题库文件名标签：名字.__题型.__科目.__年级（第一个标签固定是题型）
+        TAG_SEP:'.__',
+        cleanTag:function(s){
+            return String(s||'').replace(/[.\\/\s]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20);
         },
-        fromFileName:function(name){
-            var m=String(name||'').match(/\.__(single|pinyin|reading|fill)$/);
-            return m?m[1]:'';
+        tagsOfName:function(name){
+            var parts=String(name||'').split('.__');
+            if(parts.length<2)return [];
+            var first=parts[1];
+            if(!TYPES[first])return [];
+            var tags=[first];
+            for(var i=2;i<parts.length;i++){var x=this.cleanTag(parts[i]);if(x)tags.push(x)}
+            return tags;
         },
-        withSuffix:function(name,type){
-            var base=this.stripSuffix(name),suf=this.suffixOf(type);
-            return suf?base+suf:base;
+        stripAllTags:function(name){
+            return String(name||'').split('.__')[0]||String(name||'');
         },
+        fileWithTags:function(name,tags){
+            var self=this,base=this.stripAllTags(name);
+            var arr=(tags||[]).map(function(x){return self.cleanTag(x)}).filter(function(x){return !!x});
+            return base+(arr.length?'.__'+arr.join('.__'):'');
+        },
+        tagsOfBank:function(bank){
+            if(!bank)return [];
+            var self=this;
+            var arr=(bank.tags||[]).map(function(x){return self.cleanTag(x)}).filter(function(x){return !!x});
+            var ty=this.of(bank);
+            if(!arr.length||!TYPES[arr[0]])arr=[ty];
+            else if(arr[0]!==ty)arr[0]=ty;
+            return arr;
+        },
+        suffixOf:function(type){return this.TYPES[type]?'.__'+type:''},
+        stripSuffix:function(name){return this.stripAllTags(name)},
+        fromFileName:function(name){var t=this.tagsOfName(name);return t.length?t[0]:''},
+        withSuffix:function(name,type){return this.fileWithTags(name,[type])},
         // 老题库/云端旧文件可能没有 type：按内容兜底判断，避免“阅读题库跑到选择练习里”
         guess:function(bank){
             if(!bank)return 'single';

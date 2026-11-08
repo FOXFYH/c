@@ -174,10 +174,11 @@
                     var _ix=JSON.parse(localStorage.getItem('exam_file_index')||'[]'),_ch=false;
                     b.forEach(function(x){
                         if(!x||!x.id||x._demo)return;
-                        var ty=App.BankTypes.of(x),e=_ix.find(function(y){return y.id===x.id});
+                        var ty=App.BankTypes.of(x),tags=App.BankTypes.tagsOfBank(x),e=_ix.find(function(y){return y.id===x.id});
                         if(!e)return;
                         if(e.bankType!==ty){e.bankType=ty;_ch=true}
-                        var want=App.BankTypes.withSuffix(x.name,ty);
+                        if(String(e.bankTags||'')!==String(tags.join(','))){e.bankTags=tags;_ch=true}
+                        var want=App.BankTypes.fileWithTags(x.name,tags);
                         if(e.name!==want){e.name=want;_ch=true}
                     });
                     if(_ch)localStorage.setItem('exam_file_index',JSON.stringify(_ix));
@@ -199,12 +200,14 @@
                 });
                 idx.forEach(function(f){
                     if(!f||!f.id||!f.cloudOnly||!/^QB_/.test(String(f.id)))return;
-                    var fromName=App.BankTypes.fromFileName(f.name);
+                    var tags=App.BankTypes.tagsOfName(f.name);
                     var local=banks.find(function(x){return x.id===f.id});
-                    var ty=fromName||(local?App.BankTypes.of(local):'');
+                    var ty=tags[0]||(local?App.BankTypes.of(local):'');
                     if(!ty)return;
                     if(f.bankType!==ty){f.bankType=ty;ch=true}
-                    var want=App.BankTypes.withSuffix(f.name,ty);
+                    var full=tags.length?tags:[ty];
+                    if(String(f.bankTags||'')!==String(full.join(','))){f.bankTags=full;ch=true}
+                    var want=App.BankTypes.fileWithTags(f.name,full);
                     if(f.name!==want){f.name=want;ch=true}
                 });
                 if(ch)localStorage.setItem('exam_file_index',JSON.stringify(idx));
