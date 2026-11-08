@@ -2315,6 +2315,7 @@
                                 self._recordCheck(ok2, info2);
                                 if(ok2)return;
                                 App.Toast.show('登录状态已失效，请重新登录（本地数据已保留）','warning');
+                                self._markLoginRequired();
                                 self._redirectToLogin();
                             });
                         }, 2500);
@@ -2382,6 +2383,11 @@
             this._loggedIn = false;
             this._username = '';
             this._password = '';
+        },
+
+        // 标记“本次是服务端明确判定失效”：登录页据此在 10 分钟内不自动跳回，避免来回死循环
+        _markLoginRequired: function(){
+            try{ localStorage.setItem('exam_login_required', JSON.stringify({t:Date.now(), user:this._username||''})); }catch(e){}
         },
 
         // 跳转到登录页

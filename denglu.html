@@ -171,6 +171,30 @@ function clearLocalCacheOnLoad(){
   wipeExamCache();
 }
 
+// 已登录的用户从历史记录误入登录页 → 直接回首页（replace，不占历史）
+// 但“服务端明确判定失效”后的 10 分钟内不跳，避免 首页→登录页→首页 死循环
+function shouldBounceBackToApp(){
+  try{
+    if(!(localStorage.getItem('exam_auth_user') && localStorage.getItem('exam_auth_pass'))) return false;
+    var raw=localStorage.getItem('exam_login_required');
+    if(raw){
+      var g=null; try{ g=JSON.parse(raw); }catch(e){}
+      if(g && (Date.now()-(g.t||0)) < 10*60*1000) return false;
+      localStorage.removeItem('exam_login_required');
+    }
+    return true;
+  }catch(e){ return false; }
+}
+
+function loginRequiredFlag(){
+  try{
+    var raw=localStorage.getItem('exam_login_required');
+    if(!raw) return false;
+    var g=null; try{ g=JSON.parse(raw); }catch(e){}
+    return !!(g && (Date.now()-(g.t||0)) < 10*60*1000);
+  }catch(e){ return false; }
+}
+
 // 登录成功后保存凭据并跳转主页
 function onLoginSuccess(username, password){
   // 只有“换账号登录”才清旧账号的本地缓存；同一账号保留，避免误清数据
@@ -180,6 +204,7 @@ function onLoginSuccess(username, password){
   }catch(e){}
   localStorage.setItem('exam_auth_user', username);
   localStorage.setItem('exam_auth_pass', password);
+  try{ localStorage.removeItem('exam_login_required'); }catch(e){}
   setStatus('登录成功，正在跳转...');
   setTimeout(function(){ window.location.href = 'index.html'; }, 400);
 }
@@ -336,8 +361,11 @@ window.addEventListener('message', function(e){
 });
 
 window.onload = () => {
+  // 已登录却不小心回到登录页（例如从历史记录进来）：直接结束这个页面，回首页
+  if(shouldBounceBackToApp()){ window.location.replace('index.html'); return; }
   clearLocalCacheOnLoad();
   showPanel(getDefaultPanelFromUrl());
+  if(loginRequiredFlag()){ setStatus('登录状态已失效，请重新登录', true); }
 }
 </script>
 </body>
