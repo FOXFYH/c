@@ -147,6 +147,15 @@
                 this.set('banks',banks);
             }
             this._skipDemoRefill=false;
+            // 老题库可能没写 type：按内容补一次并落盘，保证各模式题库严格分开
+            var _typeFixed=false;
+            banks.forEach(function(b){
+                if(b&&!b.type&&App.BankTypes&&App.BankTypes.guess){
+                    var _t=App.BankTypes.guess(b);
+                    if(_t!=='single'){b.type=_t;_typeFixed=true}
+                }
+            });
+            if(_typeFixed)this.set('banks',banks);
             return banks
         },
         setBanks:function(b){

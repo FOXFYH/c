@@ -15,7 +15,19 @@
     App.BankTypes={
         TYPES:TYPES,
         ALL:['single','pinyin','reading','fill'],
-        of:function(bank){var t=bank&&bank.type;return TYPES[t]?t:'single'},
+        of:function(bank){var t=bank&&bank.type;if(TYPES[t])return t;return this.guess(bank)},
+        // 老题库/云端旧文件可能没有 type：按内容兜底判断，避免“阅读题库跑到选择练习里”
+        guess:function(bank){
+            if(!bank)return 'single';
+            if(bank.article&&String(bank.article).trim())return 'reading';
+            var qs=bank.questions||[];
+            if(qs.length){
+                var q=qs[0]||{};
+                if(q.char&&q.pinyin)return 'pinyin';
+                if(q.answers||/_{2,}/.test(String(q.text||'')))return 'fill';
+            }
+            return 'single';
+        },
         info:function(id){return TYPES[id]||TYPES.single},
         allowedForMode:function(mode){
             for(var k in TYPES){if(TYPES[k].modes.indexOf(mode)>=0)return k}

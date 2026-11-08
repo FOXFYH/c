@@ -379,7 +379,7 @@
                     var fi=fileIndex.find(function(x){return x.id===bid&&x.id.startsWith('QB_')});
                     if(fi){
                         // 先在banks中创建空壳条目，以便下载后填充（静默，不增加版本号）
-                        b={id:bid,name:fi.name,description:'',questions:[],createdAt:Date.now()};
+                        b={id:bid,name:fi.name,description:'',questions:[],createdAt:Date.now(),type:fi.bankType||''};
                         banks.push(b);
                         App.Storage._syncSilent=true;
                         try{App.Storage.setBanks(banks)}finally{App.Storage._syncSilent=false}
