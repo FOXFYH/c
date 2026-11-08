@@ -2453,6 +2453,15 @@
                         }, 2500);
                         return;
                     }
+                    // 换账号：先清掉上一个账号的本地业务数据，避免 333 的题库/学生串到 444 名下
+                    try{
+                        var _lastAcc=localStorage.getItem('exam_last_account')||'';
+                        if(_lastAcc&&_lastAcc!==self._username){
+                            self._purgeAccountData();
+                            if(App.Toast)App.Toast.show('检测到切换账号，已清理上一个账号的本地数据','info');
+                        }
+                        localStorage.setItem('exam_last_account',self._username);
+                    }catch(e){}
                     // 登录门禁：云端系统文件必须完全对齐后才放行；题库只刷新最新索引，不下载内容
                     if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在同步云端系统文件…');
                     if(App.Sync&&App.Sync.postToFileManager){
@@ -2476,6 +2485,21 @@
                 localStorage.setItem('exam_login_lastcheck', JSON.stringify({t:Date.now(),ok:!!ok,code:(info&&info.code)||0,note:(info&&info.note)||''}));
             }catch(e){}
             try{ console.log('[Login] 校验'+(ok?'通过':'未通过'), info||''); }catch(e){}
+        },
+
+        // 换账号时只清“业务数据”，保留界面偏好与本机 AI 配置
+        _purgeAccountData: function(){
+            try{
+                var exact=['exam_banks','exam_students','exam_records','exam_wrongSets','exam_absences','exam_examProgress','exam_file_index','exam_seed_new_modes_v1'];
+                for(var i=0;i<exact.length;i++){try{localStorage.removeItem(exact[i])}catch(e){}}
+                var del=[];
+                for(var j=0;j<localStorage.length;j++){
+                    var k=localStorage.key(j);
+                    if(k&&k.indexOf('exam_file_id_')===0)del.push(k);
+                }
+                for(var m=0;m<del.length;m++){try{localStorage.removeItem(del[m])}catch(e){}}
+                try{App.Storage._skipDemoRefill=false;}catch(e){}
+            }catch(e){}
         },
 
         // 清空所有 exam_ 开头的本地缓存（保留设备标识）
