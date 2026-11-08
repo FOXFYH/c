@@ -53,10 +53,14 @@
         withSuffix:function(name,type){return this.fileWithTags(name,[type])},
         // 科目猜测（用于给老题库补标签；猜不到归“未分类”）
         SUBJECTS:['语文','数学','道法','道德','科学','英语','音乐','美术','体育','信息','历史','地理','生物','物理','化学'],
-        guessSubject:function(name){
+        guessSubject:function(name,type){
             var s=String(name||'');
             var hit=this.SUBJECTS.filter(function(x){return s.indexOf(x)>=0})[0];
-            if(!hit)return '未分类';
+            if(!hit){
+                // 阅读/拼音都是语文，猜不到科目时按语文归，避免掉进“未分类”
+                if(type==='reading'||type==='pinyin')return '语文';
+                return '未分类';
+            }
             if(hit==='道德')return '道法';
             return hit;
         },

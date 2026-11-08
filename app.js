@@ -150,9 +150,16 @@
             // 老题库可能没写 type：按内容补一次并落盘，保证各模式题库严格分开
             var _typeFixed=false;
             banks.forEach(function(b){
-                if(b&&!b.type&&App.BankTypes&&App.BankTypes.guess){
+                if(!b||!App.BankTypes||!App.BankTypes.guess)return;
+                if(!b.type){
                     var _t=App.BankTypes.guess(b);
                     if(_t!=='single'){b.type=_t;_typeFixed=true}
+                    return;
+                }
+                // 老题库被记成“单选题”，但内容明确是阅读（有主文章）等类型 → 按内容纠正
+                if(b.type==='single'){
+                    var _g=App.BankTypes.guess(b);
+                    if(_g!=='single'){b.type=_g;_typeFixed=true}
                 }
             });
             if(_typeFixed)this.set('banks',banks);
@@ -205,8 +212,12 @@
                         _bch=true;
                     }
                     var tags=App.BankTypes.tagsOfBank(b);
-                    if(tags.length<2){
-                        b.tags=[tags[0],App.BankTypes.guessSubject(b.name)];
+                    var sub=App.BankTypes.guessSubject(b.name,tags[0]);
+                    if(tags.length<2||(tags[1]==='未分类'&&sub!=='未分类')){
+                        b.tags=[tags[0],sub];
+                        _bch=true;
+                    }else if(!b.tags||b.tags[0]!==tags[0]){
+                        b.tags=tags;
                         _bch=true;
                     }
                 });
@@ -225,7 +236,7 @@
                     if(!ty)return;
                     if(f.bankType!==ty){f.bankType=ty;ch=true}
                     var full=tags.length?tags:[ty];
-                    if(full.length<2)full=[ty,App.BankTypes.guessSubject(f.name)];
+                    if(full.length<2)full=[ty,App.BankTypes.guessSubject(f.name,ty)];
                     if(String(f.bankTags||'')!==String(full.join(','))){f.bankTags=full;ch=true}
                     var want=App.BankTypes.fileWithTags(f.name,full);
                     if(f.name!==want){f.name=want;ch=true}
