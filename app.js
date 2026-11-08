@@ -1818,6 +1818,11 @@
                 }
                 }
                 var data=JSON.parse(content);
+                // 全演示学生数据一律不应用（防止云端被污染的演示名单覆盖本机真实名单）
+                if(dataType==='students'&&Array.isArray(data)&&data.length&&data.every(function(x){return x&&x._demo})){
+                    console.log('[Sync] 忽略全演示学生数据');
+                    return;
+                }
                 App.Storage._syncSilent=true;
                 try{
                     if(dataType==='students'){
@@ -2244,6 +2249,8 @@
                 var onlyIds=(onlyKeys&&onlyKeys.length)?onlyKeys:null;
                 sys.forEach(function(s){
                     if(onlyIds&&onlyIds.indexOf(s[1])<0)return;
+                    // 全演示学生不推到云端，避免污染账号名单
+                    if(s[0]==='students'&&Array.isArray(s[3])&&s[3].length&&s[3].every(function(x){return x&&x._demo}))return;
                     var id=s[1]+'__'+user;
                     var content=JSON.stringify(s[3]);
                     var e=idx.find(function(x){return x.id===id});
@@ -2347,7 +2354,14 @@
                             try{localStorage.setItem(prefix+'_file_id_'+fid,JSON.stringify({data:content,view:null}))}catch(err){}
                         }
                         var t=dtMap[nm];
-                        if(t&&content)App.Sync._applyContentToApp(t,content,true);
+                        if(t&&content){
+                            // 云端学生信息如果全是演示数据（_demo），绝不覆盖本机真实名单
+                            var _okApply=true;
+                            if(t==='students'){
+                                try{var _sa=JSON.parse(content);if(Array.isArray(_sa)&&_sa.length&&_sa.every(function(x){return x&&x._demo}))_okApply=false}catch(e){}
+                            }
+                            if(_okApply)App.Sync._applyContentToApp(t,content,true);
+                        }
                     });
                     localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));
                     // 本地版本更高的，继续按常规同步推上去
