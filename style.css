@@ -4100,14 +4100,7 @@ body.role-student #stab-ai,
 body.role-student #stab-students,
 body.role-student #stab-records,
 body.role-student #stab-sync{display:none!important}
-/* 学生模式顶部身份提示条 */
-#role-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin:0 auto 10px;max-width:1100px;border-radius:10px;background:rgba(231,126,34,.12);border:1px solid rgba(231,126,34,.35);font-size:13px}
-body.role-student #role-bar{display:flex}
-/* 考试进行中（选题/抽签/答题界面）不再显示“回到班主任”横幅，回班主任到点名处切换即可 */
-body.role-student:has(#exam-setup:not(.hidden)) #role-bar,
-body.role-student:has(#exam-drawing:not(.hidden)) #role-bar,
-body.role-student:has(#exam-playing:not(.hidden)) #role-bar{display:none!important}
-#role-bar .role-back{margin-left:auto}
+/* 学生模式顶部身份提示条已移除：回班主任直接在点名/切换身份处操作 */
 
 /* ===== 学生模式：我的考试历史入口 ===== */
 .student-history-bar{display:none}
