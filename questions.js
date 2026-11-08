@@ -88,7 +88,9 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
             for(var i2=1;i2<path.length;i2++){
                 body+='<span class="folder-sep">/</span><span class="folder-crumb clickable" onclick="App.Questions.modalFolderTo('+(i2+1)+')">'+path[i2]+'</span>';
             }
-            body+='</div><div class="bank-modal-grid">';
+            body+='</div>';
+            if(Object.keys(folders).length)body+='<div class="bank-modal-note" style="grid-column:1/-1">先点文件夹进入下一层；看到题库后点一下选中，再按「确定」</div>';
+            body+='<div class="bank-modal-grid">';
             Object.keys(folders).sort().forEach(function(tag){
                 body+='<div class="bank-modal-item folder-item" onclick="App.Questions.modalFolderEnter(\''+String(tag).replace(/'/g,'')+'\')"><span class="bank-modal-name">📁 '+tag+'</span><span class="bank-modal-count">'+folders[tag]+' 个</span><span class="bank-modal-arrow">▸</span></div>';
             });

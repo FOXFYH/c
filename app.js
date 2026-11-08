@@ -2352,6 +2352,22 @@
                         var cloudS=parseInt(r.起点号||0)||0;
                         var cloudE=parseInt(r.终点号||0)||0;
                         var content=(msg.contents&&msg.contents[fid])||'';
+                        // 考试数据按“场次并集”合并：云端旧快照 + 本机未上传的新场次，避免刷新后被旧快照吞掉
+                        var _merged=false;
+                        if(nm==='系统-考试数据'&&String(content).trim()!==''){
+                            try{
+                                var _lr=JSON.parse(localStorage.getItem('exam_records')||'[]')||[];
+                                var _cr=JSON.parse(content)||[];
+                                if(Array.isArray(_lr)&&Array.isArray(_cr)){
+                                    var _ids={};_cr.forEach(function(x){if(x&&x.id)_ids[x.id]=1});
+                                    var _extra=_lr.filter(function(x){return x&&x.id&&!_ids[x.id]});
+                                    if(_extra.length){
+                                        var _all=_cr.concat(_extra).sort(function(a,b){return (a.date||0)-(b.date||0)});
+                                        content=JSON.stringify(_all);_merged=true;
+                                    }
+                                }
+                            }catch(e4){}
+                        }
                         var e=idx.find(function(x){return x.id===fid});
                         if(!e){
                             idx.push({name:r.文件名,id:fid,version:1,lastSyncVersion:cloudS,isNewFile:false,folder:String(r.文件夹路径||''),owner:user,createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...content].length,time:Date.now(),star:true,s:cloudS,e:cloudE});
@@ -2361,6 +2377,12 @@
                             e.s=cloudS;e.e=cloudE;e.isNewFile=false;e.cloudOnly=false;e.folder=String(r.文件夹路径||e.folder||'');
                             e.contentLength=[...content].length;
                             try{localStorage.setItem(prefix+'_file_id_'+fid,JSON.stringify({data:content,view:null}))}catch(err){}
+                        }
+                        // 合并过的成绩：本地标记为待上传，门禁会等它推上去再放行
+                        if(_merged){
+                            try{localStorage.setItem(prefix+'_file_id_'+fid,JSON.stringify({data:content,view:null}))}catch(e5){}
+                            var _e3=idx.find(function(x){return x.id===fid});
+                            if(_e3){_e3.s=cloudS;_e3.e=Math.max(cloudE,cloudS)+1;_e3.isNewFile=true;_e3.contentLength=[...content].length}
                         }
                         var t=dtMap[nm];
                         if(t&&content){
