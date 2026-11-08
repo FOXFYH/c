@@ -2001,8 +2001,7 @@
             var map={
                 '系统-学生信息':['EXAM_SYS_STUDENT_INFO',JSON.stringify(App.Storage.getStudents())],
                 '系统-考试数据':['EXAM_SYS_RECORDS',JSON.stringify(App.Storage.getRecords())],
-                '系统-等级设置':['EXAM_SYS_LEVELS',JSON.stringify(st.levels||[])],
-                '系统-AI配置':['EXAM_SYS_AI_CONFIG',JSON.stringify({aiApiUrl:st.aiApiUrl||'',aiApiKey:st.aiApiKey||'',aiModel:st.aiModel||''})]
+                '系统-等级设置':['EXAM_SYS_LEVELS',JSON.stringify(st.levels||[])]
             };
             var it=map[name];if(!it)return;
             var fid=it[0]+'__'+user,content=it[1];
@@ -2202,7 +2201,7 @@
                 localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));
                 localStorage.setItem(flag,'1');
                 var self=this;
-                var sysIds=['EXAM_SYS_STUDENT_INFO','EXAM_SYS_RECORDS','EXAM_SYS_LEVELS','EXAM_SYS_AI_CONFIG'].map(function(k){return k+'__'+user});
+                var sysIds=['EXAM_SYS_STUDENT_INFO','EXAM_SYS_RECORDS','EXAM_SYS_LEVELS'].map(function(k){return k+'__'+user});
                 this.postToFileManager({type:'ensureFolder',folderId:folderId,name:'系统',fileIds:sysIds});
                 setTimeout(function(){self.postToFileManager({type:'syncAllFiles'})},3000);
                 console.log('[Sync] 已为账号 '+user+' 建系统文件夹与系统文件并提交同步');
@@ -2245,7 +2244,7 @@
                 var idx=JSON.parse(localStorage.getItem(prefix+'_file_index')||'[]');
                 var cloudNameMap={};
                 sysRows.forEach(function(r){cloudNameMap[String(r.文件名||'')]=r});
-                var std=[['EXAM_SYS_STUDENT_INFO','系统-学生信息'],['EXAM_SYS_RECORDS','系统-考试数据'],['EXAM_SYS_LEVELS','系统-等级设置'],['EXAM_SYS_AI_CONFIG','系统-AI配置']];
+                var std=[['EXAM_SYS_STUDENT_INFO','系统-学生信息'],['EXAM_SYS_RECORDS','系统-考试数据'],['EXAM_SYS_LEVELS','系统-等级设置']];
                 var missing=std.filter(function(s){
                     var cr=cloudNameMap[s[1]];
                     if(!cr)return true;
@@ -2271,7 +2270,7 @@
                     },6000);
                 }
                 if(sysRows.length>0){
-                    var dtMap={'系统-学生信息':'students','系统-考试数据':'records','系统-等级设置':'levels','系统-AI配置':'aiConfig'};
+                    var dtMap={'系统-学生信息':'students','系统-考试数据':'records','系统-等级设置':'levels'};
                     sysRows.forEach(function(r){
                         var fid=String(r.ID||'');
                         var cloudS=parseInt(r.起点号||0)||0;
