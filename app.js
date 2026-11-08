@@ -1794,10 +1794,12 @@
             if(dataType==='aiConfig')return 'EXAM_SYS_AI_CONFIG'+suffix;
             return null;
         },
-        _applyContentToApp:function(dataType,content){
+        _applyContentToApp:function(dataType,content,force){
             try{
                 if(content===undefined||content===null||String(content).trim()==='')return;
                 // 本地有未上传改动时，拒绝云端旧内容覆盖（防止同步回写把刚改的数据打回旧版）
+                // force=true（登录门禁）时例外：系统文件以云端为准，保证进来就是云端那一份
+                if(!force){
                 try{
                     var _fid=this._getFileIdForDataType(dataType);
                     if(_fid){
@@ -1813,6 +1815,7 @@
                 if(this._localEditAt&&this._localEditAt[dataType]&&(Date.now()-this._localEditAt[dataType]<30000)){
                     console.log('[Sync] 本地刚改过，暂不接受云端覆盖：'+dataType);
                     return;
+                }
                 }
                 var data=JSON.parse(content);
                 App.Storage._syncSilent=true;
@@ -2327,21 +2330,24 @@
                     var dtMap={'系统-学生信息':'students','系统-考试数据':'records','系统-等级设置':'levels'};
                     sysRows.forEach(function(r){
                         var fid=String(r.ID||'');
+                        var nm=String(r.文件名||'');
+                        // AI 配置不参与云端同步（2.052）：门禁也不碰它
+                        if(nm==='系统-AI配置')return;
                         var cloudS=parseInt(r.起点号||0)||0;
                         var cloudE=parseInt(r.终点号||0)||0;
                         var content=(msg.contents&&msg.contents[fid])||'';
                         var e=idx.find(function(x){return x.id===fid});
-                        var localE=e?(parseInt(e.e||0)||0):-1;
                         if(!e){
                             idx.push({name:r.文件名,id:fid,version:1,lastSyncVersion:cloudS,isNewFile:false,folder:String(r.文件夹路径||''),owner:user,createTime:'',lastUploadTime:'',lastEditTime:App.Sync._formatTime(),contentLength:[...content].length,time:Date.now(),star:true,s:cloudS,e:cloudE});
                             try{localStorage.setItem(prefix+'_file_id_'+fid,JSON.stringify({data:content,view:null}))}catch(err){}
-                        }else if(cloudE>localE){
-                            // 云端更大 → 云端覆盖本地
+                        }else if(String(content).trim()!==''){
+                            // 登录门禁：系统文件以云端为准（云端有内容就覆盖本地，保证进来就是完整数据）
                             e.s=cloudS;e.e=cloudE;e.isNewFile=false;e.cloudOnly=false;e.folder=String(r.文件夹路径||e.folder||'');
+                            e.contentLength=[...content].length;
                             try{localStorage.setItem(prefix+'_file_id_'+fid,JSON.stringify({data:content,view:null}))}catch(err){}
                         }
-                        var t=dtMap[String(r.文件名||'')];
-                        if(t&&content)App.Sync._applyContentToApp(t,content);
+                        var t=dtMap[nm];
+                        if(t&&content)App.Sync._applyContentToApp(t,content,true);
                     });
                     localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));
                     // 本地版本更高的，继续按常规同步推上去
@@ -2418,40 +2424,18 @@
                         }, 2500);
                         return;
                     }
-                    // 登录门禁：只校验系统文件；题库文件按需下载。一致后才放行
-                    if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在校验云端系统文件…');
-                    // 本地已有缓存 → 1.8 秒后先放行显示本地数据，云端校验转后台继续，不再干等十几秒
-                    try{
-                        var _st=JSON.parse(localStorage.getItem('exam_students')||'[]');
-                        var _rc=JSON.parse(localStorage.getItem('exam_records')||'[]');
-                        var _hasReal=(_st||[]).filter(function(s){return s&&s.id&&String(s.id).indexOf('demo_')!==0});
-                        var _hasLocal=((_rc&&_rc.length)||0)>0 || _hasReal.length>0;
-                        if(_hasLocal){
-                            setTimeout(function(){
-                                App.Sync._gateSoftReleased=true;
-                                if(App.Sync._hideGate)App.Sync._hideGate();
-                                if(App.Toast)App.Toast.show('云端校验在后台继续，先显示本地数据','info');
-                            },1800);
-                        }
-                    }catch(e){}
+                    // 登录门禁：云端系统文件必须完全对齐后才放行；题库只刷新最新索引，不下载内容
+                    if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在同步云端系统文件…');
                     if(App.Sync&&App.Sync.postToFileManager){
                         var gateTries=0;
                         var gateTimer=setInterval(function(){
+                            if(App.Sync._gateDone){clearInterval(gateTimer);return}
                             gateTries++;
+                            var gt=document.getElementById('gate-text');
+                            if(gt)gt.textContent='正在同步云端系统文件…（第'+gateTries+'次）';
                             App.Sync.postToFileManager({type:'loginGateReadAll'});
-                            if(App.Sync._gateDone||gateTries>=12)clearInterval(gateTimer);
                         },3000);
                         App.Sync.postToFileManager({type:'loginGateReadAll'});
-                        // 兜底：60 秒仍未通过则提示，避免永远挡着
-                        setTimeout(function(){
-                            if(!App.Sync._gateDone){
-                                var t=document.getElementById('gate-text');
-                                if(t)t.textContent='云端校验未完成：可先使用本地数据，后台会自动重试';
-                                if(App.Toast)App.Toast.show('云端校验未完成，可先使用本地数据，后台会自动重试','warning');
-                                var m=document.getElementById('gate-mask');
-                                if(m)m.style.display='none';
-                            }
-                        },60000);
                     }
                 });
             }, 2000);
