@@ -1509,7 +1509,7 @@
                     var nextPPQ=Math.max(1,Math.floor(ppq/2));
                     App.Storage.setWrongSet(sid,bid,{wrongQuestionIds:wrongIds,lastAttempt:Date.now(),bankId:bid,pendingPoints:originalPending+pendingPoints,nextPointsPerQ:nextPPQ,lastInitialPPQ:currentInitialPPQ});
                 }
-                var record={id:App.genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,practicePassed:allCorrect,allParticipants:allParticipants||undefined};
+                var record={id:App.genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,bankIds:(bankIds||[]).slice(),totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,practicePassed:allCorrect,allParticipants:allParticipants||undefined};
                 var records=App.Storage.getRecords();
                 records.push(record);App.Storage.setRecords(records);
                 if(allCorrect)App.Sync.syncNow();
@@ -1580,7 +1580,7 @@
                     });
                 }
             }
-            var record={id:App.genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,allParticipants:allParticipants||undefined};
+            var record={id:App.genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,bankIds:(bankIds||[]).slice(),totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,allParticipants:allParticipants||undefined};
             var records=App.Storage.getRecords();records.push(record);App.Storage.setRecords(records);this.currentExam=null;
             App.Storage.clearExamProgress();
             App.Sync.syncNow();

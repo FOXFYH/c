@@ -707,7 +707,7 @@
         },
         getStudentHistory:function(studentId){
             var records=App.Storage.getRecords();var history=[];
-            records.forEach(function(rec){var srs=rec.studentResults||{};if(srs[studentId]){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:srs[studentId].correctCount,totalCount:srs[studentId].totalCount,pointsEarned:srs[studentId].pointsEarned})}else if(rec.allParticipants){history.push({date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],correctCount:0,totalCount:0,pointsEarned:0,notDrawn:true})}});
+            records.forEach(function(rec){var srs=rec.studentResults||{};if(srs[studentId]){history.push({id:rec.id,date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],bankIds:rec.bankIds||[],correctCount:srs[studentId].correctCount,totalCount:srs[studentId].totalCount,pointsEarned:srs[studentId].pointsEarned})}else if(rec.allParticipants){history.push({id:rec.id,date:rec.date,mode:rec.mode,bankNames:rec.bankNames||[],bankIds:rec.bankIds||[],correctCount:0,totalCount:0,pointsEarned:0,notDrawn:true})}});
             history.sort(function(a,b){return b.date-a.date});return history;
         },
         // 按题库汇总某学生历史：每份题库做了几次、答对多少、正确率、累计得分
@@ -736,12 +736,18 @@
         open:function(){
             var me=App.Role&&App.Role.student?App.Role.student():null;
             if(!me){App.Toast.show('请先在学生模式下查看','warning');return}
+            this._mode='all';this._bank='';
             var body=this._summaryHTML(me.id)+'<div class="history-filter">';
             body+='<button class="btn-sm btn-primary" data-m="all" onclick="App.History.filter(this,\''+me.id+'\')">全部</button>';
             ['practice','pinyin','reading','fill','farm','challenge','pk','smart'].forEach(function(m){
                 body+='<button class="btn-sm btn-secondary" data-m="'+m+'" onclick="App.History.filter(this,\''+me.id+'\')">'+(App.History.META[m]?App.History.META[m].n:m)+'</button>';
             });
-            body+='</div><div id="history-list" style="margin-top:10px"></div>';
+            body+='</div><div class="history-filter" style="margin-top:8px"><select id="hist-bank" onchange="App.History._bank=this.value;App.History.render(\''+me.id+'\',App.History._mode||\'all\')"><option value="">全部题库</option>';
+            App.Storage.getBanks().forEach(function(b){
+                var nm=String(b.name||'').replace(/</g,'&lt;');
+                body+='<option value="'+String(b.id||'').replace(/"/g,'')+'">'+nm+'</option>';
+            });
+            body+='</select></div><div id="history-list" style="margin-top:10px"></div>';
             App.Modal.open('📜 '+me.name+' 的考试历史',body,'<button class="btn-secondary" onclick="App.Modal.close()">关闭</button>');
             this.render(me.id,'all');
         },
@@ -770,13 +776,18 @@
         filter:function(btn,sid){
             var wrap=btn.parentNode;wrap.querySelectorAll('button').forEach(function(b){b.className='btn-sm btn-secondary'});
             btn.className='btn-sm btn-primary';
+            this._mode=btn.dataset.m;
             this.render(sid,btn.dataset.m);
         },
         render:function(sid,mode){
             var box=document.getElementById('history-list');if(!box)return;
+            var bid=this._bank||'';
+            var bn='';if(bid){var _b=(App.Storage.getBanks()||[]).find(function(x){return x.id===bid});bn=_b?_b.name:''}
             var recs=App.Storage.getRecords().filter(function(r){
                 var sr=(r.studentResults||{})[sid];
-                return sr&&sr.totalCount>0&&(mode==='all'||r.mode===mode);
+                if(!(sr&&sr.totalCount>0&&(mode==='all'||r.mode===mode)))return false;
+                if(bid){var hit=(r.bankIds&&r.bankIds.length)?(r.bankIds.indexOf(bid)>=0):((r.bankNames||[]).indexOf(bn)>=0);if(!hit)return false}
+                return true;
             });
             recs.sort(function(a,b){return b.date-a.date});
             if(!recs.length){box.innerHTML='<p style="color:var(--text-muted);padding:10px 0">该类型还没有考试记录</p>';return}

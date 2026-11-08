@@ -214,9 +214,12 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
             var bank=App.Storage.getBanks().find(function(b){return b.id===bankId});
             if(!bank){App.Toast.show('找不到该题库','warning');return}
             var modes={farm:'🌾 打野',challenge:'🎯 挑战',pk:'⚔️ PK',practice:'📝 选择练习',smart:'🧠 智能抽查',pinyin:'拼 拼音练习',reading:'📖 阅读选择',fill:'✍️ 填空练习',lottery:'🎲 抽签'};
-            var map={};
+            var map={},sessions=[];
             App.Storage.getRecords().forEach(function(r){
-                if((r.bankNames||[]).indexOf(bank.name)<0)return;
+                // 优先按稳定的题库ID关联（题库改名也不断链），老记录没有 bankIds 才退回按名字
+                var hit=(r.bankIds&&r.bankIds.length)?(r.bankIds.indexOf(bankId)>=0):((r.bankNames||[]).indexOf(bank.name)>=0);
+                if(!hit)return;
+                var parts=[];
                 Object.keys(r.studentResults||{}).forEach(function(sid){
                     var sr=r.studentResults[sid];
                     if(!sr||!sr.totalCount)return;
@@ -225,7 +228,9 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
                     o.sessions++;o.correct+=(sr.correctCount||0);o.total+=(sr.totalCount||0);o.points+=(sr.pointsEarned||0);
                     if(r.date>o.last)o.last=r.date;
                     o.rows.push({date:r.date,mode:r.mode,correct:sr.correctCount||0,total:sr.totalCount||0,points:sr.pointsEarned||0});
+                    parts.push({name:sr.name||'',correct:sr.correctCount||0,total:sr.totalCount||0,points:sr.pointsEarned||0});
                 });
+                if(parts.length)sessions.push({id:r.id,date:r.date,mode:r.mode,parts:parts});
             });
             var me=App.Role&&App.Role.isStudent?App.Role.student():null;
             var ids=Object.keys(map);
@@ -249,6 +254,19 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
                     });
                     html+='</div></div>';
                 });
+            }
+            // 按场次看：这一场是谁参加的、各得多少分（学生模式只显示自己）
+            var visSess=sessions.map(function(s){
+                var ps=(s.parts||[]).filter(function(p){return !me||p.name===me.name});
+                return ps.length?{date:s.date,mode:s.mode,parts:ps}:null;
+            }).filter(function(x){return !!x}).sort(function(a,b){return b.date-a.date});
+            if(visSess.length){
+                html+='<div class="bank-usage-sessions"><h4 style="margin:14px 0 6px;font-size:13px">按场次（谁参加）</h4>';
+                visSess.forEach(function(s){
+                    var txt=s.parts.map(function(p){return p.name+' '+p.correct+'/'+p.total+'（+'+p.points+'⭐）'}).join('；');
+                    html+='<div class="bur-session"><span>'+new Date(s.date).toLocaleString('zh-CN')+'</span><span>'+(modes[s.mode]||s.mode)+'</span><span style="flex:1;text-align:left">'+txt+'</span></div>';
+                });
+                html+='</div>';
             }
             var title=me?('📊 '+bank.name+' · 我的完成情况'):('📊 '+bank.name+' · 学生完成情况');
             App.Modal.open(title,html,'<button class="btn-secondary" onclick="App.Modal.close()">关闭</button>');
