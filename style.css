@@ -4093,6 +4093,8 @@ body.role-student .mode-card:not([data-mode="practice"]):not([data-mode="pinyin"
 /* 班主任专属的操作整块隐藏 */
 body.role-student [data-teacher-only],
 body.role-student .teacher-only{display:none!important}
+/* 题库相关：学生模式只灰化不可点，布局与老师一致 */
+body.role-student .teacher-dim{opacity:.45!important;filter:grayscale(1);pointer-events:none!important;cursor:not-allowed!important}
 body.role-student #stab-levels,
 body.role-student #stab-ai,
 body.role-student #stab-students,
