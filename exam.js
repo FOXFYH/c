@@ -1446,7 +1446,7 @@
             if(!bankNames.length)bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b)bankNames.push(b.name)});
             var studentResults={};
             exam.students.forEach(function(s){studentResults[s.id]={id:s.id,name:s.name,avatar:s.avatar,group:s.group||'',correctCount:0,totalCount:0,pointsEarned:0}});
-            exam.results.forEach(function(r){if(studentResults[r.studentId]&&!r.isAbsent){studentResults[r.studentId].totalCount++;if(r.correct){studentResults[r.studentId].correctCount++;studentResults[r.studentId].pointsEarned+=r.pointsEarned}}});
+            exam.results.forEach(function(r){if(studentResults[r.studentId]&&!r.isAbsent){var sr=studentResults[r.studentId];sr.totalCount++;if(r.correct)sr.correctCount++;sr.pointsEarned+=(r.pointsEarned||0)}});
             // 判断是否全员参与：个人模式下所有学生都参与，或小组模式下所有小组都参与
             var allParticipants=false;
             if(exam.participationType!=='group'){

@@ -74,6 +74,49 @@
                 localStorage.removeItem('exam_pointsCache');
             }
         },
+        // 一次性为三种新模式各建一个「测试用·可删除」的正常题库；删掉后不会再自动补回
+        seedNewModeBanks:function(){
+            try{
+                if(localStorage.getItem('exam_seed_new_modes_v1'))return;
+                var banks=this.getBanks(),changed=false;
+                var add=function(name,type,extra){
+                    if(banks.some(function(b){return b.name===name}))return;
+                    var b={id:App.genBankId(),name:name,type:type,description:'测试用，可删除',createdAt:Date.now(),_newFile:true};
+                    for(var k in extra)b[k]=extra[k];
+                    banks.push(b);changed=true;
+                };
+                add('拼音测试题库','pinyin',{questions:[
+                    {id:App.genId(),text:'春天来了',char:'春',pinyin:'chūn',points:10},
+                    {id:App.genId(),text:'夏天很热',char:'夏',pinyin:'xià',points:10},
+                    {id:App.genId(),text:'秋天到了',char:'秋',pinyin:'qiū',points:10},
+                    {id:App.genId(),text:'冬天很冷',char:'冬',pinyin:'dōng',points:10},
+                    {id:App.genId(),text:'花园里的花开了',char:'花',pinyin:'huā',points:10},
+                    {id:App.genId(),text:'树上有一只小鸟',char:'鸟',pinyin:'niǎo',points:10},
+                    {id:App.genId(),text:'小河里的水很清',char:'水',pinyin:'shuǐ',points:10},
+                    {id:App.genId(),text:'月亮挂在天上',char:'月',pinyin:'yuè',points:10},
+                    {id:App.genId(),text:'我们每天都要学习',char:'学',pinyin:'xué',points:10},
+                    {id:App.genId(),text:'树叶变绿了',char:'绿',pinyin:'lǜ',points:10},
+                    {id:App.genId(),text:'下雨了要带伞',char:'雨',pinyin:'yǔ',points:10},
+                    {id:App.genId(),text:'白云在天上飘',char:'云',pinyin:'yún',points:10}
+                ]});
+                add('阅读测试题库','reading',{
+                    title:'春天来了',
+                    article:'春天来了。小草从土里钻出来，绿绿的。花园里的花开了，红的、白的、黄的，真好看。小鸟在树上唱歌，蝴蝶在花丛中飞舞。小朋友们脱下棉衣，在草地上奔跑。春天真美啊！',
+                    questions:[
+                        {id:App.genId(),text:'文章写的是哪个季节？',options:{A:'春天',B:'夏天',C:'秋天',D:'冬天'},answer:'A',points:10},
+                        {id:App.genId(),text:'小草是什么颜色的？',options:{A:'红的',B:'绿的',C:'黄的',D:'白的'},answer:'B',points:10},
+                        {id:App.genId(),text:'小朋友们在草地上做什么？',options:{A:'睡觉',B:'奔跑',C:'读书',D:'吃饭'},answer:'B',points:10}
+                    ]
+                });
+                add('填空测试题库','fill',{questions:[
+                    {id:App.genId(),text:'我会写数字____。',answers:['一'],points:10},
+                    {id:App.genId(),text:'天上有____个太阳。',answers:['一'],points:10},
+                    {id:App.genId(),text:'____和____都是数字。',answers:['一','二'],points:10}
+                ]});
+                if(changed)this.setBanks(banks);
+                localStorage.setItem('exam_seed_new_modes_v1','1');
+            }catch(e){}
+        },
         getStudents:function(){return this.get('students',[])},
         setStudents:function(s){var hasReal=s.some(function(x){return!x._demo});if(hasReal){s=s.filter(function(x){return!x._demo})}this.set('students',s);if(!this._syncSilent)App.Sync.notifyChange('students',s)},
         getBanks:function(){
@@ -2512,6 +2555,7 @@
         App.Sync.init();
         App.Toast.init();
         App.Effects.init();
+        App.Storage.seedNewModeBanks();
         App.Students.render();
         App.Questions.render();
         App.Leaderboard.render();
