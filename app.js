@@ -191,6 +191,12 @@
                 var idx=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
                 var banks=this.get('banks',[])||[];
                 var ch=false;
+                // 对账：索引里存在、但本地 banks 没有的题库 → 一定属于“仅云端”，避免老题库凭空消失
+                var _localIds={};
+                banks.forEach(function(b){if(b&&b.id)_localIds[b.id]=1});
+                idx.forEach(function(f){
+                    if(f&&f.id&&/^QB_/.test(String(f.id))&&!_localIds[f.id]&&!f.cloudOnly){f.cloudOnly=true;ch=true}
+                });
                 idx.forEach(function(f){
                     if(!f||!f.id||!f.cloudOnly||!/^QB_/.test(String(f.id)))return;
                     var fromName=App.BankTypes.fromFileName(f.name);
