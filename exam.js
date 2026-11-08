@@ -230,7 +230,7 @@
             var studentTitleEl=document.getElementById('student-select-title');
             if(titleEl)titleEl.textContent=label;
             if(btnIcon){
-                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝',smart:'🧠',lottery:'🎲',pinyin:'🈶',reading:'📖',fill:'✍️'};
+                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝',smart:'🧠',lottery:'🎲',pinyin:'拼',reading:'📖',fill:'✍️'};
                 btnIcon.textContent=icons[mode]||'🎮';
             }
             if(pType==='personal'){

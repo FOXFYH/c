@@ -6,7 +6,7 @@
     var App=window.App=window.App||{};
     var TYPES={
         single:{id:'single',name:'单选题',icon:'📝',modes:['farm','challenge','pk','practice','smart'],desc:'A/B/C/D 四选一（旧题库自动归为单选）'},
-        pinyin:{id:'pinyin',name:'拼音题',icon:'🈶',modes:['pinyin'],desc:'给字/词/句，考察目标字的拼音拼写'},
+        pinyin:{id:'pinyin',name:'拼音题',icon:'拼',modes:['pinyin'],desc:'给字/词/句，考察目标字的拼音拼写'},
         reading:{id:'reading',name:'课外阅读题',icon:'📖',modes:['reading'],desc:'先读文章，读完倒计时再答题'},
         fill:{id:'fill',name:'填空题',icon:'✍️',modes:['fill'],desc:'句子挖空，必须手写作答（禁键盘/语音）'}
     };

@@ -60,8 +60,8 @@ var ModeRules = {
         personalOnly: true
     },
     pinyin: {
-        title: '🈶 拼音',
-        icon: '🈶',
+        title: '拼 拼音',
+        icon: '拼',
         rules: [
             '仅学生模式可使用，单人拼字',
             '题目展示字/词/句，只考察其中被标色加粗的那一个字',
@@ -138,7 +138,7 @@ var ParticipationLabels = {
         practice: '📝 个人练习',
         smart: '🧠 个人智能抽查',
         lottery: '🎲 个人抽签',
-        pinyin: '🈶 个人拼音',
+        pinyin: '拼 个人拼音',
         fill: '✍️ 个人填空',
         reading: '📖 个人课外阅读'
     },
