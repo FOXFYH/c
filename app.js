@@ -2334,6 +2334,7 @@
                         }catch(e){}
                     },6000);
                 }
+                var _mismatch=false;
                 if(sysRows.length>0){
                     var dtMap={'系统-学生信息':'students','系统-考试数据':'records','系统-等级设置':'levels'};
                     sysRows.forEach(function(r){
@@ -2361,7 +2362,15 @@
                             if(t==='students'){
                                 try{var _sa=JSON.parse(content);if(Array.isArray(_sa)&&_sa.length&&_sa.every(function(x){return x&&x._demo}))_okApply=false}catch(e){}
                             }
-                            if(_okApply)App.Sync._applyContentToApp(t,content,true);
+                            if(_okApply){
+                                App.Sync._applyContentToApp(t,content,true);
+                                // 回读本地落盘内容，必须与云端一字不差
+                                try{
+                                    var _lk=localStorage.getItem(prefix+'_file_id_'+fid);
+                                    var _lv=_lk?((JSON.parse(_lk)||{}).data||''):'';
+                                    if(String(_lv)!==String(content))_mismatch=true;
+                                }catch(e3){_mismatch=true}
+                            }
                         }
                     });
                     localStorage.setItem(prefix+'_file_index',JSON.stringify(idx));
@@ -2375,6 +2384,10 @@
                 });
                 if(missContent){
                     if(!App.Sync._gateSoftReleased)App.Sync._showGate('正在读取云端系统文件…');
+                    return;
+                }
+                if(_mismatch){
+                    App.Sync._showGate('系统文件正在对齐本地…');
                     return;
                 }
                 App.Sync._gateBlocked=false;
