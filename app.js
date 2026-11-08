@@ -196,6 +196,14 @@
                 var _bch=false;
                 banks.forEach(function(b){
                     if(!b||!b.id)return;
+                    // 云端文件名带标签下载到本地后：拆出标签，显示名只留主干
+                    var nameTags=App.BankTypes.tagsOfName(b.name);
+                    if(nameTags.length){
+                        b.name=App.BankTypes.stripAllTags(b.name);
+                        b.tags=nameTags;
+                        if(!App.BankTypes.TYPES[b.type])b.type=nameTags[0];
+                        _bch=true;
+                    }
                     var tags=App.BankTypes.tagsOfBank(b);
                     if(tags.length<2){
                         b.tags=[tags[0],App.BankTypes.guessSubject(b.name)];
@@ -1919,12 +1927,13 @@
                             banksChanged=true;
                         }
                     }
-                    var fileName=b.name||bankId;
+                    // 云端「文件名」列必须带标签：题库名.__题型.__科目…（前端靠这一列分类）
+                    var fileName=App.BankTypes?App.BankTypes.fileWithTags(b.name,App.BankTypes.tagsOfBank(b)):(b.name||bankId);
                     var content=JSON.stringify(b);
                     var existing=fileIndex.find(function(x){return x.id===bankId});
-                    // 如果ID不匹配，再检查是否有同名文件（云端已有同名题库）
+                    // 如果ID不匹配，再检查是否有同名文件（云端已有同名题库；忽略旧的无标签后缀差异）
                     if(!existing){
-                        existing=fileIndex.find(function(x){return x.name===fileName&&x.id!==bankId});
+                        existing=fileIndex.find(function(x){return x.id!==bankId&&(x.name===fileName||(App.BankTypes&&App.BankTypes.stripAllTags(x.name)===b.name))});
                         if(existing){
                             // 复用已有文件索引的ID，避免同名不同ID导致重复
                             var oldBankData=localStorage.getItem(prefix+'_file_id_'+bankId);
@@ -1943,6 +1952,8 @@
                         try{var raw=localStorage.getItem(prefix+'_file_id_'+existing.id);if(raw)oldData=JSON.parse(raw).data}catch(e){}
                         var contentChanged=!oldData||oldData!==content;
                         if(contentChanged){existing.version=(existing.version||0)+1}
+                        // 索引文件名与云端文件名保持一致（带标签），否则按名查不到会重复建行
+                        if(existing.name!==fileName){existing.name=fileName}
                         existing.contentLength=[...content].length;
                         existing.lastEditTime=App.Sync._formatTime();
                         // 题库文件不设置文件夹（云端平铺）
