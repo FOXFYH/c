@@ -1764,6 +1764,9 @@ body {
     flex-direction: column;
     gap: 10px;
     margin-bottom: 14px;
+    max-height: 52vh;
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .level-item {

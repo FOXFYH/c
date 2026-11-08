@@ -50,6 +50,24 @@
     var DEFAULT_BANKS = DemoData.banks;
 
     var DATA_VERSION = 5;
+    // 学生等级默认表：前5级为原有，后9级为新增（门槛逐级翻倍到 512000）
+    var DEFAULT_LEVELS = [
+        {name:'新手',minPoints:0,comment:'初出茅庐，继续加油！'},
+        {name:'学徒',minPoints:100,comment:'小有所成，前途无量！'},
+        {name:'熟手',minPoints:300,comment:'技艺精湛，令人佩服！'},
+        {name:'专家',minPoints:600,comment:'学识渊博，无人能敌！'},
+        {name:'大师',minPoints:1000,comment:'登峰造极，一代宗师！'},
+        {name:'宗师',minPoints:2000,comment:'开宗立派，实力超群！'},
+        {name:'泰斗',minPoints:4000,comment:'学识如海，众人仰望！'},
+        {name:'传奇',minPoints:8000,comment:'已成传奇，故事流传！'},
+        {name:'王者',minPoints:16000,comment:'王者风范，所向披靡！'},
+        {name:'神话',minPoints:32000,comment:'书写神话，无人能及！'},
+        {name:'圣者',minPoints:64000,comment:'超凡入圣，心如明镜！'},
+        {name:'至尊',minPoints:128000,comment:'至尊之位，天下无双！'},
+        {name:'战神',minPoints:256000,comment:'战无不胜，气吞山河！'},
+        {name:'巅峰',minPoints:512000,comment:'登临巅峰，俯瞰群雄！'}
+    ];
+    var LEVEL_SCHEMA_VERSION = 2;
 
     App.Storage = {
         get:function(k,d){try{var v=localStorage.getItem('exam_'+k);return v?JSON.parse(v):d}catch(e){return d}},
@@ -158,18 +176,30 @@
         setAbsence:function(studentId,data){var all=this.getAbsences();all[studentId]=data;this.setAbsences(all)},
         clearAbsence:function(studentId){var all=this.getAbsences();delete all[studentId];this.setAbsences(all)},
         getSettings:function(){
-            return this.get('settings',{
-                levels:[
-                    {name:'新手',minPoints:0,comment:'初出茅庐，继续加油！'},
-                    {name:'学徒',minPoints:100,comment:'小有所成，前途无量！'},
-                    {name:'熟手',minPoints:300,comment:'技艺精湛，令人佩服！'},
-                    {name:'专家',minPoints:600,comment:'学识渊博，无人能敌！'},
-                    {name:'大师',minPoints:1000,comment:'登峰造极，一代宗师！'}
-                ],
+            var def={
+                levels:DEFAULT_LEVELS.map(function(l){return {name:l.name,minPoints:l.minPoints,comment:l.comment}}),
+                levelSchemaVersion:LEVEL_SCHEMA_VERSION,
                 aiApiUrl:'https://open.bigmodel.cn/api/paas/v4/chat/completions',aiApiKey:'a2c7cedcd0c64b74abf9967d85ba3d4c.lRKWx5uvKXz7Gn6B',aiModel:'glm-4.7-flash',
                 soundEnabled:true,soundVolume:70,
                 shuffleOptions:true,baseTimeout:30,charTimeoutCompensation:0.2,autoNext:true,drawAnimation:true,drawDuration:3
-            });
+            };
+            var s=this.get('settings',def);
+            if(!s||typeof s!=='object')s=def;
+            if(!Array.isArray(s.levels))s.levels=DEFAULT_LEVELS.map(function(l){return {name:l.name,minPoints:l.minPoints,comment:l.comment}});
+            // 一次性升级：只补缺失的高等级，不覆盖老师自定义的等级名/门槛；升级过就不再重复
+            if(!s.levelSchemaVersion||s.levelSchemaVersion<LEVEL_SCHEMA_VERSION){
+                var changed=false;
+                DEFAULT_LEVELS.slice(5).forEach(function(l){
+                    if(!s.levels.some(function(x){return x.minPoints===l.minPoints})){
+                        s.levels.push({name:l.name,minPoints:l.minPoints,comment:l.comment});
+                        changed=true;
+                    }
+                });
+                if(changed)s.levels.sort(function(a,b){return (a.minPoints||0)-(b.minPoints||0)});
+                s.levelSchemaVersion=LEVEL_SCHEMA_VERSION;
+                this.set('settings',s);
+            }
+            return s;
         },
         setSettings:function(s){
             var oldSettings=this.getSettings();
