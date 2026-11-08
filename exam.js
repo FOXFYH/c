@@ -379,7 +379,7 @@
                     var fi=fileIndex.find(function(x){return x.id===bid&&x.id.startsWith('QB_')});
                     if(fi){
                         // 先在banks中创建空壳条目，以便下载后填充（静默，不增加版本号）
-                        b={id:bid,name:fi.name,description:'',questions:[],createdAt:Date.now(),type:fi.bankType||''};
+                        b={id:bid,name:App.BankTypes.stripSuffix(fi.name),description:'',questions:[],createdAt:Date.now(),type:fi.bankType||(App.BankTypes.fromFileName(fi.name)||'')};
                         banks.push(b);
                         App.Storage._syncSilent=true;
                         try{App.Storage.setBanks(banks)}finally{App.Storage._syncSilent=false}
@@ -502,7 +502,8 @@
             App._autoFS();
             this._nextPlayer();
         },
-        _startPinyinExam:function(){
+        _startPinyinExam:async function(){
+            await this._ensureCloudFor(App.Storage.getSettings()._lastPinyinBankIds||[],'pinyin');
             var selectedIds=this.getSelectedStudentIds();
             if(App.Role&&App.Role.isStudent()&&selectedIds.length!==1){selectedIds=[App.Role.actingId()]}
             if(selectedIds.length!==1){App.Toast.show('拼音练习模式请选择1名学生','warning');return}
@@ -537,13 +538,30 @@
             var sp=parseFloat((document.getElementById('exam-reading-speed')||{}).value)||0.5;
             el.textContent='文章《'+(bank.title||bank.name)+'》约 '+chars+' 字 × '+sp+' 秒 ≈ 阅读 '+Math.max(5,Math.round(chars*sp))+' 秒';
         },
+        // 开始前确保所选题库已在本地；仅云端的先下载（阅读/拼音/填空共用）
+        _ensureCloudFor:async function(ids,type){
+            try{
+                ids=ids||[];
+                var fi=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                for(var i=0;i<ids.length;i++){
+                    var id=ids[i];
+                    var b=App.Storage.getBanks().find(function(x){return x.id===id});
+                    if(b&&b.questions&&b.questions.length)continue;
+                    var f=fi.find(function(x){return x.id===id&&App.Questions.cloudType(x)===type});
+                    if(!f)continue;
+                    App.Toast.show('正在下载云端题库「'+App.BankTypes.stripSuffix(f.name)+'」…','info');
+                    await App.Questions.downloadCloudBank(f.id,App.BankTypes.stripSuffix(f.name));
+                }
+            }catch(e){}
+        },
         _readingBank:function(){
             var banks=App.Storage.getBanks(),ids=App.Storage.getSettings()._lastReadingBankIds||[];
             var hit=null;
             ids.forEach(function(id){var b=banks.find(function(x){return x.id===id});if(b&&App.BankTypes.of(b)==='reading')hit=b});
             return hit;
         },
-        _startReadingExam:function(){
+        _startReadingExam:async function(){
+            await this._ensureCloudFor(App.Storage.getSettings()._lastReadingBankIds||[],'reading');
             var bank=this._readingBank();
             if(!bank){App.Toast.show('请选择1个课外阅读题库','warning');return}
             if(!bank.article){App.Toast.show('该题库没有阅读文章','warning');return}
@@ -591,7 +609,8 @@
             var self=this;
             App.Reading.begin(bank.article,sp,function(){self._nextPlayer()},bank.title||bank.name);
         },
-        _startFillExam:function(){
+        _startFillExam:async function(){
+            await this._ensureCloudFor(App.Storage.getSettings()._lastFillBankIds||[],'fill');
             var selectedIds=this.getSelectedStudentIds();
             if(App.Role&&App.Role.isStudent()&&selectedIds.length!==1)selectedIds=[App.Role.actingId()];
             if(selectedIds.length!==1){App.Toast.show('填空练习模式请选择1名学生','warning');return}

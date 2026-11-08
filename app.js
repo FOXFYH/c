@@ -167,7 +167,42 @@
                 demoKept=true;return true
             });
             this.set('banks',b);
-            if(!this._syncSilent)App.Sync.notifyChange('banks',b)
+            if(!this._syncSilent)App.Sync.notifyChange('banks',b);
+            // 把题库类型写进文件索引，并把文件名补上类型后缀（云端未下载也能识别类型）
+            try{
+                if(App.BankTypes){
+                    var _ix=JSON.parse(localStorage.getItem('exam_file_index')||'[]'),_ch=false;
+                    b.forEach(function(x){
+                        if(!x||!x.id||x._demo)return;
+                        var ty=App.BankTypes.of(x),e=_ix.find(function(y){return y.id===x.id});
+                        if(!e)return;
+                        if(e.bankType!==ty){e.bankType=ty;_ch=true}
+                        var want=App.BankTypes.withSuffix(x.name,ty);
+                        if(e.name!==want){e.name=want;_ch=true}
+                    });
+                    if(_ch)localStorage.setItem('exam_file_index',JSON.stringify(_ix));
+                }
+            }catch(e){}
+        },
+        // 把文件索引里“仅云端题库”的类型补齐（能读文件名后缀的读后缀，本地有副本的用本地类型）
+        fixBankIndexTypes:function(){
+            try{
+                if(!App.BankTypes)return;
+                var idx=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                var banks=this.get('banks',[])||[];
+                var ch=false;
+                idx.forEach(function(f){
+                    if(!f||!f.id||!f.cloudOnly||!/^QB_/.test(String(f.id)))return;
+                    var fromName=App.BankTypes.fromFileName(f.name);
+                    var local=banks.find(function(x){return x.id===f.id});
+                    var ty=fromName||(local?App.BankTypes.of(local):'');
+                    if(!ty)return;
+                    if(f.bankType!==ty){f.bankType=ty;ch=true}
+                    var want=App.BankTypes.withSuffix(f.name,ty);
+                    if(f.name!==want){f.name=want;ch=true}
+                });
+                if(ch)localStorage.setItem('exam_file_index',JSON.stringify(idx));
+            }catch(e){}
         },
         getRecords:function(){return this.get('records',[])},
         setRecords:function(r){this.set('records',r);if(!this._syncSilent){App.Sync.notifyChange('records',r);if(App.Sync.forceSaveFile&&App.Sync._pref('on_exam_end'))App.Sync.forceSaveFile('系统-考试数据');if(App.Ledger)App.Ledger.onRecordsChanged(r)}},
@@ -2644,6 +2679,7 @@
         safe('Toast.init', function(){ App.Toast.init(); });
         safe('Effects.init', function(){ App.Effects.init(); });
         safe('seedNewModeBanks', function(){ App.Storage.seedNewModeBanks(); });
+        safe('fixBankIndexTypes', function(){ App.Storage.fixBankIndexTypes(); });
         safe('Students.render', function(){ App.Students.render(); });
         safe('Questions.render', function(){ App.Questions.render(); });
         safe('Leaderboard.render', function(){ App.Leaderboard.render(); });

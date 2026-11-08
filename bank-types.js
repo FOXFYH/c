@@ -16,6 +16,20 @@
         TYPES:TYPES,
         ALL:['single','pinyin','reading','fill'],
         of:function(bank){var t=bank&&bank.type;if(TYPES[t])return t;return this.guess(bank)},
+        // 题库文件名类型后缀：云端文件即使没下载，也能从文件名看出类型
+        SUFFIX:{single:'.__single',pinyin:'.__pinyin',reading:'.__reading',fill:'.__fill'},
+        suffixOf:function(type){return this.SUFFIX[type]||''},
+        stripSuffix:function(name){
+            return String(name||'').replace(/\.__(single|pinyin|reading|fill)$/,'');
+        },
+        fromFileName:function(name){
+            var m=String(name||'').match(/\.__(single|pinyin|reading|fill)$/);
+            return m?m[1]:'';
+        },
+        withSuffix:function(name,type){
+            var base=this.stripSuffix(name),suf=this.suffixOf(type);
+            return suf?base+suf:base;
+        },
         // 老题库/云端旧文件可能没有 type：按内容兜底判断，避免“阅读题库跑到选择练习里”
         guess:function(bank){
             if(!bank)return 'single';
