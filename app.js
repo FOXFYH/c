@@ -456,7 +456,7 @@
                 }
                 body+='<div style="font-weight:700;font-size:14px;margin:14px 0 8px">📅 逐场记录</div>';
                 history.forEach(function(h){
-                    var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':h.mode==='pinyin'?'拼 拼音':h.mode==='fill'?'✍️ 填空题':mode==='reading'?'📖 课外阅读':h.mode==='practice'?'📝 练习':h.mode==='smart'?'🧠 智能抽查':h.mode==='group'?'👥 分组':'🎮 未知';
+                    var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':h.mode==='pinyin'?'拼 拼音练习':h.mode==='fill'?'✍️ 填空练习':h.mode==='reading'?'📖 阅读选择':h.mode==='practice'?'📝 选择练习':h.mode==='smart'?'🧠 智能抽查':h.mode==='group'?'👥 分组':'🎮 未知';
                     var dateStr=new Date(h.date).toLocaleString('zh-CN');
                     var bankStr=h.bankNames.join('、')||'未知题库';
                     body+='<div class="sh-session">';
@@ -487,7 +487,7 @@
             empty.classList.remove('show');records.sort(function(a,b){return b.date-a.date});
             var html='';
             records.forEach(function(rec){
-                var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':rec.mode==='pinyin'?'拼 拼音':rec.mode==='fill'?'✍️ 填空题':mode==='reading'?'📖 课外阅读':rec.mode==='practice'?'📝 练习':rec.mode==='smart'?'🧠 智能抽查':rec.mode==='group'?'👥 分组':'🎮 未知';
+                var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':rec.mode==='pinyin'?'拼 拼音练习':rec.mode==='fill'?'✍️ 填空练习':rec.mode==='reading'?'📖 阅读选择':rec.mode==='practice'?'📝 选择练习':rec.mode==='smart'?'🧠 智能抽查':rec.mode==='group'?'👥 分组':'🎮 未知';
                 var dateStr=new Date(rec.date).toLocaleString('zh-CN');
                 var srs=rec.studentResults||{};var sNames=Object.keys(srs).map(function(k){return srs[k].name});
                 var partLabel=rec.allParticipants?' 👥全员':'';
@@ -562,7 +562,7 @@
             var container=document.querySelector('.leaderboard-container h2.section-title');
             empty.classList.remove('show');
             var dateStr=new Date(rec.date).toLocaleString('zh-CN');
-            var modeLabel=rec.mode==='draw'?'多人挑战':rec.mode==='assign'?'单人挑战':rec.mode==='pk'?'PK':rec.mode==='farm'?'打野':rec.mode==='challenge'?'挑战':rec.mode==='pinyin'?'拼音':rec.mode==='fill'?'填空题':mode==='reading'?'课外阅读':rec.mode==='practice'?'练习':rec.mode==='smart'?'智能抽查':rec.mode==='group'?'分组':'未知';
+            var modeLabel=rec.mode==='draw'?'多人挑战':rec.mode==='assign'?'单人挑战':rec.mode==='pk'?'PK':rec.mode==='farm'?'打野':rec.mode==='challenge'?'挑战':rec.mode==='pinyin'?'拼音练习':rec.mode==='fill'?'填空练习':rec.mode==='reading'?'阅读选择':rec.mode==='practice'?'选择练习':rec.mode==='smart'?'智能抽查':rec.mode==='group'?'分组':'未知';
             if(rec.mode==='group'||rec.participationType==='group'){
                 if(container)container.textContent='🏆 历史积分榜 - '+dateStr+' '+modeLabel;
                 App.Exam._renderGroupRanking(rec);
@@ -627,7 +627,7 @@
 
     // ========== 学生个人考试历史（按考试类型切割总流水账） ==========
     App.History = {
-        META:{farm:{n:'🌾 打野'},challenge:{n:'🎯 挑战'},pk:{n:'⚔️ PK'},practice:{n:'📝 练习'},smart:{n:'🧠 智能抽查'},pinyin:{n:'拼 拼音'},reading:{n:'📖 课外阅读'},fill:{n:'✍️ 填空题'},lottery:{n:'🎲 抽签'}},
+        META:{farm:{n:'🌾 打野'},challenge:{n:'🎯 挑战'},pk:{n:'⚔️ PK'},practice:{n:'📝 选择练习'},smart:{n:'🧠 智能抽查'},pinyin:{n:'拼 拼音练习'},reading:{n:'📖 阅读选择'},fill:{n:'✍️ 填空练习'},lottery:{n:'🎲 抽签'}},
         _summaryHTML:function(sid){
             var st=App.getStudentStats(sid);
             return '<div class="history-summary-row"><span>总积分 <b style="color:var(--gold)">'+st.totalPoints+'⭐</b></span><span>正确率 <b>'+st.accuracy+'%</b></span><span>场次 <b>'+st.sessions+'</b></span><span>答对 <b>'+st.totalCorrect+'/'+st.totalCount+'</b></span></div>';

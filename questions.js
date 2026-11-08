@@ -89,7 +89,7 @@
         bankUsage:function(bankId){
             var bank=App.Storage.getBanks().find(function(b){return b.id===bankId});
             if(!bank){App.Toast.show('找不到该题库','warning');return}
-            var modes={farm:'🌾 打野',challenge:'🎯 挑战',pk:'⚔️ PK',practice:'📝 练习',smart:'🧠 智能抽查',pinyin:'🈶 拼音',reading:'📖 课外阅读',fill:'✍️ 填空题',lottery:'🎲 抽签'};
+            var modes={farm:'🌾 打野',challenge:'🎯 挑战',pk:'⚔️ PK',practice:'📝 选择练习',smart:'🧠 智能抽查',pinyin:'拼 拼音练习',reading:'📖 阅读选择',fill:'✍️ 填空练习',lottery:'🎲 抽签'};
             var map={};
             App.Storage.getRecords().forEach(function(r){
                 if((r.bankNames||[]).indexOf(bank.name)<0)return;

@@ -39,7 +39,7 @@ var ModeRules = {
         groupExtra: '获胜小组全员每题额外 +5 分'
     },
     practice: {
-        title: '📝 练习',
+        title: '📝 选择练习',
         icon: '📝',
         rules: [
             '首轮每题 10 积分，答错不得分',
@@ -60,7 +60,7 @@ var ModeRules = {
         personalOnly: true
     },
     pinyin: {
-        title: '拼 拼音',
+        title: '拼 拼音练习',
         icon: '拼',
         rules: [
             '仅学生模式可使用，单人拼字',
@@ -74,7 +74,7 @@ var ModeRules = {
         personalOnly: true
     },
     fill: {
-        title: '✍️ 填空题',
+        title: '✍️ 填空练习',
         icon: '✍️',
         rules: [
             '仅学生模式可使用，单人答题',
@@ -87,7 +87,7 @@ var ModeRules = {
         personalOnly: true
     },
     reading: {
-        title: '📖 课外阅读',
+        title: '📖 阅读选择',
         icon: '📖',
         rules: [
             '先展示阅读文章，读完后才开始答题',
@@ -135,19 +135,19 @@ var ParticipationLabels = {
         farm: '🌾 个人打野',
         challenge: '🎯 个人挑战',
         pk: '⚔️ 个人PK',
-        practice: '📝 个人练习',
+        practice: '📝 个人选择练习',
         smart: '🧠 个人智能抽查',
         lottery: '🎲 个人抽签',
-        pinyin: '拼 个人拼音',
-        fill: '✍️ 个人填空',
-        reading: '📖 个人课外阅读'
+        pinyin: '拼 个人拼音练习',
+        fill: '✍️ 个人填空练习',
+        reading: '📖 个人阅读选择'
     },
     group: {
         farm: '🌾 小组打野',
         challenge: '🎯 小组挑战',
         pk: '⚔️ 小组PK',
         smart: '🧠 小组智能抽查',
-        reading: '📖 小组课外阅读'
+        reading: '📖 小组阅读选择'
     }
 };
 
