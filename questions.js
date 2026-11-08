@@ -296,6 +296,11 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
             bar.innerHTML=html;
         },
         tagText:function(b){var a=App.BankTypes.tagsOfBank(b);return a.map(function(t,i){return i===0?App.BankTypes.info(t).name:t}).join(' / ')},
+        autoTagNow:function(){
+            App.Storage.fixBankIndexTypes();
+            this.render();
+            App.Toast.show('已为缺标签的题库补上题型与科目','success');
+        },
         _toggleUsageRow:function(el){
             var row=el&&el.closest?el.closest('.bank-usage-row'):null;
             if(!row)return;

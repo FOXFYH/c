@@ -192,6 +192,17 @@
                 var idx=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
                 var banks=this.get('banks',[])||[];
                 var ch=false;
+                // 本地题库：缺标签的补成 [题型, 科目]
+                var _bch=false;
+                banks.forEach(function(b){
+                    if(!b||!b.id)return;
+                    var tags=App.BankTypes.tagsOfBank(b);
+                    if(tags.length<2){
+                        b.tags=[tags[0],App.BankTypes.guessSubject(b.name)];
+                        _bch=true;
+                    }
+                });
+                if(_bch){this.set('banks',banks);ch=true}
                 // 对账：索引里存在、但本地 banks 没有的题库 → 一定属于“仅云端”，避免老题库凭空消失
                 var _localIds={};
                 banks.forEach(function(b){if(b&&b.id)_localIds[b.id]=1});
@@ -202,10 +213,11 @@
                     if(!f||!f.id||!f.cloudOnly||!/^QB_/.test(String(f.id)))return;
                     var tags=App.BankTypes.tagsOfName(f.name);
                     var local=banks.find(function(x){return x.id===f.id});
-                    var ty=tags[0]||(local?App.BankTypes.of(local):'');
+                    var ty=tags[0]||(local?App.BankTypes.of(local):'single');
                     if(!ty)return;
                     if(f.bankType!==ty){f.bankType=ty;ch=true}
                     var full=tags.length?tags:[ty];
+                    if(full.length<2)full=[ty,App.BankTypes.guessSubject(f.name)];
                     if(String(f.bankTags||'')!==String(full.join(','))){f.bankTags=full;ch=true}
                     var want=App.BankTypes.fileWithTags(f.name,full);
                     if(f.name!==want){f.name=want;ch=true}
