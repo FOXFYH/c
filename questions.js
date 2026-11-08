@@ -494,6 +494,21 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
                 return;
             }
             if(!confirm('确定要删除该题库及其所有题目吗？（同时删除云端行，云端删除失败则题库保留）'))return;
+            // 只在本机、云端没有对应行的题库（本机新建/测试库）：只删本地，不发云端删除，避免“云端找不到”
+            var _fi=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+            var _fe=_fi.find(function(x){return x.id===id});
+            var _cloudBacked=!!(_fe&&/^QB_/.test(String(id))&&!_fe.isNewFile);
+            if(!_cloudBacked){
+                App.Storage.set('banks',banks.filter(function(x){return x.id!==id}));
+                try{
+                    var _fi2=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                    _fi2=_fi2.filter(function(x){return x.id!==id});
+                    localStorage.setItem('exam_file_index',JSON.stringify(_fi2));
+                }catch(e){}
+                this.render();
+                App.Toast.show('已删除本地题库「'+(bank?bank.name:id)+'」（云端无此条）','info');
+                return;
+            }
             if(App._bankDeleting){App.Toast.show('正在删除云端题库，请稍候…','warning');return}
             var name=bank?bank.name:(function(){var fi=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var f=fi.find(function(x){return x.id===id});return f&&f.name?f.name:id})();
             App._bankDeleting=id;

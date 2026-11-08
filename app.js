@@ -1617,15 +1617,16 @@
                             if(App._bankDeleteTimer){clearTimeout(App._bankDeleteTimer);App._bankDeleteTimer=null}
                             if(!App._bankDeleting||App._bankDeleting===delId)App._bankDeleting=null;
                             if(reason==='cloud_not_found'){
-                                var hasLocal=App.Storage.getBanks().some(function(b){return b.id===delId});
-                                if(!hasLocal){
-                                    var fi0=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
-                                    var n0=fi0.length;
-                                    fi0=fi0.filter(function(f){return f.id!==delId});
-                                    try{localStorage.setItem('exam_file_index',JSON.stringify(fi0))}catch(e){}
-                                    if(App.Questions)App.Questions.render();
-                                    if(n0!==fi0.length){App.Toast.show('云端已无此题库，已清理本地残留（刷新后不再出现）','success');return}
-                                }
+                                // 云端本来就没有这行：删除目标已达成，本地一并清掉，不再报错
+                                var bk0=App.Storage.getBanks();
+                                var remain0=bk0.filter(function(b){return b.id!==delId});
+                                if(remain0.length!==bk0.length)App.Storage.setBanks(remain0);
+                                var fi0=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                                fi0=fi0.filter(function(f){return f.id!==delId});
+                                try{localStorage.setItem('exam_file_index',JSON.stringify(fi0))}catch(e){}
+                                if(App.Questions)App.Questions.render();
+                                App.Toast.show('云端已无此题库，已删除本地残留','success');
+                                return;
                             }
                             var reasonText={'cloud_not_found':'云端找不到该题库行','network_error':'网络异常，无法连接云端','sync_disabled':'云同步未启用'}[reason]||('云端删除失败（'+reason+'）');
                             if(App.Questions)App.Questions.render();

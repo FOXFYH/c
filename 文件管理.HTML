@@ -4734,7 +4734,8 @@ window.addEventListener('message',function(e){
             return;
           }
           if(!cloudResult.file){
-            toast('删除失败：云端找不到该行(ID:'+fid+')','error');
+            // 云端本来就没有这行：宿主会当作“目标已达成”清理本地残留，这里不再弹红色失败提示
+            console.log('[删除] 云端找不到该行，交由宿主处理:',fid);
             notifyParent('bankDeleteFailed',{fileId:fid,reason:'cloud_not_found'});
             return;
           }
