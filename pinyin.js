@@ -83,7 +83,7 @@
             var sel=App.Storage.getSettings()._lastPinyinBankIds||[];
             var pool=[],names=[];
             sel.forEach(function(id){
-                var b=banks.find(function(x){return x.id===id&&x.type==='pinyin'});
+                var b=banks.find(function(x){return x.id===id&&App.BankTypes.of(x)==='pinyin'});
                 if(!b||!b.questions||!b.questions.length)return;
                 b.questions.forEach(function(q){
                     if(q&&q.text&&q.char&&q.pinyin&&String(q.text).indexOf(q.char)>=0)pool.push(q);

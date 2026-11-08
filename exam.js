@@ -600,7 +600,7 @@
             if(!student){App.Toast.show('找不到该学生','warning');return}
             var banks=App.Storage.getBanks(),ids=App.Storage.getSettings()._lastFillBankIds||[];
             var bank=null;
-            ids.forEach(function(id){var b=banks.find(function(x){return x.id===id&&x.type==='fill'});if(b)bank=b});
+            ids.forEach(function(id){var b=banks.find(function(x){return x.id===id&&App.BankTypes.of(x)==='fill'});if(b)bank=b});
             if(!bank){App.Toast.show('请选择1个填空题题库','warning');return}
             var qs=(bank.questions||[]).filter(function(q){return q&&q.text&&q.answers&&q.answers.length});
             if(!qs.length){App.Toast.show('填空题题库没有题目','warning');return}
