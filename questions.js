@@ -17,8 +17,8 @@ if(_tf!=='all'){var _allc=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.fi
             var _del=_other?('App.Toast.show(\'该题库属于 '+_ow+'，请先用该账号登录后再删除\',\'error\')'):('App.Questions.removeBank(\''+f.id+'\')');
             html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-line" onclick="App.Questions.toggleBankCard(this)"><span class="bcl-name">'+_cn+'</span><span class="bcl-count">'+_n+'</span><span class="bcl-arrow">▸</span></div><div class="bc-header"><div><div class="bc-name">'+_cn+'<span style="margin-left:6px;font-size:11px;color:#0b6fb3;background:#eef7ff;border:1px solid #b9dcf5;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">☁ 仅云端·未下载</span>'+_badge+_ob+'</div><div class="bc-count">（'+_n+'）</div></div></div><div class="bc-desc">'+(_other?('该题库属于账号 '+_ow+'，当前登录的是 '+_me+'，无权删除或编辑；请用该账号登录后再操作。'):'该题库只存在于云端，尚未缓存到本地；可直接在「开始比赛→题库」里选中，开考时会自动下载。')+'</div><div class="bc-actions"><button onclick="App.Questions.downloadCloudBank(\''+f.id+'\',\''+String(_cn).replace(/'/g,'')+'\')">☁️ 下载题库</button><button class="teacher-only" onclick="App.Questions.editCloudBank(\''+f.id+'\',\''+String(_cn).replace(/'/g,'')+'\')">📋 编辑预览</button><button class="btn-del teacher-only" onclick="'+_del+'">🗑️ 删除</button></div></div>'
         });
-        if(_cloudHidden>0)html+='<div class="bank-modal-note" style="grid-column:1/-1">另有 '+_cloudHidden+' 个云端题库尚未标注类型，未显示；可切换「全部类型」查看，或在题库页打开一次即可自动归类</div>';
-        grid.innerHTML=html;try{clearTimeout(App.Questions._probeTimer);App.Questions._probeTimer=setTimeout(function(){App.Questions.probeCloudTypes()},1500)}catch(e){}},
+        if(_cloudHidden>0)html+='<div class="bank-modal-note" style="grid-column:1/-1">另有 '+_cloudHidden+' 个云端题库未标注类型（旧文件），未显示；可在「全部类型」里手动下载一次后自动归类</div>';
+        grid.innerHTML=html},
         toggleBankCard:function(el){
             var card=el&&el.closest?el.closest('.bank-card'):null;
             var grid=document.getElementById('bank-grid');
@@ -39,7 +39,7 @@ cloudOnlyBanks=cloudOnlyBanks.filter(function(f){
     if(ty)return ty===_needType;
     return _needType==='single';
 });
-var _cloudHidden=_cloudAll-cloudOnlyBanks.length;var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';if(App.Exam.participationType==='personal')body+='<button type="button" class="bank-modal-stat" onclick="event.stopPropagation();App.Modal.close();App.Questions.bankUsage(\''+b.id+'\')">📊</button>';body+='</div>'});cloudOnlyBanks.forEach(function(f){var sel=lastIds.indexOf(f.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+f.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+App.Questions.cloudBaseName(f)+'</span>';body+='<span class="bank-modal-count">☁ 未下载</span>';body+='</div>'});body+='</div>';if(_cloudHidden>0)body+='<div class="bank-modal-note">另有 '+_cloudHidden+' 个云端题库尚未标注类型；到「题库」页下载一次即可自动归类</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
+var _cloudHidden=_cloudAll-cloudOnlyBanks.length;var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';if(App.Exam.participationType==='personal')body+='<button type="button" class="bank-modal-stat" onclick="event.stopPropagation();App.Modal.close();App.Questions.bankUsage(\''+b.id+'\')">📊</button>';body+='</div>'});cloudOnlyBanks.forEach(function(f){var sel=lastIds.indexOf(f.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+f.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+App.Questions.cloudBaseName(f)+'</span>';body+='<span class="bank-modal-count">☁ 未下载</span>';body+='</div>'});body+='</div>';if(_cloudHidden>0)body+='<div class="bank-modal-note">另有 '+_cloudHidden+' 个云端题库未标注类型（旧文件）；到「题库」页手动下载一次即可归类</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
         toggleModalBank:function(el,single){if(single){document.querySelectorAll('.bank-modal-item.selected').forEach(function(item){if(item!==el){item.classList.remove('selected');item.querySelector('.bank-modal-check').textContent=''}})}el.classList.toggle('selected');el.querySelector('.bank-modal-check').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         selectAllModalBanks:function(){var items=document.querySelectorAll('.bank-modal-item');var allSel=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSel=false});items.forEach(function(el){if(allSel){el.classList.remove('selected');el.querySelector('.bank-modal-check').textContent=''}else{if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.bank-modal-check').textContent='✓'}}});App.Effects.playClick()},
         confirmBankSelect:function(){var ids=[];document.querySelectorAll('.bank-modal-item.selected').forEach(function(el){ids.push(el.dataset.bankId)});if(ids.length===0){App.Toast.show('请至少选择一个题库','warning');return}if((App.Exam.currentMode==='practice'||App.Exam.currentMode==='reading'||App.Exam.currentMode==='fill')&&ids.length>1){App.Toast.show('该模式只能选择1个题库','warning');return}var settings=App.Storage.getSettings();if(App.Exam.currentMode==='reading'){settings._lastReadingBankIds=ids}else if(App.Exam.currentMode==='pinyin'){settings._lastPinyinBankIds=ids}else if(App.Exam.currentMode==='fill'){settings._lastFillBankIds=ids}else{settings._lastBankIds=ids}App.Storage.setSettings(settings);App.Modal.close();this.renderBankSelect();if(App.Exam.currentMode==='reading'&&App.Exam.updateReadingPreview)App.Exam.updateReadingPreview();App.Effects.playClick()},
@@ -50,33 +50,6 @@ var _cloudHidden=_cloudAll-cloudOnlyBanks.length;var body='<div class="bank-moda
             return App.BankTypes.fromFileName(f.name)||'';
         },
         cloudBaseName:function(f){return App.BankTypes.stripSuffix(f&&f.name||'')},
-        // 自动探测“仅云端题库”的类型：下载一次、读内容判定，并回填索引（最多 8 个，节流）
-        _probing:false,
-        probeCloudTypes:function(){
-            try{
-                var self=this;
-                if(self._probing)return;
-                if(!(App.Sync&&App.Sync.ready))return;
-                var fi=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
-                var todo=fi.filter(function(f){return f.cloudOnly&&f.id&&/^QB_/.test(String(f.id))&&!self.cloudType(f)}).slice(0,8);
-                if(!todo.length)return;
-                self._probing=true;
-                (async function(){
-                    for(var i=0;i<todo.length;i++){
-                        var f=todo[i];
-                        App.Sync.postToFileManager({type:'downloadCloudFile',fileId:f.id});
-                        var t0=Date.now();
-                        while(Date.now()-t0<8000){
-                            await new Promise(function(r){setTimeout(r,500)});
-                            var b=App.Storage.getBanks().find(function(x){return x.id===f.id});
-                            if(b&&b.questions&&b.questions.length>0){App.Storage.fixBankIndexTypes();break}
-                        }
-                    }
-                    self._probing=false;
-                    App.Questions.render();
-                })();
-            }catch(e){App.Questions._probing=false}
-        },
         // 云端题库：先下载再打开编辑器
         editCloudBank:async function(id,name){
             var base=App.BankTypes.stripSuffix(name||'');
