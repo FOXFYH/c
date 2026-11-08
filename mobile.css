@@ -594,12 +594,20 @@ html[data-ui="mobile"] .rules-arrow {
     transition: transform .2s;
 }
 html[data-ui="mobile"] .rules-card.expanded .rules-arrow { transform: rotate(180deg); }
-html[data-ui="mobile"] .setup-header { flex-wrap: wrap; gap: 8px; justify-content: center; }
-html[data-ui="mobile"] .setup-header .btn-back { order: 1; min-height: 44px; }
-html[data-ui="mobile"] .setup-header .section-title { order: 2; flex: 1 1 40%; font-size: 18px; text-align: right; }
+/* 手机端：返回 / 本类型历史 / 标题 同处一行，开始按钮单独一行 */
+html[data-ui="mobile"] .setup-header {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas: "back hist title" "start start start";
+    gap: 6px 8px;
+    align-items: center;
+}
+html[data-ui="mobile"] .setup-header .btn-back { grid-area: back; min-height: 38px; padding: 6px 10px; font-size: 13px; white-space: nowrap; }
+html[data-ui="mobile"] .setup-header .btn-secondary.btn-sm { grid-area: hist; min-height: 38px; padding: 6px 10px; font-size: 13px; white-space: nowrap; }
+html[data-ui="mobile"] .setup-header .section-title { grid-area: title; font-size: 17px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
 html[data-ui="mobile"] .setup-header .btn-start-top {
-    order: 3;
-    flex: 1 1 100%;
+    grid-area: start;
+    width: 100%;
     justify-content: center;
     font-size: 18px;
     padding: 12px;
