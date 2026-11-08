@@ -976,3 +976,15 @@ html[data-ui="mobile"] body:has(> #statusText) .status { font-size: 13px; }
     /* 文件管理器弹窗同样限宽居中 */
     html[data-ui="mobile"] #file-modal iframe { max-width: 480px !important; }
 }
+
+/* ===== 拼音迷你键盘（手机竖版） ===== */
+html[data-ui="mobile"] .pin-key { min-width: 56px; min-height: 46px; font-size: 18px; padding: 8px 10px; }
+html[data-ui="mobile"] .pin-key.special { min-width: 84px; font-size: 14px; }
+html[data-ui="mobile"] .pin-current { font-size: 1.8em; letter-spacing: 4px; }
+html[data-ui="mobile"] .pinyin-q { font-size: 1.45em; }
+
+/* ===== 课外阅读（手机竖版） ===== */
+html[data-ui="mobile"] .reading-sheet { max-height: 94vh; border-radius: 12px; }
+html[data-ui="mobile"] .reading-body { font-size: 17px; line-height: 1.9; padding: 4px 16px 14px; }
+html[data-ui="mobile"] .reading-btn { padding: 10px 12px; font-size: 14px; }
+html[data-ui="mobile"] .reading-meta { font-size: 12px; }

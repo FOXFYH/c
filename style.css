@@ -4080,10 +4080,11 @@ input:checked + .slider:before {
 .sr-actions{padding-top:8px;text-align:right}
 #nav-login-status{cursor:pointer}
 #nav-login-status:hover{text-decoration:underline}
-/* 班主任看不到「练习」（练习只能由班主任切到某个学生后进入） */
-body.role-teacher .mode-card[data-mode="practice"]{display:none}
+/* 班主任看不到「练习」「拼音」（这两个只能由班主任切到某个学生后进入） */
+body.role-teacher .mode-card[data-mode="practice"],
+body.role-teacher .mode-card[data-mode="pinyin"]{display:none}
 /* 学生模式只保留单人可完成的模式 */
-body.role-student .mode-card:not([data-mode="practice"]){display:none}
+body.role-student .mode-card:not([data-mode="practice"]):not([data-mode="pinyin"]){display:none}
 /* 班主任专属的操作整块隐藏 */
 body.role-student [data-teacher-only],
 body.role-student .teacher-only{display:none!important}
@@ -4096,3 +4097,47 @@ body.role-student #stab-sync{display:none!important}
 #role-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin:0 auto 10px;max-width:1100px;border-radius:10px;background:rgba(231,126,34,.12);border:1px solid rgba(231,126,34,.35);font-size:13px}
 body.role-student #role-bar{display:flex}
 #role-bar .role-back{margin-left:auto}
+
+/* ===== 学生模式：我的考试历史入口 ===== */
+.student-history-bar{display:none}
+body.role-student .student-history-bar{display:block;max-width:1100px;margin:0 auto 10px;padding:0 12px}
+/* 题库类型筛选下拉 */
+.bank-type-select{height:34px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary);font-size:13px;padding:0 8px}
+
+/* ===== 拼音题：迷你键盘 ===== */
+.pinyin-q{font-size:1.6em;line-height:1.9;letter-spacing:1px}
+.pinyin-target{font-weight:900;color:#e8590c;background:rgba(255,145,0,.14);border-radius:6px;padding:0 4px}
+.pin-panel{display:flex;flex-direction:column;gap:12px;width:100%}
+.pin-current{text-align:center;font-size:2em;letter-spacing:6px;min-height:1.4em;color:var(--text-primary)}
+.pin-ph{color:var(--text-muted);letter-spacing:12px}
+.pin-dots{color:var(--text-muted)}
+.pin-hint{text-align:center;color:var(--text-secondary);font-size:14px}
+.pin-hint.ok{color:var(--success);font-weight:700;font-size:16px}
+.pin-hint.bad{color:var(--danger);font-size:16px}
+.pin-grid{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.pin-key{min-width:64px;min-height:52px;padding:10px 14px;font-size:20px;border-radius:12px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary);cursor:pointer;font-weight:700}
+.pin-key:active{transform:scale(.97)}
+.pin-key.special{font-size:15px;min-width:92px;background:var(--bg-hover)}
+.pin-key.tone{font-size:15px;min-width:76px}
+.pin-key.ok{border-color:var(--success);background:rgba(46,204,113,.15)}
+.pin-key.bad{border-color:var(--danger);background:rgba(231,76,60,.15)}
+.pin-key.disabled{opacity:.55;pointer-events:none}
+
+/* ===== 课外阅读：记事本式阅读界面 ===== */
+body.reading-open{overflow:hidden}
+.reading-overlay{position:fixed;inset:0;z-index:1500;background:rgba(20,20,25,.72);display:flex;align-items:center;justify-content:center;padding:12px}
+.reading-sheet{width:min(760px,100%);max-height:92vh;display:flex;flex-direction:column;background:#fdfaf3;color:#2c2a26;border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.45);overflow:hidden}
+.reading-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px 6px}
+.reading-title{font-weight:800;font-size:17px}
+.reading-timer{font-weight:800;color:#b3541e;background:#f8e7d2;border-radius:999px;padding:4px 12px;font-size:15px;white-space:nowrap}
+.reading-timer.warn{color:#fff;background:#c0392b}
+.reading-meta{padding:0 18px 8px;font-size:12.5px;color:#8a8175}
+.reading-body{flex:1;overflow:auto;padding:6px 22px 18px;font-size:19px;line-height:2;font-family:"Songti SC","SimSun",serif;white-space:pre-wrap}
+.reading-body p{margin:0 0 12px;text-indent:2em}
+.reading-bar{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid #eadfce;background:#fffdf8}
+.reading-progress{flex:1;height:8px;border-radius:999px;background:#eee3d2;overflow:hidden}
+.reading-progress-fill{height:100%;width:0;background:linear-gradient(90deg,#e3a14a,#c0392b);transition:width .3s}
+.reading-btn{border:none;border-radius:10px;padding:11px 16px;font-size:15px;font-weight:700;background:#c0392b;color:#fff;cursor:pointer;white-space:nowrap}
+.reading-btn:active{transform:scale(.98)}
+/* 历史记录筛选按钮行 */
+.history-filter{display:flex;flex-wrap:wrap;gap:8px}

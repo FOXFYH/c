@@ -1,6 +1,21 @@
 (function () {
     'use strict';
-    var App = window.App = {};
+    var App = window.App = window.App || {};
+    // 按需加载模块：拼音题 / 课外阅读题等新功能不塞进本文件
+    App.Modules = {
+        _q:{},
+        load:function(name,cb){
+            if((name==='pinyin'&&App.Pinyin)||(name==='reading'&&App.Reading)){if(cb)cb();return}
+            var q=this._q[name];
+            if(q){if(cb)q.push(cb);return}
+            q=this._q[name]=cb?[cb]:[];
+            var s=document.createElement('script');
+            s.src=name+'.js?v='+(window.__APP_VER||'0');
+            s.onload=function(){delete App.Modules._q[name];q.forEach(function(f){try{if(f)f()}catch(e){}})};
+            s.onerror=function(){delete App.Modules._q[name];if(App.Toast)App.Toast.show('模块加载失败：'+name,'error')};
+            document.head.appendChild(s);
+        }
+    };
     function genId(){return Date.now().toString(36)+Math.random().toString(36).substr(2,6)}
     // 题库专用ID：QB_ + 10位数字，与云端格式一致
     function genBankId(){return 'QB_'+Math.floor(Math.random()*9000000000+1000000000)}
@@ -160,6 +175,9 @@
         });
         return{totalPoints:totalPoints,totalCorrect:totalCorrect,totalCount:totalCount,sessions:sessions,accuracy:totalCount>0?Math.round(totalCorrect/totalCount*100):0};
     }
+    // 供按需加载的模块（拼音/课外阅读）复用
+    App.getLevel=getLevel;
+    App.getStudentStats=getStudentStats;
 
     function getAllStudentStats(){
         var students=App.Storage.getStudents();
@@ -362,7 +380,7 @@
                 }
                 body+='<div style="font-weight:700;font-size:14px;margin:14px 0 8px">📅 逐场记录</div>';
                 history.forEach(function(h){
-                    var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':h.mode==='practice'?'📝 练习':h.mode==='smart'?'🧠 智能抽查':h.mode==='group'?'👥 分组':'🎮 未知';
+                    var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':h.mode==='pinyin'?'🈶 拼音':h.mode==='reading'?'📖 课外阅读':h.mode==='practice'?'📝 练习':h.mode==='smart'?'🧠 智能抽查':h.mode==='group'?'👥 分组':'🎮 未知';
                     var dateStr=new Date(h.date).toLocaleString('zh-CN');
                     var bankStr=h.bankNames.join('、')||'未知题库';
                     body+='<div class="sh-session">';
@@ -385,7 +403,7 @@
     };
 
     App.Questions = {
-        render:function(){var banks=App.Storage.getBanks();var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');var compact=(function(){try{return localStorage.getItem('exam_bank_compact')==='1'}catch(e){return false}})();grid.className='bank-grid'+(compact?' compact':'');var cbx=document.getElementById('bank-compact');if(cbx)cbx.checked=compact;var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var html='';banks.forEach(function(b){var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'空题库';var demoBadge=b._demo?'<span style="margin-left:6px;font-size:11px;color:#b07d00;background:#fff7e0;border:1px solid #f0d090;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">测试·仅本地</span>':'';html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-line" onclick="App.Questions.toggleBankCard(this)"><span class="bcl-name">'+b.name+'</span><span class="bcl-count">'+b.questions.length+' 题</span><span class="bcl-arrow">▸</span></div><div class="bc-header"><div><div class="bc-name">'+b.name+demoBadge+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});cloudOnlyBanks.forEach(function(f){var _n=(f.contentLength?f.contentLength+'字':'内容未缓存');var _me=(localStorage.getItem('exam_auth_user')||'');var _ow=String(f.owner||'');var _other=(_ow&&_me&&_ow!==_me);var _ob=_other?'<span style="margin-left:6px;font-size:11px;color:#8a4b00;background:#fff3e0;border:1px solid #f0c090;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">👤 属于 '+_ow+'</span>':'';var _del=_other?('App.Toast.show(\'该题库属于 '+_ow+'，请先用该账号登录后再删除\',\'error\')'):('App.Questions.removeBank(\''+f.id+'\')');html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-line" onclick="App.Questions.toggleBankCard(this)"><span class="bcl-name">'+f.name+'</span><span class="bcl-count">'+_n+'</span><span class="bcl-arrow">▸</span></div><div class="bc-header"><div><div class="bc-name">'+f.name+'<span style="margin-left:6px;font-size:11px;color:#0b6fb3;background:#eef7ff;border:1px solid #b9dcf5;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">☁ 仅云端·未下载</span>'+_ob+'</div><div class="bc-count">（'+_n+'）</div></div></div><div class="bc-desc">'+(_other?('该题库属于账号 '+_ow+'，当前登录的是 '+_me+'，无权删除或编辑；请用该账号登录后再操作。'):'该题库只存在于云端，尚未缓存到本地；请先点『下载题库』，下载完成后再编辑。')+'</div><div class="bc-actions"><button onclick="App.Questions.downloadCloudBank(\''+f.id+'\',\''+String(f.name).replace(/'/g,'')+'\')">☁️ 下载题库</button><button class="btn-del" onclick="'+_del+'">🗑️ 删除</button></div></div>'});grid.innerHTML=html},
+        render:function(){var banks=App.Storage.getBanks();var _tf=(document.getElementById('bank-type-filter')||{}).value||'all';if(_tf!=='all')banks=banks.filter(function(b){return App.BankTypes.of(b)===_tf});var grid=document.getElementById('bank-grid');var empty=document.getElementById('banks-empty');var compact=(function(){try{return localStorage.getItem('exam_bank_compact')==='1'}catch(e){return false}})();grid.className='bank-grid'+(compact?' compact':'');var cbx=document.getElementById('bank-compact');if(cbx)cbx.checked=compact;var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){grid.innerHTML='';empty.classList.add('show');return}empty.classList.remove('show');var html='';banks.forEach(function(b){if(b.type==='pinyin'){html+=App.Questions.pinyinBankCardHTML(b);return}if(b.type==='reading'){html+=App.Questions.readingBankCardHTML(b);return}var hasContent=b.questions&&b.questions.length>0;var countText=hasContent?(b.questions.length+'道题'):'空题库';var demoBadge=b._demo?'<span style="margin-left:6px;font-size:11px;color:#b07d00;background:#fff7e0;border:1px solid #f0d090;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">测试·仅本地</span>':'';html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-line" onclick="App.Questions.toggleBankCard(this)"><span class="bcl-name">'+b.name+'</span><span class="bcl-count">'+b.questions.length+' 题</span><span class="bcl-arrow">▸</span></div><div class="bc-header"><div><div class="bc-name">'+b.name+demoBadge+'</div><div class="bc-count">('+countText+')</div></div></div><div class="bc-desc">'+(b.description||'暂无描述')+'</div><div class="bc-actions"><button onclick="App.Questions.openBankManager(\''+b.id+'\')">📋 编辑预览</button><button onclick="App.Questions.showAddQuestionDialog(\''+b.id+'\')">➕ 添加题目</button><button onclick="App.Questions.showImportQuestionsDialog(\''+b.id+'\')">📥 导入题目</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>'});cloudOnlyBanks.forEach(function(f){var _n=(f.contentLength?f.contentLength+'字':'内容未缓存');var _me=(localStorage.getItem('exam_auth_user')||'');var _ow=String(f.owner||'');var _other=(_ow&&_me&&_ow!==_me);var _ob=_other?'<span style="margin-left:6px;font-size:11px;color:#8a4b00;background:#fff3e0;border:1px solid #f0c090;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">👤 属于 '+_ow+'</span>':'';var _del=_other?('App.Toast.show(\'该题库属于 '+_ow+'，请先用该账号登录后再删除\',\'error\')'):('App.Questions.removeBank(\''+f.id+'\')');html+='<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-line" onclick="App.Questions.toggleBankCard(this)"><span class="bcl-name">'+f.name+'</span><span class="bcl-count">'+_n+'</span><span class="bcl-arrow">▸</span></div><div class="bc-header"><div><div class="bc-name">'+f.name+'<span style="margin-left:6px;font-size:11px;color:#0b6fb3;background:#eef7ff;border:1px solid #b9dcf5;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">☁ 仅云端·未下载</span>'+_ob+'</div><div class="bc-count">（'+_n+'）</div></div></div><div class="bc-desc">'+(_other?('该题库属于账号 '+_ow+'，当前登录的是 '+_me+'，无权删除或编辑；请用该账号登录后再操作。'):'该题库只存在于云端，尚未缓存到本地；请先点『下载题库』，下载完成后再编辑。')+'</div><div class="bc-actions"><button onclick="App.Questions.downloadCloudBank(\''+f.id+'\',\''+String(f.name).replace(/'/g,'')+'\')">☁️ 下载题库</button><button class="btn-del" onclick="'+_del+'">🗑️ 删除</button></div></div>'});grid.innerHTML=html},
         toggleBankCard:function(el){
             var card=el&&el.closest?el.closest('.bank-card'):null;
             var grid=document.getElementById('bank-grid');
@@ -398,15 +416,190 @@
             this.render();
             if(App.Effects&&App.Effects.playClick)App.Effects.playClick();
         },
-        renderBankSelect:function(){var banks=App.Storage.getBanks();var info=document.getElementById('exam-bank-info');if(!info)return;var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){info.textContent='暂无题库，请先创建';return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var matched=banks.filter(function(b){return lastIds.indexOf(b.id)>=0});var cloudMatched=cloudOnlyBanks.filter(function(f){return lastIds.indexOf(f.id)>=0});if(matched.length>0||cloudMatched.length>0){var names=[];var totalQ=0;matched.forEach(function(b){names.push(b.name);totalQ+=b.questions.length});cloudMatched.forEach(function(f){names.push(f.name)});info.textContent=names.join('、')+'（'+totalQ+' 题）'}else{info.textContent='点击选择题库'}},
-        showBankSelectModal:function(){var banks=App.Storage.getBanks();var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){App.Toast.show('暂无题库，请先在题库中创建','warning');return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var isPractice=App.Exam.currentMode==='practice';var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';body+='</div>'});cloudOnlyBanks.forEach(function(f){var sel=lastIds.indexOf(f.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+f.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+f.name+'</span>';body+='<span class="bank-modal-count">☁ 未下载</span>';body+='</div>'});body+='</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
+        renderBankSelect:function(){if(App.Exam&&App.Exam.currentMode==='pinyin'){this.renderPinyinBankInfo();return}if(App.Exam&&App.Exam.currentMode==='reading'){this.renderReadingBankInfo();return}var banks=App.Storage.getBanks();if(App.BankTypes)banks=App.BankTypes.filter(banks,App.Exam.currentMode);var info=document.getElementById('exam-bank-info');if(!info)return;var _bar=document.getElementById('exam-bank-bar');var _lab=_bar?_bar.querySelector('.bank-bar-label'):null;if(_lab)_lab.textContent='📚 题库';var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){info.textContent='暂无题库，请先创建';return}var lastIds=App.Storage.getSettings()._lastBankIds||[];var matched=banks.filter(function(b){return lastIds.indexOf(b.id)>=0});var cloudMatched=cloudOnlyBanks.filter(function(f){return lastIds.indexOf(f.id)>=0});if(matched.length>0||cloudMatched.length>0){var names=[];var totalQ=0;matched.forEach(function(b){names.push(b.name);totalQ+=b.questions.length});cloudMatched.forEach(function(f){names.push(f.name)});info.textContent=names.join('、')+'（'+totalQ+' 题）'}else{info.textContent='点击选择题库'}},
+        showBankSelectModal:function(){var banks=App.Storage.getBanks();if(App.BankTypes)banks=App.BankTypes.filter(banks,App.Exam.currentMode);var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var localBankIds=new Set(banks.map(function(b){return b.id||b.name}));var localBankNames=new Set(banks.map(function(b){return b.name}));var cloudOnlyBanks=fileIndex.filter(function(f){return f.cloudOnly&&f.id&&f.id.startsWith('QB_')&&!localBankIds.has(f.id)&&!localBankNames.has(f.name)&&f.name});if(banks.length===0&&cloudOnlyBanks.length===0){App.Toast.show('暂无题库，请先在题库中创建','warning');return}var lastIds=(App.Exam.currentMode==='reading')?(App.Storage.getSettings()._lastReadingBankIds||[]):(App.Storage.getSettings()._lastBankIds||[]);var isPractice=(App.Exam.currentMode==='practice'||App.Exam.currentMode==='reading');if(App.Exam.currentMode==='reading')cloudOnlyBanks=[];var body='<div class="bank-modal-grid">';banks.forEach(function(b){var sel=lastIds.indexOf(b.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+b.name+'</span>';body+='<span class="bank-modal-count">'+b.questions.length+' 题</span>';body+='</div>'});cloudOnlyBanks.forEach(function(f){var sel=lastIds.indexOf(f.id)>=0?' selected':'';body+='<div class="bank-modal-item'+sel+'" data-bank-id="'+f.id+'" onclick="App.Questions.toggleModalBank(this,'+(isPractice?'true':'false')+')">';body+='<span class="bank-modal-check">'+(sel?'✓':'')+'</span>';body+='<span class="bank-modal-name">'+f.name+'</span>';body+='<span class="bank-modal-count">☁ 未下载</span>';body+='</div>'});body+='</div>';var footer='';if(!isPractice){footer+='<button class="btn-secondary" onclick="App.Questions.selectAllModalBanks()">全选/取消</button>'}footer+='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmBankSelect()">确定</button>';App.Modal.open(isPractice?'📚 选择题库（仅限1个）':'📚 选择题库',body,footer)},
         toggleModalBank:function(el,single){if(single){document.querySelectorAll('.bank-modal-item.selected').forEach(function(item){if(item!==el){item.classList.remove('selected');item.querySelector('.bank-modal-check').textContent=''}})}el.classList.toggle('selected');el.querySelector('.bank-modal-check').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         selectAllModalBanks:function(){var items=document.querySelectorAll('.bank-modal-item');var allSel=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSel=false});items.forEach(function(el){if(allSel){el.classList.remove('selected');el.querySelector('.bank-modal-check').textContent=''}else{if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.bank-modal-check').textContent='✓'}}});App.Effects.playClick()},
-        confirmBankSelect:function(){var ids=[];document.querySelectorAll('.bank-modal-item.selected').forEach(function(el){ids.push(el.dataset.bankId)});if(ids.length===0){App.Toast.show('请至少选择一个题库','warning');return}if(App.Exam.currentMode==='practice'&&ids.length>1){App.Toast.show('练习模式只能选择1个题库','warning');return}var settings=App.Storage.getSettings();settings._lastBankIds=ids;App.Storage.setSettings(settings);App.Modal.close();this.renderBankSelect();App.Effects.playClick()},
+        confirmBankSelect:function(){var ids=[];document.querySelectorAll('.bank-modal-item.selected').forEach(function(el){ids.push(el.dataset.bankId)});if(ids.length===0){App.Toast.show('请至少选择一个题库','warning');return}if((App.Exam.currentMode==='practice'||App.Exam.currentMode==='reading')&&ids.length>1){App.Toast.show('该模式只能选择1个题库','warning');return}var settings=App.Storage.getSettings();if(App.Exam.currentMode==='reading'){settings._lastReadingBankIds=ids}else{settings._lastBankIds=ids}App.Storage.setSettings(settings);App.Modal.close();this.renderBankSelect();if(App.Exam.currentMode==='reading'&&App.Exam.updateReadingPreview)App.Exam.updateReadingPreview();App.Effects.playClick()},
         getSelectedBankIds:function(){var lastIds=App.Storage.getSettings()._lastBankIds||[];return lastIds},
+        // ===== 拼音题库（type:'pinyin'）=====
+        openBankSelect:function(){
+            if(App.Exam&&App.Exam.currentMode==='pinyin'){this.showPinyinBankSelectModal();return}
+            this.showBankSelectModal();
+        },
+        renderPinyinBankInfo:function(){
+            var info=document.getElementById('exam-bank-info');if(!info)return;
+            info.textContent=App.Pinyin.poolLabel();
+            var bar=document.getElementById('exam-bank-bar');
+            var lab=bar?bar.querySelector('.bank-bar-label'):null;
+            if(lab)lab.textContent='🈶 字库';
+        },
+        renderReadingBankInfo:function(){
+            var info=document.getElementById('exam-bank-info');if(!info)return;
+            var bar=document.getElementById('exam-bank-bar');var lab=bar?bar.querySelector('.bank-bar-label'):null;
+            if(lab)lab.textContent='📖 阅读题库';
+            var b=App.Exam._readingBank?App.Exam._readingBank():null;
+            if(!b){info.textContent='点击选择课外阅读题库';return}
+            var n=(b.questions||[]).length,chars=String(b.article||'').replace(/\s/g,'').length;
+            info.textContent=b.name+'（'+n+' 题 / 文章 '+chars+' 字）';
+        },
+        showPinyinBankSelectModal:function(){
+            var banks=(App.Storage.getBanks()||[]).filter(function(b){return b.type==='pinyin'});
+            var sel=App.Storage.getSettings()._lastPinyinBankIds||[];
+            var body='<div class="bank-modal-grid">';
+            var bs=sel.length?'':' selected';
+            body+='<div class="bank-modal-item'+bs+'" data-bank-id="" onclick="App.Questions.toggleModalBank(this,true)"><span class="bank-modal-check">'+(bs?'✓':'')+'</span><span class="bank-modal-name">内置拼音字库</span><span class="bank-modal-count">'+App.Pinyin.BUILTIN.length+' 字</span></div>';
+            banks.forEach(function(b){
+                var s=sel.indexOf(b.id)>=0?' selected':'';
+                body+='<div class="bank-modal-item'+s+'" data-bank-id="'+b.id+'" onclick="App.Questions.toggleModalBank(this,true)"><span class="bank-modal-check">'+(s?'✓':'')+'</span><span class="bank-modal-name">'+b.name+'</span><span class="bank-modal-count">'+(b.questions?b.questions.length:0)+' 字</span></div>';
+            });
+            body+='</div>';
+            if(!banks.length)body+='<p style="margin-top:8px;font-size:13px;color:var(--text-muted)">还没有自建拼音题库，可到「题库 → 🈶 拼音题库」新建。</p>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.confirmPinyinBankSelect()">确定</button>';
+            App.Modal.open('🈶 选择拼音字库（仅限1个）',body,footer);
+        },
+        confirmPinyinBankSelect:function(){
+            var el=document.querySelector('.bank-modal-item.selected');
+            var id=el?el.dataset.bankId:'';
+            var s=App.Storage.getSettings();
+            s._lastPinyinBankIds=id?[id]:[];
+            App.Storage.setSettings(s);
+            App.Modal.close();
+            this.renderPinyinBankInfo();
+            App.Effects.playClick();
+        },
+        showAddPinyinBankDialog:function(bankId){
+            var banks=App.Storage.getBanks();
+            var b=bankId?banks.find(function(x){return x.id===bankId}):null;
+            var body='<div class="import-format-hint">每行一个：<code>题面|目标字|拼音</code><br>例：<br><code>春天来了|春|chūn</code><br><code>月亮挂在天上|月|yuè</code><br>要求：目标字必须出现在题面里；拼音必须带声调（ā á ǎ à）。</div>';
+            body+='<div class="form-group"><label>题库名称</label><input type="text" id="inp-pinyin-bank-name" value="'+(b?String(b.name).replace(/"/g,'&quot;'):'我的拼音题库')+'"></div>';
+            body+='<div class="form-group"><label>字词数据</label><textarea id="inp-pinyin-bank-data" rows="8" placeholder="春天来了|春|chūn"></textarea></div>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.doAddPinyinBank(\''+(bankId||'')+'\')">保存</button>';
+            App.Modal.open(b?'🈶 追加拼音字词':'🈶 新建拼音题库',body,footer);
+        },
+        doAddPinyinBank:function(bankId){
+            if(!App.Pinyin){App.Modules.load('pinyin',function(){App.Questions.doAddPinyinBank(bankId)});return}
+            var name=document.getElementById('inp-pinyin-bank-name').value.trim();
+            var raw=document.getElementById('inp-pinyin-bank-data').value;
+            if(!name){App.Toast.show('请输入题库名称','warning');return}
+            if(!raw||!raw.trim()){App.Toast.show('请输入字词数据','warning');return}
+            var lines=raw.split('\n'),qs=[],bad=[];
+            for(var i=0;i<lines.length;i++){
+                var line=lines[i].trim();if(!line)continue;
+                var p=line.split('|');
+                if(p.length<3){bad.push(i+1);continue}
+                var text=p[0].trim(),ch=p[1].trim(),py=p[2].trim();
+                if(!text||!ch||!py||text.indexOf(ch)<0){bad.push(i+1);continue}
+                var parsed;
+                try{parsed=App.Pinyin.parsePinyin(py)}catch(e){bad.push(i+1);continue}
+                if(!parsed||!parsed.tone||(!parsed.isWhole&&App.Pinyin.baseFinals.indexOf(parsed.final)<0)){bad.push(i+1);continue}
+                qs.push({id:genId(),text:text,char:ch,pinyin:py,points:10});
+            }
+            if(!qs.length){App.Toast.show('没有识别到有效数据，请检查格式','warning');return}
+            var banks=App.Storage.getBanks(),bank=null;
+            if(bankId){bank=banks.find(function(x){return x.id===bankId})}
+            if(bank&&bank.type==='pinyin'){
+                bank.name=name;bank.questions=(bank.questions||[]).concat(qs);
+            }else{
+                bank={id:genBankId(),name:name,description:'拼音题库',type:'pinyin',questions:qs,createdAt:Date.now(),_newFile:true};
+                banks.push(bank);
+            }
+            App.Storage.setBanks(banks);
+            App.Modal.close();this.render();
+            App.Toast.show('拼音题库已保存：新增 '+qs.length+' 字'+(bad.length?('，跳过 '+bad.length+' 行（第 '+bad.join('、')+' 行）'):''),'success');
+        },
+        openPinyinBankManager:function(id){
+            var banks=App.Storage.getBanks();
+            var b=banks.find(function(x){return x.id===id});
+            if(!b)return;
+            var qs=b.questions||[];
+            var body='<div class="question-preview-list">';
+            if(!qs.length)body+='<p style="color:var(--text-muted)">这个拼音题库还没有字词。</p>';
+            qs.forEach(function(q,i){
+                body+='<div class="qp-item"><div class="qp-text">'+(i+1)+'. '+App.Pinyin._esc(q.text)+'</div><div class="qp-answer">考察字：<b>'+App.Pinyin._esc(q.char)+'</b> | 拼音：'+App.Pinyin._esc(q.pinyin)+'</div><div class="qp-actions"><button class="btn-sm btn-del" onclick="App.Questions.deletePinyinQuestion(\''+id+'\',\''+q.id+'\')">🗑️ 删除</button></div></div>';
+            });
+            body+='</div>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">关闭</button><button class="btn-primary" onclick="App.Modal.close();App.Questions.showAddPinyinBankDialog(\''+id+'\')">➕ 追加字词</button>';
+            App.Modal.open('🈶 '+b.name+'（'+qs.length+' 字）',body,footer);
+        },
+        deletePinyinQuestion:function(bankId,qid){
+            if(!confirm('确定删除这个字吗？'))return;
+            var banks=App.Storage.getBanks();
+            var b=banks.find(function(x){return x.id===bankId});
+            if(!b)return;
+            b.questions=(b.questions||[]).filter(function(q){return q.id!==qid});
+            App.Storage.setBanks(banks);
+            this.openPinyinBankManager(bankId);
+            App.Toast.show('已删除','info');
+        },
+        pinyinBankCardHTML:function(b){
+            var n=(b.questions||[]).length;
+            return '<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-line"><span class="bcl-name">'+b.name+'</span><span class="bcl-count">'+n+' 字</span></div><div class="bc-header"><div><div class="bc-name">'+b.name+'<span style="margin-left:6px;font-size:11px;color:#7a3ec8;background:#f3ecff;border:1px solid #d5c2f5;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">🈶 拼音题库</span></div><div class="bc-count">（'+n+' 个考察字）</div></div></div><div class="bc-desc">'+(b.description||'拼音题库')+'</div><div class="bc-actions"><button onclick="App.Questions.openPinyinBankManager(\''+b.id+'\')">📋 查看字表</button><button onclick="App.Questions.showAddPinyinBankDialog(\''+b.id+'\')">➕ 追加字词</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>';
+        },
         toggleBankSelect:function(el){el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
-        showAddBankDialog:function(){var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" placeholder="请输入题库名称"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" placeholder="简要描述（可选）"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.addBank()">创建</button>';App.Modal.open('新建题库',body,footer)},
-        addBank:function(){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();banks.push({id:genBankId(),name:name,description:desc,questions:[],createdAt:Date.now(),_newFile:true});App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题库 '+name+' 创建成功','success')},
+        chooseBankType:function(action){
+            var html='<p style="margin-bottom:10px;font-size:13px;color:var(--text-secondary)">请选择题库类型：</p><div style="display:flex;flex-direction:column;gap:10px">';
+            App.BankTypes.ALL.forEach(function(t){var x=App.BankTypes.info(t);html+='<button class="btn-secondary" style="text-align:left;padding:12px 14px;line-height:1.5" onclick="App.Modal.close();App.Questions._bankTypeChosen(\''+action+'\',\''+t+'\')"><b>'+x.icon+' '+x.name+'</b><br><span style="font-size:12px;color:var(--text-muted)">'+x.desc+'</span></button>'});
+            html+='</div>';
+            App.Modal.open('选择题库类型',html,'<button class="btn-secondary" onclick="App.Modal.close()">取消</button>');
+        },
+        _bankTypeChosen:function(action,type){
+            if(action==='add')this.showAddBankDialog(type);
+            else if(action==='import')this.showImportBankDialog(type);
+            else if(action==='export')this.exportTemplate(type);
+            else if(action==='copy')this.copyTemplateForAI(type);
+        },
+        showAddBankDialog:function(type){
+            type=type||'single';var ti=App.BankTypes.info(type);
+            var body='<div class="form-group"><label>题库类型</label><div style="font-weight:700">'+ti.icon+' '+ti.name+'</div><div class="form-hint">'+ti.desc+'</div></div>';
+            body+='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" placeholder="请输入题库名称"></div>';
+            body+='<div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" placeholder="简要描述（可选）"></div>';
+            if(type==='reading')body+='<div class="form-group"><label>阅读文章</label><textarea id="inp-bank-article" rows="8" placeholder="把要阅读的文章粘贴到这里"></textarea></div>';
+            if(type!=='single')body+='<div class="import-format-hint">'+App.BankTypes.templateHelp(type)+'</div>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.addBank(\''+type+'\')">创建</button>';
+            App.Modal.open('新建'+ti.name,body,footer);
+        },
+        addBank:function(type){
+            type=type||'single';
+            var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}
+            var desc=document.getElementById('inp-bank-desc').value.trim();
+            var banks=App.Storage.getBanks();
+            var bank={id:genBankId(),name:name,description:desc,type:type,questions:[],createdAt:Date.now(),_newFile:true};
+            if(type==='reading'){var ta=document.getElementById('inp-bank-article');bank.article=ta?ta.value.trim():''}
+            banks.push(bank);App.Storage.setBanks(banks);App.Modal.close();this.render();
+            App.Toast.show(App.BankTypes.info(type).name+'「'+name+'」创建成功','success');
+        },
+        readingBankCardHTML:function(b){
+            var n=(b.questions||[]).length,chars=String(b.article||'').replace(/\s/g,'').length;
+            return '<div class="bank-card" style="animation:slide-up 0.3s ease both"><div class="bc-line"><span class="bcl-name">'+b.name+'</span><span class="bcl-count">'+n+' 题</span></div><div class="bc-header"><div><div class="bc-name">'+b.name+'<span style="margin-left:6px;font-size:11px;color:#1d6fb8;background:#eef7ff;border:1px solid #b9dcf5;border-radius:8px;padding:1px 6px;font-weight:400;white-space:nowrap">📖 课外阅读题</span></div><div class="bc-count">（'+n+' 题 / 文章 '+chars+' 字）</div></div></div><div class="bc-desc">'+(b.description||'课外阅读题库')+'</div><div class="bc-actions"><button onclick="App.Questions.openReadingBankManager(\''+b.id+'\')">📖 文章与题目</button><button onclick="App.Questions.editReadingArticleDialog(\''+b.id+'\')">✏️ 编辑文章</button><button class="btn-del" onclick="App.Questions.removeBank(\''+b.id+'\')">🗑️ 删除</button></div></div>';
+        },
+        openReadingBankManager:function(id){
+            var b=App.Storage.getBanks().find(function(x){return x.id===id});if(!b)return;
+            var esc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')};
+            var body='<div class="form-group"><label>文章标题</label><div style="font-weight:700">'+esc(b.title||b.name)+'</div></div>';
+            body+='<div class="form-group"><label>阅读文章（约 '+String(b.article||'').replace(/\s/g,'').length+' 字）</label><div style="max-height:180px;overflow:auto;white-space:pre-wrap;line-height:1.7;background:var(--bg-hover);padding:10px;border-radius:8px">'+esc(b.article||'（还没有文章）')+'</div></div>';
+            body+='<div class="question-preview-list">';
+            (b.questions||[]).forEach(function(q,i){body+='<div class="qp-item"><div class="qp-text">'+(i+1)+'. '+esc(q.text)+'</div><div class="qp-answer">A.'+esc(q.options.A)+' B.'+esc(q.options.B)+' C.'+esc(q.options.C)+' D.'+esc(q.options.D)+' | 答案 '+q.answer+'</div></div>'});
+            body+='</div>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">关闭</button><button class="btn-primary" onclick="App.Modal.close();App.Questions.editReadingArticleDialog(\''+id+'\')">✏️ 编辑文章</button><button class="btn-primary" onclick="App.Modal.close();App.Questions.showAddQuestionDialog(\''+id+'\')">➕ 添加题目</button>';
+            App.Modal.open('📖 '+b.name,body,footer);
+        },
+        editReadingArticleDialog:function(id){
+            var b=App.Storage.getBanks().find(function(x){return x.id===id});if(!b)return;
+            var esc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')};
+            var body='<div class="form-group"><label>文章标题</label><input type="text" id="inp-reading-title" value="'+String(b.title||b.name||'').replace(/"/g,'&quot;')+'"></div>';
+            body+='<div class="form-group"><label>阅读文章</label><textarea id="inp-reading-article" rows="12" style="line-height:1.7">'+esc(b.article||'')+'</textarea><div class="form-hint">阅读时长 = 文章字数 × 每字秒数（开始比赛前可调）</div></div>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.saveReadingArticle(\''+id+'\')">保存</button>';
+            App.Modal.open('✏️ 编辑阅读文章',body,footer);
+        },
+        saveReadingArticle:function(id){
+            var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;
+            b.title=document.getElementById('inp-reading-title').value.trim();
+            b.article=document.getElementById('inp-reading-article').value;
+            App.Storage.setBanks(banks);App.Modal.close();this.render();
+            if(App.Exam&&App.Exam.currentMode==='reading'&&App.Exam.updateReadingPreview)App.Exam.updateReadingPreview();
+            App.Toast.show('文章已保存','success');
+        },
         showEditBankDialog:function(id){var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;var body='<div class="form-group"><label>题库名称</label><input type="text" id="inp-bank-name" value="'+b.name+'"></div><div class="form-group"><label>题库描述</label><input type="text" id="inp-bank-desc" value="'+(b.description||'')+'"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.updateBank(\''+id+'\')">保存</button>';App.Modal.open('编辑题库',body,footer)},
         updateBank:function(id){var name=document.getElementById('inp-bank-name').value.trim();if(!name){App.Toast.show('请输入题库名称','warning');return}var desc=document.getElementById('inp-bank-desc').value.trim();var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;b.name=name;b.description=desc;App.Storage.setBanks(banks);(function(){try{var fi=JSON.parse(localStorage.getItem('exam_file_index')||'[]');var fe=fi.find(function(x){return x.id===id});if(fe){fe.name=name;fe.isNewFile=true;localStorage.setItem('exam_file_index',JSON.stringify(fi))}}catch(e){}})();App.Modal.close();this.render();App.Toast.show('题库信息已更新（改名将在下次同步写入云端）','success')},
         removeBank:function(id){
@@ -470,6 +663,8 @@
         },
         openBankManager:async function(id){
             var banks=App.Storage.getBanks();var b=banks.find(function(x){return x.id===id});if(!b)return;
+            if(b.type==='pinyin'){this.openPinyinBankManager(id);return}
+            if(b.type==='reading'){this.openReadingBankManager(id);return}
             // 题库内容为空（仅有索引），按需从云端下载
             if((!b.questions||b.questions.length===0)&&App.Sync&&App.Sync.ready){
                 App.Toast.show('正在下载题库内容...','info');
@@ -488,47 +683,47 @@
         editQuestion:function(bankId,qId){var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;var q=bank.questions.find(function(x){return x.id===qId});if(!q)return;var body='<div class="form-group"><label>题目内容</label><textarea id="inp-eq-text" rows="3">'+q.text+'</textarea></div><div class="form-group"><label>选项A</label><input type="text" id="inp-eq-a" value="'+(q.options.A||'').replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>选项B</label><input type="text" id="inp-eq-b" value="'+(q.options.B||'').replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>选项C</label><input type="text" id="inp-eq-c" value="'+(q.options.C||'').replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>选项D</label><input type="text" id="inp-eq-d" value="'+(q.options.D||'').replace(/"/g,'&quot;')+'"></div><div class="form-group"><label>正确答案</label><select id="inp-eq-answer"><option value="A"'+(q.answer==='A'?' selected':'')+'>A</option><option value="B"'+(q.answer==='B'?' selected':'')+'>B</option><option value="C"'+(q.answer==='C'?' selected':'')+'>C</option><option value="D"'+(q.answer==='D'?' selected':'')+'>D</option></select></div><div class="form-group"><label>分值</label><input type="number" id="inp-eq-points" value="'+q.points+'" min="1" max="100" style="width:80px"></div>';var footer='<button class="btn-secondary" onclick="App.Questions.openBankManager(\''+bankId+'\')">取消</button><button class="btn-primary" onclick="App.Questions.saveEditQuestion(\''+bankId+'\',\''+qId+'\')">保存</button>';App.Modal.open('✏️ 编辑题目',body,footer)},
         saveEditQuestion:function(bankId,qId){var text=document.getElementById('inp-eq-text').value.trim();if(!text){App.Toast.show('请输入题目内容','warning');return}var a=document.getElementById('inp-eq-a').value.trim();var b=document.getElementById('inp-eq-b').value.trim();if(!a||!b){App.Toast.show('至少填写选项A和B','warning');return}var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;var q=bank.questions.find(function(x){return x.id===qId});if(!q)return;q.text=text;q.options={A:a,B:b,C:document.getElementById('inp-eq-c').value.trim(),D:document.getElementById('inp-eq-d').value.trim()};q.answer=document.getElementById('inp-eq-answer').value;q.points=parseInt(document.getElementById('inp-eq-points').value)||10;App.Storage.setBanks(banks);App.Modal.close();this.openBankManager(bankId);App.Toast.show('题目已更新','success')},
         deleteQuestion:function(bankId,qId){if(!confirm('确定要删除这道题目吗？'))return;var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;bank.questions=bank.questions.filter(function(q){return q.id!==qId});App.Storage.setBanks(banks);App.Modal.close();this.openBankManager(bankId);this.render();App.Toast.show('题目已删除','info')},
-        showAddQuestionDialog:function(bankId){var body='<div class="form-group"><label>题目内容</label><textarea id="inp-q-text" placeholder="请输入题目内容" rows="3"></textarea></div><div class="form-group"><label>选项A</label><input type="text" id="inp-q-a" placeholder="选项A内容"></div><div class="form-group"><label>选项B</label><input type="text" id="inp-q-b" placeholder="选项B内容"></div><div class="form-group"><label>选项C</label><input type="text" id="inp-q-c" placeholder="选项C内容"></div><div class="form-group"><label>选项D</label><input type="text" id="inp-q-d" placeholder="选项D内容"></div><div class="form-group"><label>正确答案</label><select id="inp-q-answer"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div><div class="form-group"><label>分值</label><input type="number" id="inp-q-points" value="10" min="1" max="100" style="width:80px"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.addQuestion(\''+bankId+'\')">添加</button>';App.Modal.open('添加题目',body,footer)},
+        showAddQuestionDialog:function(bankId){var _pb=App.Storage.getBanks().find(function(x){return x.id===bankId});if(_pb&&_pb.type==='pinyin'){App.Toast.show('拼音题库请用「🈶 拼音题库」维护','warning');return}var body='<div class="form-group"><label>题目内容</label><textarea id="inp-q-text" placeholder="请输入题目内容" rows="3"></textarea></div><div class="form-group"><label>选项A</label><input type="text" id="inp-q-a" placeholder="选项A内容"></div><div class="form-group"><label>选项B</label><input type="text" id="inp-q-b" placeholder="选项B内容"></div><div class="form-group"><label>选项C</label><input type="text" id="inp-q-c" placeholder="选项C内容"></div><div class="form-group"><label>选项D</label><input type="text" id="inp-q-d" placeholder="选项D内容"></div><div class="form-group"><label>正确答案</label><select id="inp-q-answer"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div><div class="form-group"><label>分值</label><input type="number" id="inp-q-points" value="10" min="1" max="100" style="width:80px"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.addQuestion(\''+bankId+'\')">添加</button>';App.Modal.open('添加题目',body,footer)},
         addQuestion:function(bankId){var text=document.getElementById('inp-q-text').value.trim();if(!text){App.Toast.show('请输入题目内容','warning');return}var a=document.getElementById('inp-q-a').value.trim();var b=document.getElementById('inp-q-b').value.trim();var c=document.getElementById('inp-q-c').value.trim();var d=document.getElementById('inp-q-d').value.trim();if(!a||!b){App.Toast.show('至少填写选项A和B','warning');return}var answer=document.getElementById('inp-q-answer').value;var points=parseInt(document.getElementById('inp-q-points').value)||10;var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;bank.questions.push({id:genId(),text:text,options:{A:a,B:b,C:c||'',D:d||''},answer:answer,points:points});App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('题目添加成功','success')},
-        showImportQuestionsDialog:function(bankId){var body='<div class="import-format-hint">导入格式说明：第一行可为题库名（不含|则视为题库名），后续每行一道题<br>格式：<code>题库名称</code>（可选）<br>题目格式：<code>题目|选项A|选项B|选项C|选项D|正确答案|分值</code><br>示例：<br><code>数学基础</code><br><code>1+1=?|1|2|3|4|B|10</code><br><code>中国的首都是?|上海|北京|广州|深圳|B|10</code></div><div class="form-group"><label>粘贴题目数据</label><textarea id="inp-import-questions" placeholder="第一行：题库名称（可选）&#10;后续每行一道题" rows="8"></textarea></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.doImportQuestions(\''+bankId+'\')">导入</button>';App.Modal.open('📥 导入题目',body,footer)},
+        showImportQuestionsDialog:function(bankId){var _pb2=App.Storage.getBanks().find(function(x){return x.id===bankId});if(_pb2&&_pb2.type==='pinyin'){App.Toast.show('拼音题库请用「🈶 拼音题库」维护','warning');return}var body='<div class="import-format-hint">导入格式说明：第一行可为题库名（不含|则视为题库名），后续每行一道题<br>格式：<code>题库名称</code>（可选）<br>题目格式：<code>题目|选项A|选项B|选项C|选项D|正确答案|分值</code><br>示例：<br><code>数学基础</code><br><code>1+1=?|1|2|3|4|B|10</code><br><code>中国的首都是?|上海|北京|广州|深圳|B|10</code></div><div class="form-group"><label>粘贴题目数据</label><textarea id="inp-import-questions" placeholder="第一行：题库名称（可选）&#10;后续每行一道题" rows="8"></textarea></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.doImportQuestions(\''+bankId+'\')">导入</button>';App.Modal.open('📥 导入题目',body,footer)},
         doImportQuestions:function(bankId){var text=document.getElementById('inp-import-questions').value.trim();if(!text){App.Toast.show('请输入题目数据','warning');return}var banks=App.Storage.getBanks();var bank=banks.find(function(x){return x.id===bankId});if(!bank)return;var lines=text.split('\n'),count=0,startIdx=0;if(lines.length>0&&lines[0].trim().indexOf('|')===-1&&lines[0].trim()){bank.name=lines[0].trim();startIdx=1}for(var i=startIdx;i<lines.length;i++){var line=lines[i].trim();if(!line)continue;var p=line.split('|');if(p.length>=6){bank.questions.push({id:genId(),text:p[0].trim(),options:{A:p[1].trim(),B:p[2].trim(),C:p[3].trim(),D:p[4].trim()},answer:p[5].trim().toUpperCase(),points:parseInt(p[6])||10});count++}}App.Storage.setBanks(banks);App.Modal.close();this.render();App.Toast.show('成功导入 '+count+' 道题目'+(startIdx===1?'，题库已重命名为「'+bank.name+'」':''),'success')},
-        copyTemplateForAI:function(){
-            var tpl='请按以下格式生成选择题，每行一道题，用|分隔字段：\n\n题库名称\n题目|选项A|选项B|选项C|选项D|正确答案|分值\n\n示例：\n\n数学基础\n1+1=?|1|2|3|4|B|10\n中国的首都是?|上海|北京|广州|深圳|B|10\n\n请生成10道关于【在此填写主题】的选择题，每题4个选项，分值10分。直接输出题目数据，不要其他解释。';
-            if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(tpl).then(function(){App.Toast.show('模板已复制，粘贴给AI即可','success')}).catch(function(){App.Questions._fallbackCopy(tpl)})}
+        copyTemplateForAI:function(type){
+            type=type||'single';
+            var tpl=App.BankTypes.template(type)+'\n\n请按上面的格式继续出题，直接输出数据，不要其他解释。';
+            if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(tpl).then(function(){App.Toast.show('模板已复制','success')}).catch(function(){App.Questions._fallbackCopy(tpl)})}
             else{this._fallbackCopy(tpl)}
         },
         _fallbackCopy:function(text){var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');App.Toast.show('模板已复制，粘贴给AI即可','success')}catch(e){App.Toast.show('复制失败，请手动复制','warning')}document.body.removeChild(ta)},
         showAIDialog:function(){var body='<div class="form-group"><label>题目主题/知识点</label><textarea id="inp-ai-topic" placeholder="请描述要生成的题目主题，越详细越好" rows="4" maxlength="2000"></textarea><div style="text-align:right;font-size:11px;color:#666;margin-top:2px"><span id="ai-topic-count">0</span>/2000</div></div><div class="form-group"><label>题目数量</label><input type="number" id="inp-ai-count" value="5" min="1" max="30" style="width:80px"> <span class="form-hint">1~30题</span></div><div class="form-group"><label>题库名称 <span style="color:#888;font-weight:normal">（留空则AI自动命名）</span></label><input type="text" id="inp-ai-bank-name" placeholder="AI将根据主题自动生成名称"></div><div id="ai-status" class="ai-status" style="display:none"></div>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" id="btn-ai-gen" onclick="App.Questions.generateAIQuestions()">🤖 生成</button>';App.Modal.open('🤖 AI生成题目',body,footer);var ta=document.getElementById('inp-ai-topic');if(ta){ta.addEventListener('input',function(){var c=document.getElementById('ai-topic-count');if(c)c.textContent=ta.value.length})}},
         generateAIQuestions:function(){var s=App.Storage.getSettings();if(!s.aiApiKey||!s.aiApiUrl){App.Toast.show('请先在设置中配置AI API','warning');return}var topic=document.getElementById('inp-ai-topic').value.trim();if(!topic){App.Toast.show('请输入题目主题','warning');return}var count=parseInt(document.getElementById('inp-ai-count').value)||5;if(count<1)count=1;if(count>30)count=30;var userBankName=document.getElementById('inp-ai-bank-name').value.trim();var statusEl=document.getElementById('ai-status');statusEl.style.display='block';statusEl.className='ai-status processing';statusEl.textContent='⏳ 正在生成题目，请稍候...';document.getElementById('btn-ai-gen').disabled=true;var prompt='你是一个专业的考试出题专家。请根据以下要求生成选择题：\n\n主题：'+topic+'\n数量：'+count+'道\n\n要求：\n1. 每道题必须有4个选项(A/B/C/D)，且只有一个正确答案\n2. 题目内容要准确、专业，选项要有迷惑性\n3. 分值默认10分，可根据难度调整(5/10/15/20)\n4. 如果用户没有指定题库名称，请根据主题生成一个简短贴切的题库名称\n\n请严格按照以下JSON格式返回，不要添加任何其他文字：\n{"bankName":"题库名称","questions":[{"text":"题目内容","options":{"A":"选项A","B":"选项B","C":"选项C","D":"选项D"},"answer":"B","points":10}]}\n\n注意：只返回这个JSON对象，不要返回任何解释或额外内容。';try{fetch(s.aiApiUrl,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.aiApiKey},body:JSON.stringify({model:s.aiModel||'glm-4.7-flash',messages:[{role:'user',content:prompt}],temperature:0.7})}).then(function(res){if(!res.ok)throw new Error('HTTP '+res.status);return res.json()}).then(function(data){var content='';if(data.choices&&data.choices[0]&&data.choices[0].message){content=data.choices[0].message.content||''}else if(data.output){content=data.output.text||data.output||''}else if(typeof data==='string'){content=data}content=content.trim();if(content.startsWith('```')){content=content.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')}var jsonMatch=content.match(/\{[\s\S]*\}/);if(!jsonMatch)throw new Error('AI返回内容无法解析为JSON');var result=JSON.parse(jsonMatch[0]);var questions=result.questions||result;var bankName=userBankName||result.bankName||'AI生成题库';if(!Array.isArray(questions))throw new Error('AI返回的题目格式不正确');var banks=App.Storage.getBanks();var newBank={id:genBankId(),name:bankName,description:'AI生成 - '+topic,questions:[],createdAt:Date.now(),_newFile:true};var validCount=0;questions.forEach(function(q){if(!q.text||!q.options||!q.answer)return;var opts={};if(typeof q.options==='object'){opts=q.options}else if(Array.isArray(q.options)){var keys=['A','B','C','D'];for(var oi=0;oi<Math.min(q.options.length,4);oi++){opts[keys[oi]]=String(q.options[oi])}}newBank.questions.push({id:genId(),text:q.text,options:opts,answer:String(q.answer).toUpperCase().charAt(0),points:parseInt(q.points)||10});validCount++});if(validCount===0)throw new Error('AI未生成有效题目');banks.push(newBank);App.Storage.setBanks(banks);App.Modal.close();App.Questions.render();App.Toast.show('成功生成 '+validCount+' 道题目 → '+bankName,'success')}).catch(function(err){statusEl.className='ai-status error';statusEl.textContent='❌ 生成失败：'+err.message;document.getElementById('btn-ai-gen').disabled=false})}catch(e){statusEl.className='ai-status error';statusEl.textContent='❌ 请求失败：'+e.message;document.getElementById('btn-ai-gen').disabled=false}},
-        showImportBankDialog:function(){
-            var body='<div class="import-format-hint">导入格式说明：第一行为题库名称，后续每行一道题<br>格式：<code>题库名称</code><br>题目格式：<code>题目|选项A|选项B|选项C|选项D|正确答案|分值</code><br>示例：<br><code>数学基础</code><br><code>1+1=?|1|2|3|4|B|10</code><br><code>中国的首都是?|上海|北京|广州|深圳|B|10</code></div>';
-            body+='<div class="form-group"><label>粘贴题库数据</label><textarea id="inp-import-bank" placeholder="第一行：题库名称&#10;后续每行一道题" rows="8"></textarea></div>';
-            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.doImportBank()">导入</button>';
-            App.Modal.open('📥 导入题库',body,footer);
+        showImportBankDialog:function(type){
+            type=type||'single';var ti=App.BankTypes.info(type);
+            var body='<div class="import-format-hint">'+App.BankTypes.templateHelp(type)+'</div>';
+            body+='<div class="form-group"><label>粘贴'+ti.name+'数据</label><textarea id="inp-import-bank" rows="10" placeholder="按上面的格式粘贴"></textarea></div>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="btn-primary" onclick="App.Questions.doImportBank(\''+type+'\')">导入</button>';
+            App.Modal.open('📥 批量导入 · '+ti.name,body,footer);
         },
-        doImportBank:function(){
-            var text=document.getElementById('inp-import-bank').value.trim();
-            if(!text){App.Toast.show('请输入题库数据','warning');return}
-            var lines=text.split('\n');
-            var bankName=lines[0].trim()||'导入题库';
+        doImportBank:function(type){
+            type=type||'single';
+            var text=document.getElementById('inp-import-bank').value;
+            if(!text||!text.trim()){App.Toast.show('请输入题库数据','warning');return}
+            var r=App.BankTypes.parse(type,text);
+            if(!r.questions.length){App.Toast.show('没有识别到有效内容'+(r.errors.length?('：'+r.errors[0]):''),'warning');return}
+            r.questions.forEach(function(q){q.id=genId()});
             var banks=App.Storage.getBanks();
-            var newBank={id:genBankId(),name:bankName,description:'导入题库',questions:[],createdAt:Date.now(),_newFile:true};
-            var count=0;
-            for(var i=1;i<lines.length;i++){
-                var line=lines[i].trim();
-                if(!line)continue;
-                var p=line.split('|');
-                if(p.length>=6){
-                    newBank.questions.push({id:genId(),text:p[0].trim(),options:{A:p[1].trim(),B:p[2].trim(),C:p[3].trim(),D:p[4].trim()},answer:p[5].trim().toUpperCase(),points:parseInt(p[6])||10});
-                    count++;
-                }
-            }
-            banks.push(newBank);
-            App.Storage.setBanks(banks);
-            App.Modal.close();this.render();
-            App.Toast.show('成功导入题库「'+bankName+'」，共 '+count+' 道题目','success');
+            var bank={id:genBankId(),name:r.name||('导入'+App.BankTypes.info(type).name),description:'导入题库',type:type,questions:r.questions,createdAt:Date.now(),_newFile:true};
+            if(type==='reading')bank.article=r.article;
+            banks.push(bank);App.Storage.setBanks(banks);App.Modal.close();this.render();
+            App.Toast.show('成功导入「'+bank.name+'」'+r.questions.length+' 题'+(r.errors.length?('，跳过 '+r.errors.length+' 处'):''),'success');
         },
-        exportTemplate:function(){var template='题目|选项A|选项B|选项C|选项D|正确答案|分值\n1+1=?|1|2|3|4|B|10\n中国的首都是?|上海|北京|广州|深圳|B|10';var blob=new Blob([template],{type:'text/plain;charset=utf-8'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='题目导入模板.txt';a.click();URL.revokeObjectURL(url);App.Toast.show('模板已导出','success')},
+        exportTemplate:function(type){
+            type=type||'single';
+            var template=App.BankTypes.template(type);
+            var blob=new Blob([template],{type:'text/plain;charset=utf-8'});
+            var url=URL.createObjectURL(blob);var a=document.createElement('a');
+            a.href=url;a.download=App.BankTypes.info(type).name+'导入模板.txt';a.click();URL.revokeObjectURL(url);
+            App.Toast.show('模板已导出','success');
+        },
         importTemplateFile:function(){var input=document.getElementById('inp-template-file');if(input){input.value='';input.click()}},
         handleTemplateFile:function(input){if(!input.files||!input.files[0])return;var file=input.files[0];var reader=new FileReader();reader.onload=function(e){var text=e.target.result;if(!text||!text.trim()){App.Toast.show('文件内容为空','warning');return}var lines=text.trim().split('\n');var bankName='导入题库';var startIdx=0;if(lines.length>0&&lines[0].trim().indexOf('|')===-1&&lines[0].trim()){bankName=lines[0].trim();startIdx=1}var banks=App.Storage.getBanks();var newBank={id:genBankId(),name:bankName,description:'从文件导入',questions:[],createdAt:Date.now(),_newFile:true};var count=0;for(var i=startIdx;i<lines.length;i++){var line=lines[i].trim();if(!line)continue;var p=line.split('|');if(p.length>=6){newBank.questions.push({id:genId(),text:p[0].trim(),options:{A:p[1].trim(),B:p[2].trim(),C:p[3].trim(),D:p[4].trim()},answer:p[5].trim().toUpperCase(),points:parseInt(p[6])||10});count++}}if(count===0){App.Toast.show('未识别到有效题目，请检查文件格式','warning');return}banks.push(newBank);App.Storage.setBanks(banks);App.Questions.render();App.Toast.show('成功导入 '+count+' 道题目 → '+bankName,'success')};reader.readAsText(file,'utf-8')}
     };
@@ -625,13 +820,15 @@
             return true;
         },
         enterMode:function(mode){
+            if(mode==='pinyin'&&!App.Pinyin){App.Modules.load('pinyin',function(){App.Exam.enterMode('pinyin')});return}
+            if(mode==='reading'&&!App.Reading){App.Modules.load('reading',function(){App.Exam.enterMode('reading')});return}
             this.currentMode=mode;
             var settings=App.Storage.getSettings();
             var lastPT=settings.lastParticipationType||'personal';
             this.participationType=lastPT;
             var isLottery=mode==='lottery';
             // 抽签与练习都只能个人参与：即使上一次是小组，也强制切回个人，否则练习看不到学生列表
-            if(isLottery||mode==='practice'){this.participationType='personal';lastPT='personal'}
+            if(isLottery||mode==='practice'||mode==='pinyin'){this.participationType='personal';lastPT='personal'}
             document.getElementById('exam-mode-select').classList.add('hidden');
             document.getElementById('exam-setup').classList.remove('hidden');
             var titleEl=document.getElementById('setup-mode-title');
@@ -644,18 +841,20 @@
             var ptabGroup=document.getElementById('ptab-group');
             var isPractice=mode==='practice';
             var isSmart=mode==='smart';
+            var isPinyin=mode==='pinyin';
+            var soloOnly=isPractice||isLottery||isPinyin;
             if(lastPT==='group'){
                 if(groupArea)groupArea.style.display='';
                 if(studentArea)studentArea.style.display='none';
                 if(rotationOpt)rotationOpt.style.display='';
                 if(ptabPersonal)ptabPersonal.classList.remove('active');
-                if(ptabGroup){ptabGroup.classList.add('active');ptabGroup.style.display=(isPractice||isLottery)?'none':''}
+                if(ptabGroup){ptabGroup.classList.add('active');ptabGroup.style.display=soloOnly?'none':''}
             }else{
                 if(groupArea)groupArea.style.display='none';
                 if(studentArea)studentArea.style.display='';
                 if(rotationOpt)rotationOpt.style.display='none';
                 if(ptabPersonal)ptabPersonal.classList.add('active');
-                if(ptabGroup){ptabGroup.classList.remove('active');ptabGroup.style.display=(isPractice||isLottery)?'none':''}
+                if(ptabGroup){ptabGroup.classList.remove('active');ptabGroup.style.display=soloOnly?'none':''}
             }
             this._updateModeTitle();
             btnText.textContent='开始';
@@ -663,7 +862,7 @@
             if(lastPT==='group')this.renderGroupSelect();
             else this.renderStudentSelect();
             // 学生模式练习：进入即锁定本人，避免列表重绘后丢失选中
-            if(isPractice&&App.Role&&App.Role.isStudent()){
+            if((isPractice||isPinyin)&&App.Role&&App.Role.isStudent()){
                 [0,300,900].forEach(function(ms){
                     setTimeout(function(){
                         var _only=document.querySelector('.student-select-item');
@@ -692,9 +891,9 @@
             var playerOrderGroup=playerOrderEl?playerOrderEl.closest('.option-group'):null;
             var questionOrderGroup=questionOrderEl?questionOrderEl.closest('.option-group'):null;
             var avgQGroup=avgQEl?avgQEl.closest('.option-group'):null;
-            if(playerOrderGroup)playerOrderGroup.style.display=(isPractice||isSmart||isLottery)?'none':'';
-            if(questionOrderGroup)questionOrderGroup.style.display=(isPractice||isLottery)?'none':'';
-            if(avgQGroup)avgQGroup.style.display=(isPractice||isLottery)?'none':'';
+            if(playerOrderGroup)playerOrderGroup.style.display=(isPractice||isSmart||isLottery||isPinyin)?'none':'';
+            if(questionOrderGroup)questionOrderGroup.style.display=(isPractice||isLottery||isPinyin)?'none':'';
+            if(avgQGroup)avgQGroup.style.display=(isPractice||isLottery||isPinyin)?'none':'';
             var timeoutGroup=document.getElementById('opt-group-timeout');
             if(timeoutGroup)timeoutGroup.style.display=isLottery?'none':'';
             var lotteryRandomGroup=document.getElementById('opt-group-lottery-random');
@@ -714,10 +913,17 @@
                 if(intensityInput)intensityInput.value=settings.smartIntensity||5;
                 this._updateSmartPreview();
             }
+            var readingGroup=document.getElementById('opt-group-reading');
+            if(readingGroup)readingGroup.style.display=(mode==='reading')?'':'none';
+            if(mode==='reading'){
+                var rsp=document.getElementById('exam-reading-speed');
+                if(rsp)rsp.value=settings.readingSecPerChar!==undefined?settings.readingSecPerChar:0.5;
+                this.updateReadingPreview();
+            }
             App.Effects.playClick();
         },
         switchParticipation:function(type){
-            if(this.currentMode==='lottery'&&type==='group'){App.Toast.show('抽签模式仅支持个人','warning');return}
+            if((this.currentMode==='lottery'||this.currentMode==='pinyin')&&type==='group'){App.Toast.show('该模式仅支持个人','warning');return}
             this.participationType=type;
             var groupArea=document.getElementById('exam-group-select-area');
             var studentArea=document.getElementById('exam-student-select-area');
@@ -748,11 +954,11 @@
             var studentTitleEl=document.getElementById('student-select-title');
             if(titleEl)titleEl.textContent=label;
             if(btnIcon){
-                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝',smart:'🧠',lottery:'🎲'};
+                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝',smart:'🧠',lottery:'🎲',pinyin:'🈶',reading:'📖'};
                 btnIcon.textContent=icons[mode]||'🎮';
             }
             if(pType==='personal'){
-                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 选择练习学生（仅限1人）',smart:'👥 参与人员（智能抽查）',lottery:'👥 参与人员（抽签池）'};
+                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 选择练习学生（仅限1人）',smart:'👥 参与人员（智能抽查）',lottery:'👥 参与人员（抽签池）',pinyin:'👤 选择拼字学生（仅限1人）',reading:'👥 参与人员（先读文章再答题）'};
                 if(studentTitleEl)studentTitleEl.textContent=titles[mode]||'👥 参与人员';
             }
         },
@@ -826,11 +1032,13 @@
         toggleGroupSelect:function(el){el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         getSelectedGroupNames:function(){var names=[];document.querySelectorAll('.group-select-item.selected').forEach(function(el){names.push(el.dataset.groupName)});return names},
         renderStudentSelect:function(){var students=App.Storage.getStudents();if(App.Role&&App.Role.isStudent()){var me=App.Role.student();students=me?[me]:[]}var list=document.getElementById('exam-student-list');if(students.length===0){list.innerHTML='<p style="color:var(--text-muted);text-align:center;">暂无学生，请先在设置→学生中添加</p>';return}var html='';students.forEach(function(s){html+='<div class="student-select-item" data-student-id="'+s.id+'" onclick="App.Exam.toggleStudentSelect(this)"><span>'+(s.avatar?'<img src="'+s.avatar+'" style="width:20px;height:20px;border-radius:50%;vertical-align:middle"> ':'')+' '+s.name+'</span><span class="check-mark"></span></div>'});list.innerHTML=html;if(App.Role&&App.Role.isStudent()){var only=list.querySelector('.student-select-item');if(only){only.classList.add('selected');var cm=only.querySelector('.check-mark');if(cm)cm.textContent='✓'}}},
-        toggleStudentSelect:function(el){var mode=this.currentMode;if(mode==='practice'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{document.querySelectorAll('.student-select-item.selected').forEach(function(other){if(other!==el){other.classList.remove('selected');other.querySelector('.check-mark').textContent=''}});el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else if(mode==='pk'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{var count=document.querySelectorAll('.student-select-item.selected').length;if(count>=8){App.Toast.show('PK最多选择8名选手','warning');return}el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else{el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':''}App.Effects.playClick()},
+        toggleStudentSelect:function(el){var mode=this.currentMode;if(mode==='practice'||mode==='pinyin'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{document.querySelectorAll('.student-select-item.selected').forEach(function(other){if(other!==el){other.classList.remove('selected');other.querySelector('.check-mark').textContent=''}});el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else if(mode==='pk'){if(el.classList.contains('selected')){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''}else{var count=document.querySelectorAll('.student-select-item.selected').length;if(count>=8){App.Toast.show('PK最多选择8名选手','warning');return}el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}}else{el.classList.toggle('selected');el.querySelector('.check-mark').textContent=el.classList.contains('selected')?'✓':''}App.Effects.playClick()},
         getSelectedStudentIds:function(){var ids=[];document.querySelectorAll('.student-select-item.selected').forEach(function(el){ids.push(el.dataset.studentId)});return ids},
-        selectAllStudents:function(){var mode=this.currentMode;var items=document.querySelectorAll('.student-select-item');var allSelected=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSelected=false});if(allSelected){items.forEach(function(el){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''})}else if(mode==='practice'){App.Toast.show('练习模式仅限选择1人','warning')}else if(mode==='pk'){var count=document.querySelectorAll('.student-select-item.selected').length;items.forEach(function(el){if(!el.classList.contains('selected')&&count<8){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓';count++}})}else{items.forEach(function(el){if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}})}App.Effects.playClick()},
+        selectAllStudents:function(){var mode=this.currentMode;var items=document.querySelectorAll('.student-select-item');var allSelected=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSelected=false});if(allSelected){items.forEach(function(el){el.classList.remove('selected');el.querySelector('.check-mark').textContent=''})}else if(mode==='practice'||mode==='pinyin'){App.Toast.show('该模式仅限选择1人','warning')}else if(mode==='pk'){var count=document.querySelectorAll('.student-select-item.selected').length;items.forEach(function(el){if(!el.classList.contains('selected')&&count<8){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓';count++}})}else{items.forEach(function(el){if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.check-mark').textContent='✓'}})}App.Effects.playClick()},
         startExam:async function(){
             if(App.Login && !App.Login.isLoggedIn()){App.Toast.show('请先登录','warning');App.Login.openModal();return}
+            if(this.currentMode==='pinyin'){this._startPinyinExam();return}
+            if(this.currentMode==='reading'){this._startReadingExam();return}
             var bankIds=App.Questions.getSelectedBankIds();
             var isLottery=this.currentMode==='lottery';
             if(bankIds.length===0&&!isLottery){App.Toast.show('请至少选择一个题库','warning');return}
@@ -922,7 +1130,7 @@
                 }
                 banks=App.Storage.getBanks();
             }
-            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions)allQ=allQ.concat(b.questions)});
+            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions&&b.type!=='pinyin')allQ=allQ.concat(b.questions)});
             if(allQ.length===0){App.Toast.show('所选题库中没有题目','warning');return}
             }
             var timeLimit=0;
@@ -1016,6 +1224,95 @@
             document.getElementById('exam-play-sidebar').classList.remove('hidden');
             App._autoFS();
             this._nextPlayer();
+        },
+        _startPinyinExam:function(){
+            var selectedIds=this.getSelectedStudentIds();
+            if(App.Role&&App.Role.isStudent()&&selectedIds.length!==1){selectedIds=[App.Role.actingId()]}
+            if(selectedIds.length!==1){App.Toast.show('拼音模式请选择1名学生','warning');return}
+            var students=App.Storage.getStudents();
+            var student=students.find(function(s){return s.id===selectedIds[0]});
+            if(!student){App.Toast.show('找不到该学生','warning');return}
+            var pool=App.Pinyin.getPool();
+            if(!pool.questions.length){App.Toast.show('拼音字库为空','warning');return}
+            var s=App.Storage.getSettings();
+            var baseInput=document.getElementById('exam-base-timeout-inline');
+            var charInput=document.getElementById('exam-char-timeout-inline');
+            if(baseInput)s.baseTimeout=parseFloat(baseInput.value)||0;
+            if(charInput)s.charTimeoutCompensation=parseFloat(charInput.value)||0;
+            s.lastMode='pinyin';s.lastParticipationType='personal';App.Storage.setSettings(s);
+            var exam={mode:'pinyin',participationType:'personal',questions:pool.questions,timeLimit:0,autoNext:false,students:[student],currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:[],queueIndex:0,avgQuestions:0,groupNames:[],groupRotation:'alternate',playerOrder:'order',_pointsPerQ:10,_bankNames:pool.names};
+            exam.playerScores[student.id]=0;
+            for(var i=0;i<pool.questions.length;i++)exam.playerQueue.push(student);
+            this.currentExam=exam;
+            document.getElementById('exam-setup').classList.add('hidden');
+            document.getElementById('exam-drawing').classList.add('hidden');
+            document.getElementById('exam-playing').classList.add('hidden');
+            document.getElementById('exam-play-sidebar').classList.remove('hidden');
+            App._autoFS();
+            this._nextPlayer();
+        },
+        updateReadingPreview:function(){
+            var el=document.getElementById('exam-reading-preview');if(!el)return;
+            var bank=this._readingBank();
+            if(!bank){el.textContent='请先选择「课外阅读题」题库';return}
+            if(!bank.article){el.textContent='该题库还没有文章，请到题库页维护';return}
+            var chars=String(bank.article).replace(/\s/g,'').length;
+            var sp=parseFloat((document.getElementById('exam-reading-speed')||{}).value)||0.5;
+            el.textContent='文章《'+(bank.title||bank.name)+'》约 '+chars+' 字 × '+sp+' 秒 ≈ 阅读 '+Math.max(5,Math.round(chars*sp))+' 秒';
+        },
+        _readingBank:function(){
+            var banks=App.Storage.getBanks(),ids=App.Storage.getSettings()._lastReadingBankIds||[];
+            var hit=null;
+            ids.forEach(function(id){var b=banks.find(function(x){return x.id===id});if(b&&b.type==='reading')hit=b});
+            return hit;
+        },
+        _startReadingExam:function(){
+            var bank=this._readingBank();
+            if(!bank){App.Toast.show('请选择1个课外阅读题库','warning');return}
+            if(!bank.article){App.Toast.show('该题库没有阅读文章','warning');return}
+            var qs=(bank.questions||[]).filter(function(q){return q&&q.options&&q.answer});
+            if(!qs.length){App.Toast.show('该题库没有题目','warning');return}
+            var students=App.Storage.getStudents();
+            if(!students.length){App.Toast.show('请先添加学生','warning');return}
+            var selectedIds=this.getSelectedStudentIds(),pType=this.participationType,groupNames=[];
+            if(pType==='group'){
+                groupNames=this.getSelectedGroupNames();
+                if(!groupNames.length){App.Toast.show('请至少选择1个小组','warning');return}
+                var gids=[];groupNames.forEach(function(gn){students.forEach(function(s){if(s.group===gn)gids.push(s.id)})});
+                selectedIds=gids;
+                if(!selectedIds.length){App.Toast.show('所选小组没有学生','warning');return}
+            }else if(!selectedIds.length){selectedIds=students.map(function(s){return s.id})}
+            var examStudents=students.filter(function(s){return selectedIds.indexOf(s.id)!==-1});
+            var settings=App.Storage.getSettings();
+            var sp=parseFloat((document.getElementById('exam-reading-speed')||{}).value)||0.5;
+            sp=Math.max(0.1,Math.min(5,sp));
+            settings.readingSecPerChar=sp;
+            var baseInput=document.getElementById('exam-base-timeout-inline');
+            var charInput=document.getElementById('exam-char-timeout-inline');
+            if(baseInput)settings.baseTimeout=parseFloat(baseInput.value)||0;
+            if(charInput)settings.charTimeoutCompensation=parseFloat(charInput.value)||0;
+            settings.lastMode='reading';settings.lastParticipationType=pType;App.Storage.setSettings(settings);
+            var playerOrder=document.getElementById('exam-player-order').value;
+            var questionOrder=document.getElementById('exam-question-order').value;
+            var groupRotation=document.getElementById('exam-group-rotation').value;
+            var total=qs.length*examStudents.length;
+            var pool=this._buildQuestionPool(qs,total,questionOrder);
+            var playerQueue=this._buildPlayerQueue(examStudents,playerOrder,total,pType,groupNames,groupRotation);
+            var exam={mode:'reading',participationType:pType,questions:pool,timeLimit:0,autoNext:settings.autoNext!==false,students:examStudents,currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:playerQueue,queueIndex:0,avgQuestions:qs.length,groupNames:groupNames,groupRotation:groupRotation,playerOrder:playerOrder,_pointsPerQ:0,_bankNames:[bank.name]};
+            if(pType==='group'){
+                var groupMap={};examStudents.forEach(function(s){var g=s.group||'未分组';if(!groupMap[g])groupMap[g]=[];groupMap[g].push(s)});
+                exam.groupMap=groupMap;exam.groupScores={};
+                Object.keys(groupMap).forEach(function(g){exam.groupScores[g]=0});
+            }
+            examStudents.forEach(function(s){exam.playerScores[s.id]=0});
+            this.currentExam=exam;
+            document.getElementById('exam-setup').classList.add('hidden');
+            document.getElementById('exam-drawing').classList.add('hidden');
+            document.getElementById('exam-playing').classList.add('hidden');
+            document.getElementById('exam-play-sidebar').classList.remove('hidden');
+            App._autoFS();
+            var self=this;
+            App.Reading.begin(bank.article,sp,function(){self._nextPlayer()},bank.title||bank.name);
         },
         _buildQuestionPool:function(allQ,needed,order){
             if(order==='fair'){
@@ -1384,6 +1681,7 @@
             document.getElementById('exam-student-points').textContent=exam.mode==='practice'?'待结算：'+(exam.playerScores[student.id]||0)+'⭐':exam.mode==='smart'?'本场：'+(exam.playerScores[student.id]||0)+'⭐  累计：'+st.totalPoints+'⭐  概率：'+(exam._smartProbMap?exam._smartProbMap[student.id]:100)+'  分值：'+this._getSmartPointsPerQ(student.id):'本场：'+(exam.playerScores[student.id]||0)+'⭐  累计：'+st.totalPoints+'⭐';
             document.getElementById('exam-progress-text').textContent='第 '+(exam.currentIndex+1)+'/'+exam.questions.length+' 题 · 人均 '+(Math.round(exam.results.length/exam.students.length*10)/10)+'/'+exam.avgQuestions;
             document.getElementById('question-text').textContent=question.text;
+            if(exam.mode==='pinyin'){App.Pinyin.renderQuestion(exam,question);return}
             document.getElementById('question-options').innerHTML=this.renderOptionsHTML(question);
             var settings=App.Storage.getSettings();
             var cardEl=document.getElementById('question-card');
@@ -1504,7 +1802,7 @@
             fill.style.width='100%';fill.classList.remove('warning');timerEl.textContent=this.timeLeft+'s';
             this.timerInterval=setInterval(function(){self.timeLeft--;var pct=(self.timeLeft/totalTime)*100;fill.style.width=pct+'%';timerEl.textContent=self.timeLeft+'s';if(self.timeLeft<=5){fill.classList.add('warning');App.Effects.playCountdown()}if(self.timeLeft<=0){clearInterval(self.timerInterval);self.timeUp()}},1000);
         },
-        timeUp:function(){var exam=this.currentExam,question=exam.questions[exam.currentIndex];if(exam.answered)return;exam.answered=true;var correctAnswer=this.getEffectiveAnswer(question);document.querySelectorAll('.option-btn').forEach(function(btn){btn.classList.add('disabled');if(btn.dataset.option===correctAnswer)btn.classList.add('correct')});exam.results.push({studentId:exam.currentStudent.id,questionId:question.id,correct:false,pointsEarned:0,selectedOption:'超时'});App.Effects.playTimeUp();App.Effects.showScorePopup(0,false);this.renderWarReport(true);this._saveProgress();this.showNextButton()},
+        timeUp:function(){var exam=this.currentExam;if(exam.answered)return;if(exam.mode==='pinyin'){App.Pinyin.timeUp();return}var question=exam.questions[exam.currentIndex];exam.answered=true;var correctAnswer=this.getEffectiveAnswer(question);document.querySelectorAll('.option-btn').forEach(function(btn){btn.classList.add('disabled');if(btn.dataset.option===correctAnswer)btn.classList.add('correct')});exam.results.push({studentId:exam.currentStudent.id,questionId:question.id,correct:false,pointsEarned:0,selectedOption:'超时'});App.Effects.playTimeUp();App.Effects.showScorePopup(0,false);this.renderWarReport(true);this._saveProgress();this.showNextButton()},
         selectOption:function(option){
             var exam=this.currentExam,question=exam.questions[exam.currentIndex];
             if(exam.answered)return;
@@ -1562,6 +1860,7 @@
         _calcBasePoints:function(mode){
             if(mode==='farm')return 10;
             if(mode==='challenge')return 5;
+            if(mode==='reading')return 5;
             if(mode==='pk')return 5;
             if(mode==='practice')return 10;
             if(mode==='smart')return 10;
@@ -1716,6 +2015,7 @@
         _exitToHome:function(){
             var exam=this.currentExam;
             if(exam)exam._ended=true;
+            if(App.Reading&&App.Reading.cancel)App.Reading.cancel();
             if(this.timerInterval)clearInterval(this.timerInterval);
             if(document.fullscreenElement)document.exitFullscreen().catch(function(){});
             document.getElementById('exam-playing').classList.add('hidden');
@@ -1781,7 +2081,7 @@
             var bankIds=App.Questions.getSelectedBankIds();
             if(bankIds.length===0){App.Toast.show('题库未选择','warning');return}
             var banks=App.Storage.getBanks(),allQ=[];
-            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions)allQ=allQ.concat(b.questions)});
+            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions&&b.type!=='pinyin')allQ=allQ.concat(b.questions)});
             if(allQ.length===0){App.Toast.show('题库中没有题目','warning');return}
             var bankId=bankIds[0]||'';
             var wrongSet=App.Storage.getWrongSet(sid,bankId);
@@ -1811,6 +2111,7 @@
         },
         showResult:function(){
             var exam=this.currentExam;if(!exam||exam._ended)return;exam._ended=true;
+            if(App.Reading&&App.Reading.cancel)App.Reading.cancel();
             if(this.timerInterval)clearInterval(this.timerInterval);
             if(exam._autoNextTimer){clearTimeout(exam._autoNextTimer);exam._autoNextTimer=null}
             document.getElementById('exam-drawing').classList.add('hidden');
@@ -1830,8 +2131,8 @@
                 return;
             }
             var exam=this.currentExam;var correct=exam.results.filter(function(r){return r.correct}).length;
-            var banks=App.Storage.getBanks();var bankNames=[];var bankIds=App.Questions.getSelectedBankIds();
-            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b)bankNames.push(b.name)});
+            var banks=App.Storage.getBanks();var bankNames=(exam._bankNames||[]).slice();var bankIds=App.Questions.getSelectedBankIds();
+            if(!bankNames.length)bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b)bankNames.push(b.name)});
             var studentResults={};
             exam.students.forEach(function(s){studentResults[s.id]={id:s.id,name:s.name,avatar:s.avatar,group:s.group||'',correctCount:0,totalCount:0,pointsEarned:0}});
             exam.results.forEach(function(r){if(studentResults[r.studentId]&&!r.isAbsent){studentResults[r.studentId].totalCount++;if(r.correct){studentResults[r.studentId].correctCount++;studentResults[r.studentId].pointsEarned+=r.pointsEarned}}});
@@ -1901,7 +2202,7 @@
                 }
                 return;
             }
-            if(exam.mode==='challenge'){
+            if(exam.mode==='challenge'||exam.mode==='reading'){
                 var sIds=Object.keys(studentResults);
                 sIds.forEach(function(sid){
                     var sr=studentResults[sid];
@@ -2188,11 +2489,13 @@
     App.Records = {
         render:function(){
             var records=App.Storage.getRecords();var list=document.getElementById('records-list');var empty=document.getElementById('records-empty');
+            var _mf=(document.getElementById('records-mode-filter')||{}).value||'all';
+            if(_mf!=='all')records=records.filter(function(r){return r.mode===_mf});
             if(records.length===0){list.innerHTML='';empty.classList.add('show');return}
             empty.classList.remove('show');records.sort(function(a,b){return b.date-a.date});
             var html='';
             records.forEach(function(rec){
-                var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':rec.mode==='practice'?'📝 练习':rec.mode==='smart'?'🧠 智能抽查':rec.mode==='group'?'👥 分组':'🎮 未知';
+                var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':rec.mode==='pinyin'?'🈶 拼音':rec.mode==='reading'?'📖 课外阅读':rec.mode==='practice'?'📝 练习':rec.mode==='smart'?'🧠 智能抽查':rec.mode==='group'?'👥 分组':'🎮 未知';
                 var dateStr=new Date(rec.date).toLocaleString('zh-CN');
                 var srs=rec.studentResults||{};var sNames=Object.keys(srs).map(function(k){return srs[k].name});
                 var partLabel=rec.allParticipants?' 👥全员':'';
@@ -2267,7 +2570,7 @@
             var container=document.querySelector('.leaderboard-container h2.section-title');
             empty.classList.remove('show');
             var dateStr=new Date(rec.date).toLocaleString('zh-CN');
-            var modeLabel=rec.mode==='draw'?'多人挑战':rec.mode==='assign'?'单人挑战':rec.mode==='pk'?'PK':rec.mode==='farm'?'打野':rec.mode==='challenge'?'挑战':rec.mode==='practice'?'练习':rec.mode==='smart'?'智能抽查':rec.mode==='group'?'分组':'未知';
+            var modeLabel=rec.mode==='draw'?'多人挑战':rec.mode==='assign'?'单人挑战':rec.mode==='pk'?'PK':rec.mode==='farm'?'打野':rec.mode==='challenge'?'挑战':rec.mode==='pinyin'?'拼音':rec.mode==='reading'?'课外阅读':rec.mode==='practice'?'练习':rec.mode==='smart'?'智能抽查':rec.mode==='group'?'分组':'未知';
             if(rec.mode==='group'||rec.participationType==='group'){
                 if(container)container.textContent='🏆 历史积分榜 - '+dateStr+' '+modeLabel;
                 App.Exam._renderGroupRanking(rec);
@@ -2327,6 +2630,48 @@
             });
             return order.map(function(k){var o=map[k];o.pct=o.total>0?Math.round(o.correct/o.total*100):0;return o})
                         .sort(function(a,b){return b.lastDate-a.lastDate});
+        }
+    };
+
+    // ========== 学生个人考试历史（按考试类型切割总流水账） ==========
+    App.History = {
+        META:{farm:{n:'🌾 打野'},challenge:{n:'🎯 挑战'},pk:{n:'⚔️ PK'},practice:{n:'📝 练习'},smart:{n:'🧠 智能抽查'},pinyin:{n:'🈶 拼音'},reading:{n:'📖 课外阅读'},lottery:{n:'🎲 抽签'}},
+        open:function(){
+            var me=App.Role&&App.Role.student?App.Role.student():null;
+            if(!me){App.Toast.show('请先在学生模式下查看','warning');return}
+            var body='<div class="history-filter">';
+            body+='<button class="btn-sm btn-primary" data-m="all" onclick="App.History.filter(this,\''+me.id+'\')">全部</button>';
+            ['practice','pinyin','reading','farm','challenge','pk','smart'].forEach(function(m){
+                body+='<button class="btn-sm btn-secondary" data-m="'+m+'" onclick="App.History.filter(this,\''+me.id+'\')">'+(App.History.META[m]?App.History.META[m].n:m)+'</button>';
+            });
+            body+='</div><div id="history-list" style="margin-top:10px"></div>';
+            App.Modal.open('📜 '+me.name+' 的考试历史',body,'<button class="btn-secondary" onclick="App.Modal.close()">关闭</button>');
+            this.render(me.id,'all');
+        },
+        filter:function(btn,sid){
+            var wrap=btn.parentNode;wrap.querySelectorAll('button').forEach(function(b){b.className='btn-sm btn-secondary'});
+            btn.className='btn-sm btn-primary';
+            this.render(sid,btn.dataset.m);
+        },
+        render:function(sid,mode){
+            var box=document.getElementById('history-list');if(!box)return;
+            var recs=App.Storage.getRecords().filter(function(r){
+                var sr=(r.studentResults||{})[sid];
+                return sr&&sr.totalCount>0&&(mode==='all'||r.mode===mode);
+            });
+            recs.sort(function(a,b){return b.date-a.date});
+            if(!recs.length){box.innerHTML='<p style="color:var(--text-muted);padding:10px 0">该类型还没有考试记录</p>';return}
+            var html='<div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">共 '+recs.length+' 场</div>';
+            recs.forEach(function(r){
+                var sr=r.studentResults[sid];
+                var pct=sr.totalCount>0?Math.round(sr.correctCount/sr.totalCount*100):0;
+                var name=(App.History.META[r.mode]&&App.History.META[r.mode].n)||r.mode;
+                html+='<div style="border-bottom:1px solid var(--border-color);padding:8px 0">';
+                html+='<div style="display:flex;justify-content:space-between;gap:8px"><b>'+name+'</b><span style="color:var(--gold);font-weight:700">+'+sr.pointsEarned+' ⭐</span></div>';
+                html+='<div style="font-size:12px;color:var(--text-muted);margin-top:2px">'+new Date(r.date).toLocaleString('zh-CN')+' · 答对 '+sr.correctCount+'/'+sr.totalCount+'（'+pct+'%）'+(r.bankNames&&r.bankNames.length?' · '+r.bankNames.join('、'):'')+'</div>';
+                html+='</div>';
+            });
+            box.innerHTML=html;
         }
     };
 

@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>🎯 挑战系统 2.0</title>
-    <link rel="stylesheet" href="style.css?v=2.022">
-    <link rel="stylesheet" href="mobile.css?v=2.022">
-    <script src="ui-mode.js?v=2.022"></script>
+    <link rel="stylesheet" href="style.css?v=2.031">
+    <link rel="stylesheet" href="mobile.css?v=2.031">
+    <script src="ui-mode.js?v=2.031"></script>
     <script>
       // 现场诊断：任何 JS 报错都在页面顶部显示一条红条，方便手机截图反馈；同时暴露版本号
       // 版本规则：基线 2.0，每次改动 +0.001（2.001、2.002、2.003…）；
       // 改完必须同步改顶栏 #nav-ver 与下面所有静态资源 ?v= 参数，否则手机会读到旧缓存
-      window.__APP_VER='2.022';
+      window.__APP_VER='2.031';
       window.addEventListener('error',function(e){
         try{
           var d=document.getElementById('js-err-bar');
@@ -34,7 +34,7 @@
     <nav id="main-nav">
         <div class="nav-brand" onclick="App.switchView('home')">
             <span class="nav-logo">🎯</span>
-            <span class="nav-title">挑战系统 2.0</span><span id="nav-ver" style="margin-left:6px;font-size:11px;color:#8ab;border:1px solid #8ab;border-radius:8px;padding:0 5px;vertical-align:middle">v2.022</span>
+            <span class="nav-title">挑战系统 2.0</span><span id="nav-ver" style="margin-left:6px;font-size:11px;color:#8ab;border:1px solid #8ab;border-radius:8px;padding:0 5px;vertical-align:middle">v2.031</span>
         </div>
         <div class="nav-items">
             <button class="nav-btn active" data-view="home" onclick="App.switchView('home')"><span class="nav-icon">🚀</span><span class="nav-text">Let's go</span></button>
@@ -59,7 +59,8 @@
     <main id="app-content">
         <section id="view-home" class="view active">
             <div class="home-container">
-                <div id="role-bar"><span>🎒 当前身份：<b id="role-bar-name">学生</b>（学生模式只保留练习；其它课堂模式请回到班主任）</span><button class="btn-secondary btn-sm role-back" onclick="App.Role.backToTeacher()">↩ 回到班主任</button></div>
+                <div id="role-bar"><span>🎒 当前身份：<b id="role-bar-name">学生</b>（学生模式只保留练习与拼音；其它课堂模式请回到班主任）</span><button class="btn-secondary btn-sm role-back" onclick="App.Role.backToTeacher()">↩ 回到班主任</button></div>
+                <div class="student-history-bar"><button class="btn-secondary btn-sm" onclick="App.History.open()">📜 我的考试历史（按类型查看场次）</button></div>
                 <div class="exam-mode-select" id="exam-mode-select">
                     <h2 class="section-title">📋 请选择模式</h2>
                     <div class="mode-cards">
@@ -82,6 +83,16 @@
                             <div class="mode-card-icon">📝</div>
                             <div class="mode-card-name">练习</div>
                             <div class="mode-card-desc">单人练习，完成整个题库才结算积分</div>
+                        </div>
+                        <div class="mode-card" data-mode="pinyin" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('pinyin');event.preventDefault()}" onclick="App.Exam.enterMode('pinyin')">
+                            <div class="mode-card-icon">🈶</div>
+                            <div class="mode-card-name">拼音</div>
+                            <div class="mode-card-desc">看字拼拼音，分步选声母/介母/韵母/声调（仅学生模式）</div>
+                        </div>
+                        <div class="mode-card" data-mode="reading" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('reading');event.preventDefault()}" onclick="App.Exam.enterMode('reading')">
+                            <div class="mode-card-icon">📖</div>
+                            <div class="mode-card-name">课外阅读</div>
+                            <div class="mode-card-desc">先读文章（可设阅读速度），读完倒计时再答题</div>
                         </div>
                         <div class="mode-card" data-mode="smart" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){App.Exam.enterMode('smart');event.preventDefault()}" onclick="App.Exam.enterMode('smart')">
                             <div class="mode-card-icon">🧠</div>
@@ -173,6 +184,14 @@
                                 </div>
                                 <div class="form-hint" id="smart-preview">末名概率点数：245（30人）</div>
                             </div>
+                            <div class="option-group" id="opt-group-reading" style="display:none">
+                                <label>📖 阅读速度（每字秒数）</label>
+                                <div class="timeout-inline">
+                                    <input type="number" id="exam-reading-speed" min="0.1" max="5" step="0.1" value="0.5" style="width:90px" oninput="App.Exam.updateReadingPreview()">
+                                    <span>秒/字（默认 0.5）</span>
+                                </div>
+                                <div class="form-hint" id="exam-reading-preview">请先选择「课外阅读题」题库</div>
+                            </div>
                             <div id="exam-student-select-area">
                                 <div class="sub-title-row"><h3 class="sub-title" id="student-select-title">👥 参与人员</h3><button class="btn-select-all" onclick="App.Exam.selectAllStudents()">全选</button></div>
                                 <div id="exam-student-list" class="student-select-list"></div>
@@ -230,7 +249,7 @@
         </section>
         <section id="view-questions" class="view">
             <div class="manage-container">
-                <div class="manage-header"><div style="display:flex;align-items:center;gap:10px;flex:0 0 auto"><h2 class="section-title" style="margin:0">📚 题库</h2><label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);cursor:pointer;white-space:nowrap"><input type="checkbox" id="bank-compact" onchange="App.Questions.toggleBankCompact(this)"> 缩略</label></div><div class="manage-actions teacher-only"><button class="btn-primary" onclick="App.Questions.showAddBankDialog()">➕ 新建题库</button><button class="btn-primary" onclick="App.Questions.showImportBankDialog()">📥 导入题库</button><button class="btn-primary" onclick="App.Questions.showAIDialog()">🤖 AI生成题目</button><button class="btn-secondary" onclick="App.Questions.exportTemplate()">📄 导出模板</button><button class="btn-secondary" onclick="App.Questions.copyTemplateForAI()">📋 复制模板给AI</button><button class="btn-secondary" onclick="App.Questions.importTemplateFile()">📁 导入模板</button><input type="file" id="inp-template-file" accept=".txt,.csv" style="display:none" onchange="App.Questions.handleTemplateFile(this)"></div></div>
+                <div class="manage-header"><div style="display:flex;align-items:center;gap:10px;flex:0 0 auto;flex-wrap:wrap"><h2 class="section-title" style="margin:0">📚 题库</h2><select id="bank-type-filter" class="bank-type-select" onchange="App.Questions.render()"><option value="all">全部类型</option><option value="single">📝 单选题</option><option value="pinyin">🈶 拼音题</option><option value="reading">📖 课外阅读题</option></select><label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);cursor:pointer;white-space:nowrap"><input type="checkbox" id="bank-compact" onchange="App.Questions.toggleBankCompact(this)"> 缩略</label></div><div class="manage-actions teacher-only"><button class="btn-primary" onclick="App.Questions.chooseBankType('add')">➕ 新建题库</button><button class="btn-primary" onclick="App.Questions.chooseBankType('import')">📥 批量导入题库</button><button class="btn-secondary" onclick="App.Questions.chooseBankType('export')">📄 导出模板</button><button class="btn-secondary" onclick="App.Questions.chooseBankType('copy')">📋 复制模板</button></div></div>
                 <div class="bank-grid" id="bank-grid"></div>
                 <div class="empty-state" id="banks-empty"><div class="empty-icon">📚</div><p>还没有题库，点击上方按钮创建</p></div>
             </div>
@@ -300,12 +319,12 @@
                             <div style="display:flex;gap:8px;flex-wrap:wrap">
                                 <button class="btn-primary btn-sm" onclick="App.Records.showAudit()">🔍 立即核对</button>
                                 <button class="btn-secondary btn-sm" onclick="App.Ledger.push(null,{summary:true,detail:true});App.Toast.show('已重建全班总账与详账（等待同步上传）','info')">↻ 重建全部账本</button>
-                                <button class="btn-secondary btn-sm" onclick="window.open('账本说明.HTML?v=2.022','_blank')">📘 账本体系说明</button>
+                                <button class="btn-secondary btn-sm" onclick="window.open('账本说明.HTML?v=2.031','_blank')">📘 账本体系说明</button>
                             </div>
                             <div id="ledger-audit-result" style="margin-top:10px;font-size:12.5px;color:var(--text-secondary)"></div>
                         </div>
                         <div class="settings-card" style="margin-top:12px"><div class="settings-actions"><button class="btn-danger btn-sm" onclick="App.Settings.clearRecords()">🗑️ 清空场次数据</button><button class="btn-danger btn-sm" onclick="App.Settings.resetData()">⚠️ 重置所有数据</button></div></div>
-                        <div class="settings-card" style="margin-top:12px"><div id="records-list" class="records-list"></div><div class="empty-state inline" id="records-empty"><div class="empty-icon">📝</div><p>暂无记录</p></div></div>
+                        <div class="settings-card" style="margin-top:12px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><b style="font-size:14px">📝 考试流水账</b><select id="records-mode-filter" class="bank-type-select" onchange="App.Records.render()"><option value="all">全部类型</option><option value="farm">🌾 打野</option><option value="challenge">🎯 挑战</option><option value="pk">⚔️ PK</option><option value="practice">📝 练习</option><option value="smart">🧠 智能抽查</option><option value="pinyin">🈶 拼音</option><option value="reading">📖 课外阅读</option></select></div><div id="records-list" class="records-list"></div><div class="empty-state inline" id="records-empty"><div class="empty-icon">📝</div><p>暂无记录</p></div></div>
                     </div>
                     <div class="settings-panel" id="stab-sync"><div class="settings-card">
                         <div class="form-group"><label>🔐 账号登录</label><div class="form-hint">登录后账号密码将用于云同步认证</div></div>
@@ -330,11 +349,12 @@
     <div class="modal-overlay" id="modal-overlay" onclick="App.Modal.closeOnOverlay(event)"><div class="modal" id="modal-container"><div class="modal-header"><h3 id="modal-title">标题</h3><button class="modal-close" onclick="App.Modal.close()">✕</button></div><div class="modal-body" id="modal-body"></div><div class="modal-footer" id="modal-footer"></div></div></div>
     <canvas id="fx-canvas"></canvas>
     <div id="file-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:200;justify-content:center;align-items:center" onclick="if(event.target===this)App.Sync.closeFileManager()">
-        <iframe id="fileManagerFrame" data-src="文件管理.HTML?v=2.022" style="width:780px;max-width:95vw;height:75vh;border:none;border-radius:10px;background:#fff"></iframe>
+        <iframe id="fileManagerFrame" data-src="文件管理.HTML?v=2.031" style="width:780px;max-width:95vw;height:75vh;border:none;border-radius:10px;background:#fff"></iframe>
     </div>
-    <iframe id="fileManagerBg" src="文件管理.HTML?v=2.022" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
-    <script src="demo-data.js?v=2.022"></script>
-    <script src="mode-rules.js?v=2.022"></script>
-    <script src="app.js?v=2.022"></script>
+    <iframe id="fileManagerBg" src="文件管理.HTML?v=2.031" style="display:none;width:0;height:0;border:none;position:absolute"></iframe>
+    <script src="demo-data.js?v=2.031"></script>
+    <script src="mode-rules.js?v=2.031"></script>
+    <script src="bank-types.js?v=2.031"></script>
+    <script src="app.js?v=2.031"></script>
 </body>
 </html>
