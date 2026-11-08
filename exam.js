@@ -96,13 +96,14 @@
         enterMode:function(mode){
             if(mode==='pinyin'&&!App.Pinyin){App.Modules.load('pinyin',function(){App.Exam.enterMode('pinyin')});return}
             if(mode==='reading'&&!App.Reading){App.Modules.load('reading',function(){App.Exam.enterMode('reading')});return}
+            if(mode==='fill'&&!App.Fill){App.Modules.load('fill',function(){App.Exam.enterMode('fill')});return}
             this.currentMode=mode;
             var settings=App.Storage.getSettings();
             var lastPT=settings.lastParticipationType||'personal';
             this.participationType=lastPT;
             var isLottery=mode==='lottery';
             // 抽签与练习都只能个人参与：即使上一次是小组，也强制切回个人，否则练习看不到学生列表
-            if(isLottery||mode==='practice'||mode==='pinyin'||(mode==='reading'&&App.Role&&App.Role.isStudent())){this.participationType='personal';lastPT='personal'}
+            if(isLottery||mode==='practice'||mode==='pinyin'||mode==='fill'||(mode==='reading'&&App.Role&&App.Role.isStudent())){this.participationType='personal';lastPT='personal'}
             document.getElementById('exam-mode-select').classList.add('hidden');
             document.getElementById('exam-setup').classList.remove('hidden');
             var titleEl=document.getElementById('setup-mode-title');
@@ -116,7 +117,8 @@
             var isPractice=mode==='practice';
             var isSmart=mode==='smart';
             var isPinyin=mode==='pinyin';
-            var soloOnly=isPractice||isLottery||isPinyin||(mode==='reading'&&App.Role&&App.Role.isStudent());
+            var isFill=mode==='fill';
+            var soloOnly=isPractice||isLottery||isPinyin||isFill||(mode==='reading'&&App.Role&&App.Role.isStudent());
             if(lastPT==='group'){
                 if(groupArea)groupArea.style.display='';
                 if(studentArea)studentArea.style.display='none';
@@ -136,7 +138,7 @@
             if(lastPT==='group')this.renderGroupSelect();
             else this.renderStudentSelect();
             // 学生模式练习：进入即锁定本人，避免列表重绘后丢失选中
-            if((isPractice||isPinyin||mode==='reading')&&App.Role&&App.Role.isStudent()){
+            if((isPractice||isPinyin||mode==='reading'||isFill)&&App.Role&&App.Role.isStudent()){
                 [0,300,900].forEach(function(ms){
                     setTimeout(function(){
                         var _only=document.querySelector('.student-select-item');
@@ -165,9 +167,9 @@
             var playerOrderGroup=playerOrderEl?playerOrderEl.closest('.option-group'):null;
             var questionOrderGroup=questionOrderEl?questionOrderEl.closest('.option-group'):null;
             var avgQGroup=avgQEl?avgQEl.closest('.option-group'):null;
-            if(playerOrderGroup)playerOrderGroup.style.display=(isPractice||isSmart||isLottery||isPinyin)?'none':'';
-            if(questionOrderGroup)questionOrderGroup.style.display=(isPractice||isLottery||isPinyin)?'none':'';
-            if(avgQGroup)avgQGroup.style.display=(isPractice||isLottery||isPinyin)?'none':'';
+            if(playerOrderGroup)playerOrderGroup.style.display=(isPractice||isSmart||isLottery||isPinyin||isFill)?'none':'';
+            if(questionOrderGroup)questionOrderGroup.style.display=(isPractice||isLottery||isPinyin||isFill)?'none':'';
+            if(avgQGroup)avgQGroup.style.display=(isPractice||isLottery||isPinyin||isFill)?'none':'';
             var timeoutGroup=document.getElementById('opt-group-timeout');
             if(timeoutGroup)timeoutGroup.style.display=isLottery?'none':'';
             var lotteryRandomGroup=document.getElementById('opt-group-lottery-random');
@@ -228,11 +230,11 @@
             var studentTitleEl=document.getElementById('student-select-title');
             if(titleEl)titleEl.textContent=label;
             if(btnIcon){
-                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝',smart:'🧠',lottery:'🎲',pinyin:'🈶',reading:'📖'};
+                var icons={farm:'🌾',challenge:'🎯',pk:'⚔️',practice:'📝',smart:'🧠',lottery:'🎲',pinyin:'🈶',reading:'📖',fill:'✍️'};
                 btnIcon.textContent=icons[mode]||'🎮';
             }
             if(pType==='personal'){
-                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 选择练习学生（仅限1人）',smart:'👥 参与人员（智能抽查）',lottery:'👥 参与人员（抽签池）',pinyin:'👤 选择拼字学生（仅限1人）',reading:'👥 参与人员（先读文章再答题）'};
+                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 选择练习学生（仅限1人）',smart:'👥 参与人员（智能抽查）',lottery:'👥 参与人员（抽签池）',pinyin:'👤 选择拼字学生（仅限1人）',reading:'👥 参与人员（先读文章再答题）',fill:'👤 选择答题学生（仅限1人）'};
                 if(studentTitleEl)studentTitleEl.textContent=titles[mode]||'👥 参与人员';
             }
         },
@@ -313,6 +315,7 @@
             if(App.Login && !App.Login.isLoggedIn()){App.Toast.show('请先登录','warning');App.Login.openModal();return}
             if(this.currentMode==='pinyin'){this._startPinyinExam();return}
             if(this.currentMode==='reading'){this._startReadingExam();return}
+            if(this.currentMode==='fill'){this._startFillExam();return}
             var bankIds=App.Questions.getSelectedBankIds();
             var isLottery=this.currentMode==='lottery';
             if(bankIds.length===0&&!isLottery){App.Toast.show('请至少选择一个题库','warning');return}
@@ -404,7 +407,7 @@
                 }
                 banks=App.Storage.getBanks();
             }
-            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions&&b.type!=='pinyin')allQ=allQ.concat(b.questions)});
+            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions&&App.BankTypes.of(b)===App.BankTypes.allowedForMode(App.Exam.currentMode))allQ=allQ.concat(b.questions)});
             if(allQ.length===0){App.Toast.show('所选题库中没有题目','warning');return}
             }
             var timeLimit=0;
@@ -587,6 +590,37 @@
             App._autoFS();
             var self=this;
             App.Reading.begin(bank.article,sp,function(){self._nextPlayer()},bank.title||bank.name);
+        },
+        _startFillExam:function(){
+            var selectedIds=this.getSelectedStudentIds();
+            if(App.Role&&App.Role.isStudent()&&selectedIds.length!==1)selectedIds=[App.Role.actingId()];
+            if(selectedIds.length!==1){App.Toast.show('填空题模式请选择1名学生','warning');return}
+            var students=App.Storage.getStudents();
+            var student=students.find(function(s){return s.id===selectedIds[0]});
+            if(!student){App.Toast.show('找不到该学生','warning');return}
+            var banks=App.Storage.getBanks(),ids=App.Storage.getSettings()._lastFillBankIds||[];
+            var bank=null;
+            ids.forEach(function(id){var b=banks.find(function(x){return x.id===id&&x.type==='fill'});if(b)bank=b});
+            if(!bank){App.Toast.show('请选择1个填空题题库','warning');return}
+            var qs=(bank.questions||[]).filter(function(q){return q&&q.text&&q.answers&&q.answers.length});
+            if(!qs.length){App.Toast.show('填空题题库没有题目','warning');return}
+            var s=App.Storage.getSettings();
+            var baseInput=document.getElementById('exam-base-timeout-inline');
+            var charInput=document.getElementById('exam-char-timeout-inline');
+            if(baseInput)s.baseTimeout=parseFloat(baseInput.value)||0;
+            if(charInput)s.charTimeoutCompensation=parseFloat(charInput.value)||0;
+            s.lastMode='fill';s.lastParticipationType='personal';App.Storage.setSettings(s);
+            var pool=App.shuffle(qs.slice());
+            var exam={mode:'fill',participationType:'personal',questions:pool,timeLimit:0,autoNext:false,students:[student],currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:[],queueIndex:0,avgQuestions:0,groupNames:[],groupRotation:'alternate',playerOrder:'order',_pointsPerQ:0,_bankNames:[bank.name]};
+            exam.playerScores[student.id]=0;
+            for(var i=0;i<pool.length;i++)exam.playerQueue.push(student);
+            this.currentExam=exam;
+            document.getElementById('exam-setup').classList.add('hidden');
+            document.getElementById('exam-drawing').classList.add('hidden');
+            document.getElementById('exam-playing').classList.add('hidden');
+            document.getElementById('exam-play-sidebar').classList.remove('hidden');
+            App._autoFS();
+            this._nextPlayer();
         },
         _buildQuestionPool:function(allQ,needed,order){
             if(order==='fair'){
@@ -956,6 +990,7 @@
             document.getElementById('exam-progress-text').textContent='第 '+(exam.currentIndex+1)+'/'+exam.questions.length+' 题 · 人均 '+(Math.round(exam.results.length/exam.students.length*10)/10)+'/'+exam.avgQuestions;
             document.getElementById('question-text').textContent=question.text;
             if(exam.mode==='pinyin'){App.Pinyin.renderQuestion(exam,question);return}
+            if(exam.mode==='fill'){App.Fill.renderQuestion(exam,question);return}
             document.getElementById('question-options').innerHTML=this.renderOptionsHTML(question);
             var settings=App.Storage.getSettings();
             var cardEl=document.getElementById('question-card');
@@ -1076,7 +1111,7 @@
             fill.style.width='100%';fill.classList.remove('warning');timerEl.textContent=this.timeLeft+'s';
             this.timerInterval=setInterval(function(){self.timeLeft--;var pct=(self.timeLeft/totalTime)*100;fill.style.width=pct+'%';timerEl.textContent=self.timeLeft+'s';if(self.timeLeft<=5){fill.classList.add('warning');App.Effects.playCountdown()}if(self.timeLeft<=0){clearInterval(self.timerInterval);self.timeUp()}},1000);
         },
-        timeUp:function(){var exam=this.currentExam;if(exam.answered)return;if(exam.mode==='pinyin'){App.Pinyin.timeUp();return}var question=exam.questions[exam.currentIndex];exam.answered=true;var correctAnswer=this.getEffectiveAnswer(question);document.querySelectorAll('.option-btn').forEach(function(btn){btn.classList.add('disabled');if(btn.dataset.option===correctAnswer)btn.classList.add('correct')});exam.results.push({studentId:exam.currentStudent.id,questionId:question.id,correct:false,pointsEarned:0,selectedOption:'超时'});App.Effects.playTimeUp();App.Effects.showScorePopup(0,false);this.renderWarReport(true);this._saveProgress();this.showNextButton()},
+        timeUp:function(){var exam=this.currentExam;if(exam.answered)return;if(exam.mode==='pinyin'){App.Pinyin.timeUp();return}if(exam.mode==='fill'){App.Fill.timeUp();return}var question=exam.questions[exam.currentIndex];exam.answered=true;var correctAnswer=this.getEffectiveAnswer(question);document.querySelectorAll('.option-btn').forEach(function(btn){btn.classList.add('disabled');if(btn.dataset.option===correctAnswer)btn.classList.add('correct')});exam.results.push({studentId:exam.currentStudent.id,questionId:question.id,correct:false,pointsEarned:0,selectedOption:'超时'});App.Effects.playTimeUp();App.Effects.showScorePopup(0,false);this.renderWarReport(true);this._saveProgress();this.showNextButton()},
         selectOption:function(option){
             var exam=this.currentExam,question=exam.questions[exam.currentIndex];
             if(exam.answered)return;
@@ -1290,6 +1325,7 @@
             var exam=this.currentExam;
             if(exam)exam._ended=true;
             if(App.Reading&&App.Reading.cancel)App.Reading.cancel();
+            if(App.Fill&&App.Fill.cancel)App.Fill.cancel();
             if(this.timerInterval)clearInterval(this.timerInterval);
             if(document.fullscreenElement)document.exitFullscreen().catch(function(){});
             document.getElementById('exam-playing').classList.add('hidden');
@@ -1355,7 +1391,7 @@
             var bankIds=App.Questions.getSelectedBankIds();
             if(bankIds.length===0){App.Toast.show('题库未选择','warning');return}
             var banks=App.Storage.getBanks(),allQ=[];
-            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions&&b.type!=='pinyin')allQ=allQ.concat(b.questions)});
+            bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions&&App.BankTypes.of(b)===App.BankTypes.allowedForMode(App.Exam.currentMode))allQ=allQ.concat(b.questions)});
             if(allQ.length===0){App.Toast.show('题库中没有题目','warning');return}
             var bankId=bankIds[0]||'';
             var wrongSet=App.Storage.getWrongSet(sid,bankId);
@@ -1386,6 +1422,7 @@
         showResult:function(){
             var exam=this.currentExam;if(!exam||exam._ended)return;exam._ended=true;
             if(App.Reading&&App.Reading.cancel)App.Reading.cancel();
+            if(App.Fill&&App.Fill.cancel)App.Fill.cancel();
             if(this.timerInterval)clearInterval(this.timerInterval);
             if(exam._autoNextTimer){clearTimeout(exam._autoNextTimer);exam._autoNextTimer=null}
             document.getElementById('exam-drawing').classList.add('hidden');

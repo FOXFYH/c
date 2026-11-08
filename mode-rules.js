@@ -73,6 +73,19 @@ var ModeRules = {
         ],
         personalOnly: true
     },
+    fill: {
+        title: '✍️ 填空题',
+        icon: '✍️',
+        rules: [
+            '仅学生模式可使用，单人答题',
+            '题面句子挖空，必须用手写把答案写进空里',
+            '写完自动识别，点候选字上屏；可撤销一笔 / 清空 / 重写',
+            '全部空填完才能提交，按空判分',
+            '禁键盘、粘贴、拖拽与语音输入',
+            '全部空正确得满分，部分正确按空给分'
+        ],
+        personalOnly: true
+    },
     reading: {
         title: '📖 课外阅读',
         icon: '📖',
@@ -126,6 +139,7 @@ var ParticipationLabels = {
         smart: '🧠 个人智能抽查',
         lottery: '🎲 个人抽签',
         pinyin: '🈶 个人拼音',
+        fill: '✍️ 个人填空',
         reading: '📖 个人课外阅读'
     },
     group: {
