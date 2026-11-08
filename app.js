@@ -76,8 +76,8 @@
             var ver=this.get('dataVersion',0);
             if(ver<DATA_VERSION){
                 var students=this.get('students',null);
-                if(!students||students.length===0){this.setStudents(DEFAULT_STUDENTS)}
-                else{
+                // 演示名单已彻底停用：没有学生就保持空，等云端/老师自己录入
+                if(students&&students.length>0){
                     var changed=false;
                     students.forEach(function(s){
                         if(s.gender===undefined){s.gender='';changed=true}
@@ -135,7 +135,13 @@
                 localStorage.setItem('exam_seed_new_modes_v1','1');
             }catch(e){}
         },
-        getStudents:function(){return this.get('students',[])},
+        getStudents:function(){
+            var s=this.get('students',[])||[];
+            // 演示名单已停用：任何位置读到演示学生一律剔除，顺手清理存储
+            var clean=(s||[]).filter(function(x){return x&&!x._demo});
+            if(clean.length!==s.length){this.set('students',clean)}
+            return clean;
+        },
         setStudents:function(s){var hasReal=s.some(function(x){return!x._demo});if(hasReal){s=s.filter(function(x){return!x._demo})}this.set('students',s);if(!this._syncSilent)App.Sync.notifyChange('students',s)},
         getBanks:function(){
             var banks=this.get('banks',[]);
