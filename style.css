@@ -4152,6 +4152,13 @@ body.reading-open{overflow:hidden}
 .history-summary-row b{color:var(--text-primary)}
 
 /* ===== 填空题：手写作答 ===== */
+.bank-modal-item.folder-item{border-color:#9fd8b3;background:linear-gradient(180deg,rgba(34,120,70,.22),rgba(20,80,48,.14))}
+.bank-modal-item.folder-item .bank-modal-name{color:#8fe6b3;font-weight:700}
+.bank-modal-arrow{margin-left:auto;color:#8fd8ae}
+.bank-card.folder-card{border-color:#9fd8b3;background:linear-gradient(180deg,rgba(34,120,70,.18),rgba(20,80,48,.12))}
+.bank-card.folder-card .bcl-name{color:#7fe0a6;font-weight:700}
+.bank-card.folder-card .bcl-count{color:#8fd8ae}
+.bank-badge.folder{color:#146b3a;background:#e9f8ef;border:1px solid #b7e3c8}
 .bank-folder-bar{margin:10px 0 4px}
 .bank-folder-path{font-size:13px;color:var(--text-secondary);margin-bottom:8px}
 .folder-crumb.clickable{cursor:pointer;color:var(--accent-3)}
