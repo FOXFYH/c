@@ -262,7 +262,7 @@
             }catch(e){}
         },
         getRecords:function(){return this.get('records',[])},
-        setRecords:function(r){this.set('records',r);if(!this._syncSilent){App.Sync.notifyChange('records',r);if(App.Sync.forceSaveFile&&App.Sync._pref('on_exam_end'))App.Sync.forceSaveFile('系统-考试数据');if(App.Ledger)App.Ledger.onRecordsChanged(r)}},
+        setRecords:function(r){this.set('records',r);if(!this._syncSilent){App.Sync.notifyChange('records',r);if(App.Ledger)App.Ledger.onRecordsChanged(r)}},
         getExamProgress:function(){return this.get('examProgress',null)},
         setExamProgress:function(p){this.set('examProgress',p)},
         clearExamProgress:function(){localStorage.removeItem('exam_examProgress')},
@@ -898,27 +898,35 @@
                 return {at:o.at||0,items:o.items||[]};
             }catch(e){return {at:0,items:[]}}
         },
-        // 账本核对：总账（records 逐条累加）vs 分账（每生累计），并逐生重算校验
+        // 账本核对：总账（records 逐条累加）vs 分账（每生累计），逐生点名差异（含已被删除的学生）
         audit:function(){
             var students=App.Storage.getStudents(),records=App.Storage.getRecords();
-            var total={correct:0,total:0,points:0};
+            var total={correct:0,total:0,points:0},per={};
             records.forEach(function(r){
                 var srs=r.studentResults||{};
                 Object.keys(srs).forEach(function(k){
-                    var sr=srs[k];
+                    var sr=srs[k]||{};
                     total.correct+=sr.correctCount||0;total.total+=sr.totalCount||0;total.points+=sr.pointsEarned||0;
+                    var o=per[k]||(per[k]={name:sr.name||k,correct:0,total:0,points:0});
+                    o.correct+=sr.correctCount||0;o.total+=sr.totalCount||0;o.points+=sr.pointsEarned||0;
+                    if(sr.name)o.name=sr.name;
                 });
             });
-            var led={correct:0,total:0,points:0},rows=[];
+            var led={correct:0,total:0,points:0},rows=[],exist={};
             students.forEach(function(s){
+                exist[s.id]=1;
                 var st=getStudentStats(s.id)||{totalCorrect:0,totalCount:0,totalPoints:0};
                 led.correct+=st.totalCorrect||0;led.total+=st.totalCount||0;led.points+=st.totalPoints||0;
-                var h=App.Records.getStudentHistory(s.id),c=0,t=0,p=0;
-                h.forEach(function(x){if(x.notDrawn)return;c+=x.correctCount||0;t+=x.totalCount||0;p+=x.pointsEarned||0});
-                if((st.totalCorrect||0)!==c||(st.totalCount||0)!==t||(st.totalPoints||0)!==p){
-                    rows.push({name:s.name,absId:this.absIdOf(s),stats:{c:st.totalCorrect||0,t:st.totalCount||0,p:st.totalPoints||0},recalc:{c:c,t:t,p:p}});
+                var acc=per[s.id]||{correct:0,total:0,points:0};
+                if((st.totalCorrect||0)!==acc.correct||(st.totalCount||0)!==acc.total||(st.totalPoints||0)!==acc.points){
+                    rows.push({name:s.name,absId:this.absIdOf(s),stats:{c:st.totalCorrect||0,t:st.totalCount||0,p:st.totalPoints||0},recalc:{c:acc.correct,t:acc.total,p:acc.points}});
                 }
             }.bind(this));
+            Object.keys(per).forEach(function(id){
+                if(exist[id])return;
+                var a=per[id];
+                rows.push({name:(a.name||id)+'（已不在学生名单）',absId:id,stats:{c:0,t:0,p:0},recalc:{c:a.correct,t:a.total,p:a.points}});
+            });
             return {ok:rows.length===0&&total.correct===led.correct&&total.total===led.total&&total.points===led.points,
                     total:total,ledger:led,mismatches:rows,students:students.length,records:records.length};
         }
@@ -927,6 +935,9 @@
     App.Leaderboard = {
         render:function(){
             var students=App.Storage.getStudents();
+            // 学生模式只看自己，不暴露全班榜单
+            var _me=App.Role&&App.Role.isStudent?App.Role.student():null;
+            if(_me)students=students.filter(function(s){return s.id===_me.id});
             var empty=document.getElementById('leaderboard-empty');
             var podium=document.getElementById('leaderboard-podium');
             var container=document.querySelector('.leaderboard-container h2.section-title');
@@ -2059,7 +2070,8 @@
             if(App.Login&&!App.Login.isLoggedIn())return;
             if(!this._anyFrameReady)return;
             ['系统-考试数据','系统-学生信息'].forEach(function(nm){
-                App.Sync.postToFileManager({type:'forceSyncFile',name:nm});
+                if(nm==='系统-考试数据'){try{App.Sync._pushSystemToCloud(nm)}catch(e){return}}
+                else App.Sync.postToFileManager({type:'forceSyncFile',name:nm});
             });
         },
         // 关键节点保存：一场答题结束立刻点名让文件管理器把该文件推上云，不等「版本差≥10」
@@ -2075,6 +2087,10 @@
         },
         // 系统文件直传：宿主拿当前内存内容直接推云端，绕开文件管理器的内容缓存，杜绝“传的是旧快照”
         _pushSystemToCloud:function(name){
+            // 成绩文件先读云端合并再写，避免多端/多窗口并发时后写整表覆盖先写
+            if(name==='系统-考试数据'&&!this._skipRecordsMerge){
+                return this._pushRecordsMerged();
+            }
             var self=this;
             if(!App.Login||!App.Login.isLoggedIn())return;
             var user=App.Login._username,pwd=App.Login._password;
@@ -2110,7 +2126,7 @@
                 }catch(e){}
                 console.log('[Sync] 系统文件已直传云端：'+name+' v'+v);
             };
-            call({表格名:'抽奖考试',操作:'同步提交',用户名:user,密码:pwd,锁登记处:dev,ID:fid,起点号:String(s),终点号:String(e),本地新文件标识:isNew?'true':'false',数据:data}).then(function(r){
+            return call({表格名:'抽奖考试',操作:'同步提交',用户名:user,密码:pwd,锁登记处:dev,ID:fid,起点号:String(s),终点号:String(e),本地新文件标识:isNew?'true':'false',数据:data}).then(function(r){
                 var jr=r&&r.判定结果;
                 if(!r||r.status==='error'){unlock();return}
                 if(jr==='无需上传'){unlock();return}
@@ -2124,6 +2140,66 @@
                 }
                 unlock();
             }).catch(function(){unlock()});
+        },
+        // 读云端成绩内容（容忍分片/解析失败，读不到就当空，不阻断写入）
+        _readCloudRecords:function(user,pwd,fid){
+            var call=function(argv){
+                var body={webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/519302387327/script/V2-6t4db1ZSsEPesqKsD7aj3/sync_task',message:{Context:{argv:argv}}};
+                return fetch('https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+                    .then(function(r){return r.json()}).then(function(j){return (j.data&&j.data.result)||j});
+            };
+            return call({表格名:'抽奖考试',操作:'批量读取',用户名:user,密码:pwd,ID列表:[fid]}).then(function(rd){
+                var rows=(rd&&rd.数据)||[];var row=null;
+                for(var i=0;i<rows.length;i++){if(rows[i]&&rows[i].ID===fid){row=rows[i];break}}
+                if(!row)return [];
+                var txt='';
+                try{var p=JSON.parse(row['文件JSON']||'');txt=(p&&p.内容)||''}catch(e){}
+                if(!txt)txt=row['内容']||'';
+                try{var arr=JSON.parse(txt);return Array.isArray(arr)?arr:[]}catch(e){return []}
+            }).catch(function(){return []});
+        },
+        _mergeLocalRecords:function(cloud){
+            var local=App.Storage.getRecords()||[];
+            if(!Array.isArray(cloud)||!cloud.length)return local;
+            var ids={};cloud.forEach(function(r){if(r&&r.id)ids[r.id]=1});
+            var extra=local.filter(function(r){return r&&r.id&&!ids[r.id]});
+            if(!extra.length)return local;
+            var all=cloud.concat(extra).sort(function(a,b){return (a.date||0)-(b.date||0)});
+            App.Storage._syncSilent=true;
+            try{App.Storage.setRecords(all)}finally{App.Storage._syncSilent=false}
+            return all;
+        },
+        // 成绩同步：读云端→按场次 id 并集→写回→回读校验，缺场次自动重试
+        _pushRecordsMerged:function(){
+            var self=this;
+            if(!App.Login||!App.Login.isLoggedIn())return Promise.resolve();
+            var user=App.Login._username,pwd=App.Login._password;
+            var fid='EXAM_SYS_RECORDS__'+user;
+            var run=function(attempt){
+                return self._readCloudRecords(user,pwd,fid).then(function(cloud){
+                    self._mergeLocalRecords(cloud);
+                    return self._writeRecordsNow();
+                }).then(function(){
+                    return self._recordsAllInCloud(user,pwd,fid);
+                }).then(function(ok){
+                    if(!ok&&attempt<3){return new Promise(function(r){setTimeout(r,1500)}).then(function(){return run(attempt+1)})}
+                });
+            };
+            this._recordsChain=(this._recordsChain||Promise.resolve()).then(function(){return run(0)}).catch(function(e){try{console.warn('[Sync] 成绩同步失败',e)}catch(_){}});
+            return this._recordsChain;
+        },
+        _writeRecordsNow:function(){
+            this._skipRecordsMerge=true;
+            try{return this._pushSystemToCloud('系统-考试数据')||Promise.resolve()}
+            finally{this._skipRecordsMerge=false}
+        },
+        _recordsAllInCloud:function(user,pwd,fid){
+            return this._readCloudRecords(user,pwd,fid).then(function(cloud){
+                var ids={};cloud.forEach(function(r){if(r&&r.id)ids[r.id]=1});
+                var local=App.Storage.getRecords()||[];
+                for(var i=0;i<local.length;i++){var r=local[i];if(r&&r.id&&!ids[r.id])return false}
+                return true;
+            });
         },
         syncNow:function(){
             if(App.Login && !App.Login.isLoggedIn()){
@@ -2308,6 +2384,8 @@
                 var verify=false;
                 for(var i=0;i<rows.length;i++){if(String(rows[i].ID)==='999999999'){verify=true;break}}
                 if(!msg||!msg.ok||!verify){
+                    // 已放行后偶发读取失败：不再弹门禁/打断答题，等下一轮静默重试
+                    if(App.Sync._gateDone){try{console.warn('[Gate] 验证行本轮读取失败，保持已放行状态')}catch(e){}return}
                     App.Sync._gateBlocked=true;
                     App.Sync._gateDone=false;
                     App.Sync._showGate('云端校验失败，正在重试…');

@@ -519,7 +519,7 @@
             if(baseInput)s.baseTimeout=parseFloat(baseInput.value)||0;
             if(charInput)s.charTimeoutCompensation=parseFloat(charInput.value)||0;
             s.lastMode='pinyin';s.lastParticipationType='personal';App.Storage.setSettings(s);
-            var exam={mode:'pinyin',participationType:'personal',questions:pool.questions,timeLimit:0,autoNext:false,students:[student],currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:[],queueIndex:0,avgQuestions:0,groupNames:[],groupRotation:'alternate',playerOrder:'order',_pointsPerQ:10,_bankNames:pool.names};
+            var exam={mode:'pinyin',participationType:'personal',questions:pool.questions,timeLimit:0,autoNext:App.Storage.getSettings().autoNext!==false,students:[student],currentIndex:0,results:[],playerScores:{},totalEarned:0,playerQueue:[],queueIndex:0,avgQuestions:0,groupNames:[],groupRotation:'alternate',playerOrder:'order',_pointsPerQ:10,_bankNames:pool.names};
             exam.playerScores[student.id]=0;
             for(var i=0;i<pool.questions.length;i++)exam.playerQueue.push(student);
             this.currentExam=exam;
@@ -1319,6 +1319,8 @@
         },
         nextQuestion:function(){
             var exam=this.currentExam;if(exam._autoNextTimer){clearTimeout(exam._autoNextTimer);exam._autoNextTimer=null}exam.currentIndex++;
+            // 先落盘题号：刷新/断电后从下一题续，不会退回刚答过的题
+            try{this._saveProgress()}catch(e){}
             if(exam.currentIndex>=exam.questions.length){this.showResult();return}
             this._nextPlayer();
         },
@@ -1520,7 +1522,8 @@
                     if(exam._isRetry){
                         App.Toast.show('补考通过！获得 '+exam.totalEarned+'⭐','success');
                     }
-                    App.Exam.showRoundLeaderboard(record);
+                    App.Toast.show('本场得分 '+exam.totalEarned+'⭐','success');
+                    try{App.Exam.showRoundLeaderboard(record)}catch(e){try{console.warn('[Exam] 本场榜渲染失败',e)}catch(_){} }
                 }else{
                     App.Effects.playWrong();
                     var wrongCount=exam.questions.length-correct;
