@@ -148,8 +148,8 @@ let correctCode = "";
 const API_URL = "https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com";
 const WEBHOOK_URL = "https://www.kdocs.cn/api/v3/ide/file/504393979179/script/V2-jCry7lblkwsPtTSmtjlWY/sync_task";
 
-// 未登录状态下清空本地缓存（保留设备标识），确保网站无法被操作
-function clearLocalCacheOnLoad(){
+// 清空 exam_ 缓存（保留设备标识）。仅在「未登录」或「换账号登录」时调用
+function wipeExamCache(){
   try{
     var keysToRemove = [];
     for(var i = 0; i < localStorage.length; i++){
@@ -162,8 +162,22 @@ function clearLocalCacheOnLoad(){
   }catch(e){}
 }
 
+// 关键修复：已经登录的用户打开登录页时，绝不能清缓存。
+// 以前这里无条件清空，等于一打开登录页就把登录态与全部数据一起毁掉，于是反复要求登录。
+function clearLocalCacheOnLoad(){
+  try{
+    if(localStorage.getItem('exam_auth_user') && localStorage.getItem('exam_auth_pass')) return;
+  }catch(e){}
+  wipeExamCache();
+}
+
 // 登录成功后保存凭据并跳转主页
 function onLoginSuccess(username, password){
+  // 只有“换账号登录”才清旧账号的本地缓存；同一账号保留，避免误清数据
+  try{
+    var prev = localStorage.getItem('exam_auth_user') || '';
+    if(prev && prev !== username) wipeExamCache();
+  }catch(e){}
   localStorage.setItem('exam_auth_user', username);
   localStorage.setItem('exam_auth_pass', password);
   setStatus('登录成功，正在跳转...');

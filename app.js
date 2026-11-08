@@ -2285,8 +2285,12 @@
         init: function(){
             var self = this;
             // 从localStorage恢复登录状态
-            var savedUser = localStorage.getItem('exam_auth_user') || '';
-            var savedPwd = localStorage.getItem('exam_auth_pass') || '';
+            var savedUser = '';
+            var savedPwd = '';
+            try{
+                savedUser = localStorage.getItem('exam_auth_user') || '';
+                savedPwd = localStorage.getItem('exam_auth_pass') || '';
+            }catch(e){}
             if(savedUser && savedPwd){
                 this._loggedIn = true;
                 this._username = savedUser;
@@ -2294,59 +2298,73 @@
             }
             this.updateUI();
 
-            // 未登录：清空本地缓存并跳转到登录页
+            // 未登录：只跳登录页；绝不清本地数据（清数据只发生在「退出登录」或「换账号登录」时）
             if(!this._loggedIn){
-                this._clearAllCache();
                 this._redirectToLogin();
                 return;
             }
 
-            // 延迟：验证已有凭据（凭据已随 initSession 一次性下发，不再单独发 authChanged）
+            // 延迟：验证已有凭据。校验不到结果不等于账号失效，不能因此踢人
             setTimeout(function(){
-                self.verifyCredentials(self._username, self._password, function(ok){
+                self.verifyCredentials(self._username, self._password, function(ok, info){
+                    self._recordCheck(ok, info);
                     if(!ok){
-                        self._clearAllCache();
-                        App.Toast.show('登录已过期，请重新登录', 'warning');
-                        self._redirectToLogin();
-                    }else{
-                        // 登录门禁：只校验系统文件；题库文件按需下载。一致后才放行
-                        if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在校验云端系统文件…');
-                        // 本地已有缓存 → 1.8 秒后先放行显示本地数据，云端校验转后台继续，不再干等十几秒
-                        try{
-                            var _st=JSON.parse(localStorage.getItem('exam_students')||'[]');
-                            var _rc=JSON.parse(localStorage.getItem('exam_records')||'[]');
-                            var _hasReal=(_st||[]).filter(function(s){return s&&s.id&&String(s.id).indexOf('demo_')!==0});
-                            var _hasLocal=((_rc&&_rc.length)||0)>0 || _hasReal.length>0;
-                            if(_hasLocal){
-                                setTimeout(function(){
-                                    App.Sync._gateSoftReleased=true;
-                                    if(App.Sync._hideGate)App.Sync._hideGate();
-                                    if(App.Toast)App.Toast.show('云端校验在后台继续，先显示本地数据','info');
-                                },1800);
-                            }
-                        }catch(e){}
-                        if(App.Sync&&App.Sync.postToFileManager){
-                            var gateTries=0;
-                            var gateTimer=setInterval(function(){
-                                gateTries++;
-                                App.Sync.postToFileManager({type:'loginGateReadAll'});
-                                if(App.Sync._gateDone||gateTries>=12)clearInterval(gateTimer);
-                            },3000);
-                            App.Sync.postToFileManager({type:'loginGateReadAll'});
-                            // 兜底：60 秒仍未通过则提示，避免永远挡着
+                        // 只有服务器明确说账号/密码无效才走这里：隔 2.5 秒复核一次，两次都无效才引导重新登录，且不删数据
+                        setTimeout(function(){
+                            self.verifyCredentials(self._username, self._password, function(ok2, info2){
+                                self._recordCheck(ok2, info2);
+                                if(ok2)return;
+                                App.Toast.show('登录状态已失效，请重新登录（本地数据已保留）','warning');
+                                self._redirectToLogin();
+                            });
+                        }, 2500);
+                        return;
+                    }
+                    // 登录门禁：只校验系统文件；题库文件按需下载。一致后才放行
+                    if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在校验云端系统文件…');
+                    // 本地已有缓存 → 1.8 秒后先放行显示本地数据，云端校验转后台继续，不再干等十几秒
+                    try{
+                        var _st=JSON.parse(localStorage.getItem('exam_students')||'[]');
+                        var _rc=JSON.parse(localStorage.getItem('exam_records')||'[]');
+                        var _hasReal=(_st||[]).filter(function(s){return s&&s.id&&String(s.id).indexOf('demo_')!==0});
+                        var _hasLocal=((_rc&&_rc.length)||0)>0 || _hasReal.length>0;
+                        if(_hasLocal){
                             setTimeout(function(){
-                                if(!App.Sync._gateDone){
-                                    var t=document.getElementById('gate-text');
-                                    if(t)t.textContent='云端校验未完成：请检查网络后重新登录';
-                                    if(App.Toast)App.Toast.show('云端校验未完成，请检查网络后重新登录','warning');
-                                    var m=document.getElementById('gate-mask');
-                                    if(m)m.style.display='none';
-                                }
-                            },60000);
+                                App.Sync._gateSoftReleased=true;
+                                if(App.Sync._hideGate)App.Sync._hideGate();
+                                if(App.Toast)App.Toast.show('云端校验在后台继续，先显示本地数据','info');
+                            },1800);
                         }
+                    }catch(e){}
+                    if(App.Sync&&App.Sync.postToFileManager){
+                        var gateTries=0;
+                        var gateTimer=setInterval(function(){
+                            gateTries++;
+                            App.Sync.postToFileManager({type:'loginGateReadAll'});
+                            if(App.Sync._gateDone||gateTries>=12)clearInterval(gateTimer);
+                        },3000);
+                        App.Sync.postToFileManager({type:'loginGateReadAll'});
+                        // 兜底：60 秒仍未通过则提示，避免永远挡着
+                        setTimeout(function(){
+                            if(!App.Sync._gateDone){
+                                var t=document.getElementById('gate-text');
+                                if(t)t.textContent='云端校验未完成：可先使用本地数据，后台会自动重试';
+                                if(App.Toast)App.Toast.show('云端校验未完成，可先使用本地数据，后台会自动重试','warning');
+                                var m=document.getElementById('gate-mask');
+                                if(m)m.style.display='none';
+                            }
+                        },60000);
                     }
                 });
             }, 2000);
+        },
+
+        // 记录最近一次登录校验结果，便于排查“明明登录了还被踢”
+        _recordCheck:function(ok, info){
+            try{
+                localStorage.setItem('exam_login_lastcheck', JSON.stringify({t:Date.now(),ok:!!ok,code:(info&&info.code)||0,note:(info&&info.note)||''}));
+            }catch(e){}
+            try{ console.log('[Login] 校验'+(ok?'通过':'未通过'), info||''); }catch(e){}
         },
 
         // 清空所有 exam_ 开头的本地缓存（保留设备标识）
@@ -2382,18 +2400,26 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(body)
             }).then(function(res){ return res.text(); }).then(function(txt){
-                try{
-                    var d = JSON.parse(txt);
-                    var result = d.data && d.data.result ? d.data.result : d;
-                    if(result.TZbianhao === 501){
-                        callback(true);
-                    } else {
-                        callback(false);
-                    }
-                }catch(e){ callback(false); }
+                var d = null;
+                try{ d = JSON.parse(txt); }catch(e){ d = null; }
+                // 解析不了 = 没法判定（断网弹页/网关502/运营商拦截页/空响应），绝不能当成“账号失效”
+                if(!d){
+                    callback(true, {note:'返回内容无法解析，按离线处理'});
+                    return;
+                }
+                var result = d.data && d.data.result ? d.data.result : d;
+                var code = parseInt(result && result.TZbianhao, 10) || 0;
+                if(code === 501){ callback(true, {code:501}); return; }
+                if(code === 101 || code === 103){
+                    // 服务器明确表示账号或密码无效
+                    callback(false, {code:code, note:(result && result.tongzhi) || ''});
+                    return;
+                }
+                // 其它业务码（限流/服务器忙/脚本异常/未知）＝没法判定，放行，下次再说
+                callback(true, {code:code, note:(result && (result.tongzhi || result.status)) || '未知返回码'});
             }).catch(function(e){
                 // 网络异常时容许离线使用
-                callback(true);
+                callback(true, {note:'网络异常'});
             });
         },
 
@@ -2430,7 +2456,20 @@
         },
 
         isLoggedIn: function(){
-            return this._loggedIn;
+            if(this._loggedIn) return true;
+            // 自愈：内存标记丢了但本地有凭据（例如某次初始化异常），不能误判成未登录
+            try{
+                var u = localStorage.getItem('exam_auth_user') || '';
+                var p = localStorage.getItem('exam_auth_pass') || '';
+                if(u && p){
+                    this._loggedIn = true;
+                    this._username = u;
+                    this._password = p;
+                    this.updateUI();
+                    return true;
+                }
+            }catch(e){}
+            return false;
         },
 
         getUsername: function(){
@@ -2580,29 +2619,39 @@
     };
 
     App.init = function(){
-        App.Storage.ensureDefaults();
+        // 先恢复登录态：后面任何初始化步骤出错，都不能把“已登录”误判成“未登录”
         App.Login.init();
-        App.Sync.init();
-        App.Toast.init();
-        App.Effects.init();
-        App.Storage.seedNewModeBanks();
-        App.Students.render();
-        App.Questions.render();
-        App.Leaderboard.render();
-        App.Settings.renderLevels();
-        App.Settings.loadSoundSettings();
-        App.Settings.loadAISettings();
-        App.Settings.loadExamSettings();
-        App.Role.init();
-        var progress=App.Storage.getExamProgress();
-        if(progress&&progress.questions&&progress.questions.length>0){
-            App.Exam.checkResumableExam();
-        }
-        document.getElementById('sound-volume').addEventListener('input',function(){
-            App.Settings.saveSoundSettings();
+        var safe = function(name, fn){
+            try{ fn(); }catch(e){ try{ console.error('[Init] '+name+' 失败:', e); }catch(_e){} }
+        };
+        safe('ensureDefaults', function(){ App.Storage.ensureDefaults(); });
+        safe('Sync.init', function(){ App.Sync.init(); });
+        safe('Toast.init', function(){ App.Toast.init(); });
+        safe('Effects.init', function(){ App.Effects.init(); });
+        safe('seedNewModeBanks', function(){ App.Storage.seedNewModeBanks(); });
+        safe('Students.render', function(){ App.Students.render(); });
+        safe('Questions.render', function(){ App.Questions.render(); });
+        safe('Leaderboard.render', function(){ App.Leaderboard.render(); });
+        safe('renderLevels', function(){ App.Settings.renderLevels(); });
+        safe('loadSoundSettings', function(){ App.Settings.loadSoundSettings(); });
+        safe('loadAISettings', function(){ App.Settings.loadAISettings(); });
+        safe('loadExamSettings', function(){ App.Settings.loadExamSettings(); });
+        safe('Role.init', function(){ App.Role.init(); });
+        safe('checkResumableExam', function(){
+            var progress=App.Storage.getExamProgress();
+            if(progress&&progress.questions&&progress.questions.length>0){
+                App.Exam.checkResumableExam();
+            }
         });
-        document.getElementById('sound-enabled').addEventListener('change',function(){
-            App.Settings.saveSoundSettings();
+        safe('bindSoundVolume', function(){
+            document.getElementById('sound-volume').addEventListener('input',function(){
+                App.Settings.saveSoundSettings();
+            });
+        });
+        safe('bindSoundEnabled', function(){
+            document.getElementById('sound-enabled').addEventListener('change',function(){
+                App.Settings.saveSoundSettings();
+            });
         });
     };
 
