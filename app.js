@@ -197,7 +197,8 @@
             try{
                 if(!App.BankTypes)return;
                 var idx=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
-                var banks=this.get('banks',[])||[];
+                // 用 getBanks 取（内含“按内容纠正旧题库题型”），「补标签」按钮也能纠正
+                var banks=this.getBanks()||[];
                 var ch=false;
                 // 本地题库：缺标签的补成 [题型, 科目]
                 var _bch=false;
