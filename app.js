@@ -1570,7 +1570,8 @@
                         App.Sync._applyLoginGate(msg);
                         break;
                     case 'syncComplete':
-                        App.Sync._hideGate();
+                        // 登录门禁未完成时，不允许同步完成消息提前把门禁撤掉
+                        if(App.Sync._gateDone)App.Sync._hideGate();
                         if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
                         if(!self._pulling)self.pullAllCloudContent();
                         if(App.Questions)App.Questions.render();
