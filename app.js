@@ -254,6 +254,7 @@
         _filterGroup:'',
         render:function(){
             var students=App.Storage.getStudents();
+            if(App.Role&&App.Role.isStudent()){var _me=App.Role.student();students=_me?[_me]:[]}
             var wrap=document.getElementById('student-table-wrap');
             var empty=document.getElementById('students-empty');
             if(students.length===0){wrap.innerHTML='';empty.classList.add('show');return}
@@ -554,10 +555,14 @@
     // ========== 学生个人考试历史（按考试类型切割总流水账） ==========
     App.History = {
         META:{farm:{n:'🌾 打野'},challenge:{n:'🎯 挑战'},pk:{n:'⚔️ PK'},practice:{n:'📝 练习'},smart:{n:'🧠 智能抽查'},pinyin:{n:'🈶 拼音'},reading:{n:'📖 课外阅读'},lottery:{n:'🎲 抽签'}},
+        _summaryHTML:function(sid){
+            var st=App.getStudentStats(sid);
+            return '<div class="history-summary-row"><span>总积分 <b style="color:var(--gold)">'+st.totalPoints+'⭐</b></span><span>正确率 <b>'+st.accuracy+'%</b></span><span>场次 <b>'+st.sessions+'</b></span><span>答对 <b>'+st.totalCorrect+'/'+st.totalCount+'</b></span></div>';
+        },
         open:function(){
             var me=App.Role&&App.Role.student?App.Role.student():null;
             if(!me){App.Toast.show('请先在学生模式下查看','warning');return}
-            var body='<div class="history-filter">';
+            var body=this._summaryHTML(me.id)+'<div class="history-filter">';
             body+='<button class="btn-sm btn-primary" data-m="all" onclick="App.History.filter(this,\''+me.id+'\')">全部</button>';
             ['practice','pinyin','reading','farm','challenge','pk','smart'].forEach(function(m){
                 body+='<button class="btn-sm btn-secondary" data-m="'+m+'" onclick="App.History.filter(this,\''+me.id+'\')">'+(App.History.META[m]?App.History.META[m].n:m)+'</button>';
@@ -565,6 +570,28 @@
             body+='</div><div id="history-list" style="margin-top:10px"></div>';
             App.Modal.open('📜 '+me.name+' 的考试历史',body,'<button class="btn-secondary" onclick="App.Modal.close()">关闭</button>');
             this.render(me.id,'all');
+        },
+        // 开始考试前的设置界面：只看当前模式的历史
+        openCurrent:function(){
+            var mode=App.Exam&&App.Exam.currentMode;
+            if(!mode||mode==='history'){App.Toast.show('请先选择考试模式','warning');return}
+            var me=App.Role&&App.Role.student?App.Role.student():null;
+            if(me){this.openFor(me.id,mode);return}
+            var ids=App.Exam.getSelectedStudentIds();
+            if(ids.length===1){
+                var st=App.Storage.getStudents().find(function(s){return s.id===ids[0]});
+                if(st){this.openFor(st.id,mode);return}
+            }
+            App.Toast.show('请先选择1名学生（或切到学生模式）','warning');
+        },
+        openFor:function(sid,mode){
+            var st=App.Storage.getStudents().find(function(s){return s.id===sid});
+            if(!st){App.Toast.show('找不到该学生','warning');return}
+            var nm=(this.META[mode]&&this.META[mode].n)||mode;
+            var body=this._summaryHTML(sid)+'<div id="history-list"></div>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">关闭</button><button class="btn-secondary" onclick="App.Modal.close();App.History.open()">看全部类型</button>';
+            App.Modal.open('📜 '+st.name+' · '+nm+' 历史',body,footer);
+            this.render(sid,mode);
         },
         filter:function(btn,sid){
             var wrap=btn.parentNode;wrap.querySelectorAll('button').forEach(function(b){b.className='btn-sm btn-secondary'});

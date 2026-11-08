@@ -102,7 +102,7 @@
             this.participationType=lastPT;
             var isLottery=mode==='lottery';
             // 抽签与练习都只能个人参与：即使上一次是小组，也强制切回个人，否则练习看不到学生列表
-            if(isLottery||mode==='practice'||mode==='pinyin'){this.participationType='personal';lastPT='personal'}
+            if(isLottery||mode==='practice'||mode==='pinyin'||(mode==='reading'&&App.Role&&App.Role.isStudent())){this.participationType='personal';lastPT='personal'}
             document.getElementById('exam-mode-select').classList.add('hidden');
             document.getElementById('exam-setup').classList.remove('hidden');
             var titleEl=document.getElementById('setup-mode-title');
@@ -116,7 +116,7 @@
             var isPractice=mode==='practice';
             var isSmart=mode==='smart';
             var isPinyin=mode==='pinyin';
-            var soloOnly=isPractice||isLottery||isPinyin;
+            var soloOnly=isPractice||isLottery||isPinyin||(mode==='reading'&&App.Role&&App.Role.isStudent());
             if(lastPT==='group'){
                 if(groupArea)groupArea.style.display='';
                 if(studentArea)studentArea.style.display='none';
@@ -136,7 +136,7 @@
             if(lastPT==='group')this.renderGroupSelect();
             else this.renderStudentSelect();
             // 学生模式练习：进入即锁定本人，避免列表重绘后丢失选中
-            if((isPractice||isPinyin)&&App.Role&&App.Role.isStudent()){
+            if((isPractice||isPinyin||mode==='reading')&&App.Role&&App.Role.isStudent()){
                 [0,300,900].forEach(function(ms){
                     setTimeout(function(){
                         var _only=document.querySelector('.student-select-item');

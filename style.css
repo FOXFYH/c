@@ -4083,8 +4083,8 @@ input:checked + .slider:before {
 /* 班主任看不到「练习」「拼音」（这两个只能由班主任切到某个学生后进入） */
 body.role-teacher .mode-card[data-mode="practice"],
 body.role-teacher .mode-card[data-mode="pinyin"]{display:none}
-/* 学生模式只保留单人可完成的模式 */
-body.role-student .mode-card:not([data-mode="practice"]):not([data-mode="pinyin"]){display:none}
+/* 学生模式保留单人可完成的模式（阅读在学模式也可单人做） */
+body.role-student .mode-card:not([data-mode="practice"]):not([data-mode="pinyin"]):not([data-mode="reading"]){display:none}
 /* 班主任专属的操作整块隐藏 */
 body.role-student [data-teacher-only],
 body.role-student .teacher-only{display:none!important}
@@ -4141,3 +4141,5 @@ body.reading-open{overflow:hidden}
 .reading-btn:active{transform:scale(.98)}
 /* 历史记录筛选按钮行 */
 .history-filter{display:flex;flex-wrap:wrap;gap:8px}
+.history-summary-row{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--text-secondary);margin-bottom:8px}
+.history-summary-row b{color:var(--text-primary)}
