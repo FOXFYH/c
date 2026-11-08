@@ -2510,6 +2510,7 @@
                 }
                 App.Sync._gateBlocked=false;
                 App.Sync._gateDone=true;
+                try{localStorage.setItem('exam_gate_ok_'+(App.Login&&App.Login._username||''),String(Date.now()))}catch(e){}
                 // 系统文件若本地还有更高版本待上传，等同步完成再放行
                 var pending=false;
                 try{
@@ -2579,18 +2580,35 @@
                         }
                         localStorage.setItem('exam_last_account',self._username);
                     }catch(e){}
-                    // 登录门禁：云端系统文件必须完全对齐后才放行；题库只刷新最新索引，不下载内容
-                    if(App.Sync&&App.Sync._showGate)App.Sync._showGate('正在同步云端系统文件…');
+                    // 登录门禁：10 分钟内已对齐且本地无待上传改动时走快路（秒进），后台仍静默重验一次；
+                    // 否则照旧严格等待云端对齐，保证数据可信。
                     if(App.Sync&&App.Sync.postToFileManager){
-                        var gateTries=0;
-                        var gateTimer=setInterval(function(){
-                            if(App.Sync._gateDone){clearInterval(gateTimer);return}
-                            gateTries++;
-                            var gt=document.getElementById('gate-text');
-                            if(gt)gt.textContent='正在同步云端系统文件…（第'+gateTries+'次）';
+                        var _pendingSys=false;
+                        try{
+                            var _ix0=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                            _pendingSys=_ix0.some(function(x){return String(x.id).indexOf('EXAM_SYS')===0&&((x.isNewFile)||((x.e||0)>(x.s||0)))});
+                        }catch(e){}
+                        var _lastOK=0;
+                        try{_lastOK=parseInt(localStorage.getItem('exam_gate_ok_'+self._username)||'0')||0}catch(e){}
+                        var _fast=!_pendingSys&&_lastOK>0&&(Date.now()-_lastOK)<10*60*1000;
+                        if(_fast){
+                            App.Sync._gateDone=true;
+                            if(App.Sync._hideGate)App.Sync._hideGate();
+                            setTimeout(function(){try{App.Sync.postToFileManager({type:'loginGateReadAll'})}catch(e){}},5000);
+                        }else{
+                            if(App.Sync._showGate)App.Sync._showGate('正在同步云端系统文件…');
+                            var gateTries=0,gateBusy=false;
+                            var gateTimer=setInterval(function(){
+                                if(App.Sync._gateDone){clearInterval(gateTimer);return}
+                                if(gateBusy)return;
+                                gateBusy=true;gateTries++;
+                                var gt=document.getElementById('gate-text');
+                                if(gt)gt.textContent='正在同步云端系统文件…（第'+gateTries+'次）';
+                                App.Sync.postToFileManager({type:'loginGateReadAll'});
+                                setTimeout(function(){gateBusy=false},2500);
+                            },1200);
                             App.Sync.postToFileManager({type:'loginGateReadAll'});
-                        },3000);
-                        App.Sync.postToFileManager({type:'loginGateReadAll'});
+                        }
                     }
                 });
             }, 2000);
