@@ -367,6 +367,7 @@
                 }
             }
             examStudents=students.filter(function(s){return selectedIds.indexOf(s.id)!==-1});
+            await this._ensureCloudFor(bankIds,App.BankTypes.allowedForMode(this.currentMode));
             var banks=App.Storage.getBanks(),allQ=[];
             if(mode!=='lottery'){
             // 检查所选题库是否缺少题目内容（仅有索引），按需从云端下载
