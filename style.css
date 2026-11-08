@@ -4172,3 +4172,18 @@ body.reading-open{overflow:hidden}
 .fill-cand-empty{font-size:12px;color:var(--text-muted);line-height:38px}
 .fill-submit{align-self:center;border:none;border-radius:10px;padding:11px 18px;font-size:15px;font-weight:700;background:var(--accent-1);color:#fff;cursor:pointer}
 .fill-submit:disabled{opacity:.5;cursor:not-allowed}
+
+/* ===== 题库使用情况（个人模式） ===== */
+.bank-modal-stat{margin-left:6px;border:1px solid var(--border-color);background:var(--bg-hover);border-radius:8px;padding:2px 8px;font-size:13px;cursor:pointer}
+.bank-usage-summary{display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--text-secondary);padding:4px 0 10px;border-bottom:1px solid var(--border-color)}
+.bank-usage-summary b{color:var(--text-primary)}
+.bank-usage-row{border-bottom:1px solid var(--border-color)}
+.bur-head{display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;font-size:14px}
+.bur-head b{flex:0 0 auto}
+.bur-head span:nth-child(2){flex:1;color:var(--text-secondary);font-size:12.5px;text-align:right}
+.bur-arrow{color:var(--text-muted);transition:transform .2s}
+.bank-usage-row.open .bur-arrow{transform:rotate(180deg)}
+.bur-body{display:none;padding:0 0 8px}
+.bank-usage-row.open .bur-body{display:block}
+.bur-session{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--text-muted);padding:4px 0 4px 10px}
+.bur-session span:nth-child(1){flex:1 1 100%;color:var(--text-secondary)}
