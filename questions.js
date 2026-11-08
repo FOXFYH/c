@@ -21,7 +21,19 @@
         toggleModalBank:function(el,single){if(single){document.querySelectorAll('.bank-modal-item.selected').forEach(function(item){if(item!==el){item.classList.remove('selected');item.querySelector('.bank-modal-check').textContent=''}})}el.classList.toggle('selected');el.querySelector('.bank-modal-check').textContent=el.classList.contains('selected')?'✓':'';App.Effects.playClick()},
         selectAllModalBanks:function(){var items=document.querySelectorAll('.bank-modal-item');var allSel=true;items.forEach(function(el){if(!el.classList.contains('selected'))allSel=false});items.forEach(function(el){if(allSel){el.classList.remove('selected');el.querySelector('.bank-modal-check').textContent=''}else{if(!el.classList.contains('selected')){el.classList.add('selected');el.querySelector('.bank-modal-check').textContent='✓'}}});App.Effects.playClick()},
         confirmBankSelect:function(){var ids=[];document.querySelectorAll('.bank-modal-item.selected').forEach(function(el){ids.push(el.dataset.bankId)});if(ids.length===0){App.Toast.show('请至少选择一个题库','warning');return}if((App.Exam.currentMode==='practice'||App.Exam.currentMode==='reading'||App.Exam.currentMode==='fill')&&ids.length>1){App.Toast.show('该模式只能选择1个题库','warning');return}var settings=App.Storage.getSettings();if(App.Exam.currentMode==='reading'){settings._lastReadingBankIds=ids}else if(App.Exam.currentMode==='pinyin'){settings._lastPinyinBankIds=ids}else if(App.Exam.currentMode==='fill'){settings._lastFillBankIds=ids}else{settings._lastBankIds=ids}App.Storage.setSettings(settings);App.Modal.close();this.renderBankSelect();if(App.Exam.currentMode==='reading'&&App.Exam.updateReadingPreview)App.Exam.updateReadingPreview();App.Effects.playClick()},
-        getSelectedBankIds:function(){var lastIds=App.Storage.getSettings()._lastBankIds||[];return lastIds},
+        getSelectedBankIds:function(){
+            var lastIds=App.Storage.getSettings()._lastBankIds||[];
+            var mode=App.Exam&&App.Exam.currentMode;
+            if(mode&&App.BankTypes){
+                var need=App.BankTypes.allowedForMode(mode);
+                var banks=App.Storage.getBanks();
+                lastIds=lastIds.filter(function(id){
+                    var b=banks.find(function(x){return x.id===id});
+                    return b&&App.BankTypes.of(b)===need;
+                });
+            }
+            return lastIds;
+        },
         // ===== 拼音题库（type:'pinyin'）=====
         openBankSelect:function(){
             if(App.Exam&&App.Exam.currentMode==='pinyin'){this.showPinyinBankSelectModal();return}
@@ -48,7 +60,7 @@
             var bar=document.getElementById('exam-bank-bar');var lab=bar?bar.querySelector('.bank-bar-label'):null;
             if(lab)lab.textContent='✍️ 填空题库';
             var banks=App.Storage.getBanks(),ids=App.Storage.getSettings()._lastFillBankIds||[];
-            var b=null;ids.forEach(function(id){var x=banks.find(function(y){return y.id===id&&y.type==='fill'});if(x)b=x});
+            var b=null;ids.forEach(function(id){var x=banks.find(function(y){return y.id===id&&App.BankTypes.of(y)==='fill'});if(x)b=x});
             if(!b){info.textContent='点击选择填空题题库';return}
             var n=(b.questions||[]).length;
             info.textContent=b.name+'（'+n+' 题·手写作答）';
@@ -137,7 +149,7 @@
             if(!open)row.classList.add('open');
         },
         showPinyinBankSelectModal:function(){
-            var banks=(App.Storage.getBanks()||[]).filter(function(b){return b.type==='pinyin'});
+            var banks=(App.Storage.getBanks()||[]).filter(function(b){return App.BankTypes.of(b)==='pinyin'});
             var sel=App.Storage.getSettings()._lastPinyinBankIds||[];
             var body='<div class="bank-modal-grid">';
             var bs=sel.length?'':' selected';

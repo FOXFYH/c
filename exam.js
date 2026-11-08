@@ -540,7 +540,7 @@
         _readingBank:function(){
             var banks=App.Storage.getBanks(),ids=App.Storage.getSettings()._lastReadingBankIds||[];
             var hit=null;
-            ids.forEach(function(id){var b=banks.find(function(x){return x.id===id});if(b&&b.type==='reading')hit=b});
+            ids.forEach(function(id){var b=banks.find(function(x){return x.id===id});if(b&&App.BankTypes.of(b)==='reading')hit=b});
             return hit;
         },
         _startReadingExam:function(){
