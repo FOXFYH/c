@@ -200,10 +200,20 @@
                 // 用 getBanks 取（内含“按内容纠正旧题库题型”），「补标签」按钮也能纠正
                 var banks=this.getBanks()||[];
                 var ch=false;
+                // 云端索引里的文件名是“权威名”，本地同 ID 题库跟随（云端改了编号，本地也同步显示）
+                var _idxNames={};
+                idx.forEach(function(f){if(f&&f.id&&f.name)_idxNames[f.id]=f.name});
                 // 本地题库：缺标签的补成 [题型, 科目]
                 var _bch=false;
                 banks.forEach(function(b){
                     if(!b||!b.id)return;
+                    var _iname=_idxNames[b.id];
+                    if(_iname&&b.name!==App.BankTypes.stripAllTags(_iname)){
+                        var _it=App.BankTypes.tagsOfName(_iname);
+                        b.name=App.BankTypes.stripAllTags(_iname);
+                        if(_it.length)b.tags=_it;
+                        _bch=true;
+                    }
                     // 云端文件名带标签下载到本地后：拆出标签，显示名只留主干
                     var nameTags=App.BankTypes.tagsOfName(b.name);
                     if(nameTags.length){
