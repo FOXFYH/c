@@ -2151,12 +2151,14 @@
             return call({表格名:'抽奖考试',操作:'批量读取',用户名:user,密码:pwd,ID列表:[fid]}).then(function(rd){
                 var rows=(rd&&rd.数据)||[];var row=null;
                 for(var i=0;i<rows.length;i++){if(rows[i]&&rows[i].ID===fid){row=rows[i];break}}
-                if(!row)return [];
+                // 读不到行 → 返回 null（读取失败），绝不能当成「云端没有成绩」拿空数组往上写
+                if(!row)return null;
                 var txt='';
                 try{var p=JSON.parse(row['文件JSON']||'');txt=(p&&p.内容)||''}catch(e){}
                 if(!txt)txt=row['内容']||'';
-                try{var arr=JSON.parse(txt);return Array.isArray(arr)?arr:[]}catch(e){return []}
-            }).catch(function(){return []});
+                if(!String(txt).trim())return [];
+                try{var arr=JSON.parse(txt);return Array.isArray(arr)?arr:null}catch(e){return null}
+            }).catch(function(){return null});
         },
         _mergeLocalRecords:function(cloud){
             var local=App.Storage.getRecords()||[];
@@ -2177,12 +2179,18 @@
             var fid='EXAM_SYS_RECORDS__'+user;
             var run=function(attempt){
                 return self._readCloudRecords(user,pwd,fid).then(function(cloud){
+                    // 云端读不到（null）就本轮不写，避免把本地空数据盖上去；稍后重试
+                    if(cloud===null){
+                        try{console.warn('[Sync] 云端成绩读取失败，本轮跳过写入')}catch(_){}
+                        if(attempt<3)return new Promise(function(r){setTimeout(r,1500)}).then(function(){return run(attempt+1)});
+                        return;
+                    }
                     self._mergeLocalRecords(cloud);
                     return self._writeRecordsNow();
                 }).then(function(){
                     return self._recordsAllInCloud(user,pwd,fid);
                 }).then(function(ok){
-                    if(!ok&&attempt<3){return new Promise(function(r){setTimeout(r,1500)}).then(function(){return run(attempt+1)})}
+                    if(ok===false&&attempt<3){return new Promise(function(r){setTimeout(r,1500)}).then(function(){return run(attempt+1)})}
                 });
             };
             this._recordsChain=(this._recordsChain||Promise.resolve()).then(function(){return run(0)}).catch(function(e){try{console.warn('[Sync] 成绩同步失败',e)}catch(_){}});
@@ -2195,6 +2203,7 @@
         },
         _recordsAllInCloud:function(user,pwd,fid){
             return this._readCloudRecords(user,pwd,fid).then(function(cloud){
+                if(cloud===null)return false;
                 var ids={};cloud.forEach(function(r){if(r&&r.id)ids[r.id]=1});
                 var local=App.Storage.getRecords()||[];
                 for(var i=0;i<local.length;i++){var r=local[i];if(r&&r.id&&!ids[r.id])return false}
@@ -2388,10 +2397,13 @@
                     if(App.Sync._gateDone){try{console.warn('[Gate] 验证行本轮读取失败，保持已放行状态')}catch(e){}return}
                     App.Sync._gateBlocked=true;
                     App.Sync._gateDone=false;
-                    App.Sync._showGate('云端校验失败，正在重试…');
-                    App.Toast.show('云端校验失败：读不到验证行，已阻止进入','error');
+                    App.Sync._gateFailCount=(App.Sync._gateFailCount||0)+1;
+                    // 头两轮多是文件管理器还没握手完/偶发抖动，别吓人；连续 3 轮才提示
+                    App.Sync._showGate(App.Sync._gateFailCount>=3?'云端读取失败，正在自动重试…':'正在连接云端…');
+                    if(App.Sync._gateFailCount===3)App.Toast.show('云端读取失败，正在自动重试…','warning');
                     return;
                 }
+                App.Sync._gateFailCount=0;
                 var sysRows=[];
                 for(var j=0;j<rows.length;j++){
                     var r=rows[j];
@@ -2597,10 +2609,12 @@
                             setTimeout(function(){try{App.Sync.postToFileManager({type:'loginGateReadAll'})}catch(e){}},5000);
                         }else{
                             if(App.Sync._showGate)App.Sync._showGate('正在同步云端系统文件…');
-                            var gateTries=0,gateBusy=false;
+                            var gateTries=0,gateBusy=false,gateStartAt=Date.now();
                             var gateTimer=setInterval(function(){
                                 if(App.Sync._gateDone){clearInterval(gateTimer);return}
                                 if(gateBusy)return;
+                                // 文件管理器 iframe 还没握手完时发过去也只会拿到「未登录」，白跑一轮；最多等 8 秒
+                                if(!App.Sync._sessionReady&&(Date.now()-gateStartAt)<8000)return;
                                 gateBusy=true;gateTries++;
                                 var gt=document.getElementById('gate-text');
                                 if(gt)gt.textContent='正在同步云端系统文件…（第'+gateTries+'次）';
