@@ -4213,3 +4213,19 @@ body.reading-open{overflow:hidden}
 .bank-usage-row.open .bur-body{display:block}
 .bur-session{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--text-muted);padding:4px 0 4px 10px}
 .bur-session span:nth-child(1){flex:1 1 100%;color:var(--text-secondary)}
+
+/* ===== 2.085（R4-03）：浏览器放大到 200%（约 640 CSS px 视口）时顶栏不得把「结束」挤出屏幕 =====
+   原因：顶栏是单行 flex，缩放后内容总宽 > 视口，末尾的「结束」「账号名」被推到右侧不可见，
+   且页面 overflow-x:hidden 无法横向滚动。这里在窄视口下隐藏次要控件并收紧间距，
+   同时把「结束」按钮钉在顶栏可视区右缘，保证 getBoundingClientRect().right <= innerWidth。 */
+@media (max-width: 768px) {
+    #main-nav { padding: 0 8px; }
+    #nav-ver, .nav-sound, .nav-fullscreen, .nav-fs-btn, #nav-zoom-controls { display: none; }
+    .nav-items { gap: 2px; }
+    .nav-btn { padding: 6px 8px; }
+    .nav-icon { font-size: 20px; }
+    #nav-login-status { display: none; }
+    .nav-login-btn { width: 26px; height: 26px; }
+    .nav-exam-ctrl { padding: 3px 8px; font-size: 12px; }
+    #nav-exam-end { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 1003; }
+}
