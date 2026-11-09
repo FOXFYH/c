@@ -1027,7 +1027,11 @@
             if(pointsEl&&settings.studentInfoFontSize)pointsEl.style.fontSize=settings.studentInfoFontSize+'px';
             if(exam.mode==='lottery'){
                 document.getElementById('exam-student-points').textContent='本场已抽 '+(exam.playerScores[student.id]||0)+' 次';
-                document.getElementById('exam-progress-text').textContent='第 '+(exam.currentIndex+1)+'/'+exam.questions.length+' 签 · 已抽 '+(exam.results.length)+' 人';
+                // R1-13：抽签模式没有题库，不能拿题库题数当分母显示「第 x/500 签」；按实际待抽人数走
+                var _lotN=(exam.students&&exam.students.length)||0;
+                document.getElementById('exam-progress-text').textContent=_lotN
+                    ? ('第 '+Math.min(exam.currentIndex+1,_lotN)+'/'+_lotN+' 签 · 已抽 '+(exam.results.length)+' 人')
+                    : ('已抽 '+(exam.results.length)+' 人');
                 document.getElementById('timer-bar').style.display='none';
                 document.getElementById('exam-timer').style.display='none';
                 document.getElementById('question-text').textContent='📣 请老师现场口头出题（与题库无关）';
