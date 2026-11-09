@@ -1306,6 +1306,8 @@
         },
         clearRecords:function(){
             if(!confirm('⚠️ 确定要清空所有场次数据吗？此操作不可恢复！'))return;
+            // 清空是有意为之：60 秒内禁止「读云端并集」把旧场次又并回本地
+            try{App.Sync._suppressRecordsPushUntil=Date.now()+60000;App.Sync._recordsDirty=false;App.Sync._everReadOk=false}catch(e){}
             App.Storage.setRecords([]);
             App.Records.render();
             App.Leaderboard.render();
@@ -1592,6 +1594,12 @@
             var self=this;
             this._attachFrameReady(this.frame);
             this._attachFrameReady(document.getElementById('fileManagerFrame'));
+            // R1-11/R1-12：成绩持久对账状态（快写 + 后台并集校验 + 联网/回前台自动补）
+            this._everReadOk=false;
+            this._recordsDirty=false;
+            this._lastCloudReadAt=0;
+            this._reconcileTimer=null;
+            this._suppressRecordsPushUntil=0;
             window.addEventListener('message',function(e){
                 if(!e.data||typeof e.data!=='object')return;
                 var msg=e.data;
@@ -1754,8 +1762,13 @@
                 if(!document.hidden&&self.ready){
                     self.postToFileManager({type:'mainActivated'});
                     self._ensureCoreStars();
+                    // M15：断网/后台回来的第一时刻补推未上云的成绩
+                    if(self._recordsDirty){try{self._pushRecordsMerged()}catch(e){}}
                 }
                 if(document.hidden&&self.ready){ self.syncOnExit(); }
+            });
+            window.addEventListener('online',function(){
+                if(App.Sync&&App.Sync._recordsDirty){try{App.Sync._pushRecordsMerged()}catch(e){}}
             });
             window.addEventListener('pagehide',function(){ if(App.Sync)App.Sync.syncOnExit(); });
             window.addEventListener('beforeunload',function(){ if(App.Sync)App.Sync.syncOnExit(); });
@@ -2306,6 +2319,7 @@
         },
         // 读云端成绩内容：读失败一律返回 null（R1-19），并由 R1-12 串行化避免高频读被打回
         _readCloudRecords:function(user,pwd,fid){
+            var self=this;
             var doRead=function(){
             var call=function(argv){
                 var body={webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/519302387327/script/V2-6t4db1ZSsEPesqKsD7aj3/sync_task',message:{Context:{argv:argv}}};
@@ -2325,9 +2339,10 @@
                 if(!String(txt).trim()){
                     // R1-19：云端行还在、字符数还 >0，这次却读回空串 → 限流/解析失败，不是真空表
                     if((parseInt(row['内容字符数']||0)||0)>0)return null;
+                    self._everReadOk=true;self._lastCloudReadAt=Date.now();
                     return [];
                 }
-                try{var arr=JSON.parse(txt);return Array.isArray(arr)?arr:null}catch(e){return null}
+                try{var arr=JSON.parse(txt);if(!Array.isArray(arr))return null;self._everReadOk=true;self._lastCloudReadAt=Date.now();return arr}catch(e){return null}
             }).catch(function(){return null});
             };
             // R1-12：云端读取串行化（同一时刻只放一个读请求），避免 2 秒级高频读触发 WPS「数据解析失败」
@@ -2346,33 +2361,59 @@
             try{App.Storage.setRecords(all)}finally{App.Storage._syncSilent=false}
             return all;
         },
-        // 成绩同步：读云端→按场次 id 并集→写回→回读校验，缺场次自动重试
+        // R1-11/R1-12：成绩同步＝「本地快写（几秒内云端可查）→ 后台读云端并集 → 缺场次再重写 → 回读校验」
+        // 并发时先写的一方可能被对方整表覆盖，随后的并集校验会把两端场次补回，云端只增不减
         _pushRecordsMerged:function(){
             var self=this;
             if(!App.Login||!App.Login.isLoggedIn())return Promise.resolve();
+            if(this._suppressRecordsPushUntil&&Date.now()<this._suppressRecordsPushUntil)return Promise.resolve();
             var user=App.Login._username,pwd=App.Login._password;
             var fid='EXAM_SYS_RECORDS__'+user;
-            var run=function(attempt){
-                return self._readCloudRecords(user,pwd,fid).then(function(cloud){
-                    // 云端读不到（null）就本轮不写，避免把本地空数据盖上去；稍后重试
-                    if(cloud===null){
-                        try{console.warn('[Sync] 云端成绩读取失败，本轮跳过写入（第'+(attempt+1)+'次）')}catch(_){}
-                        if(attempt<3)return new Promise(function(r){setTimeout(r,1500)}).then(function(){return run(attempt+1)});
-                        // R1-19：连续读失败 → 落日志 + 明确告诉用户「本机已保留、没上传」，不静默吞掉
-                        try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'records_read_failed',msg:'云端成绩读取失败，本机数据已保留'}))}catch(_){}
-                        try{if(App.Toast)App.Toast.show('成绩同步失败：云端读取异常，本机成绩已保留，稍后自动重试','warning')}catch(_){}
-                        return;
-                    }
-                    self._mergeLocalRecords(cloud);
-                    return self._writeRecordsNow();
-                }).then(function(){
-                    return self._recordsAllInCloud(user,pwd,fid);
-                }).then(function(ok){
-                    if(ok===false&&attempt<3){return new Promise(function(r){setTimeout(r,1500)}).then(function(){return run(attempt+1)})}
-                });
-            };
-            this._recordsChain=(this._recordsChain||Promise.resolve()).then(function(){return run(0)}).catch(function(e){try{console.warn('[Sync] 成绩同步失败',e)}catch(_){}});
+            this._recordsDirty=true;
+            var chain=(this._recordsChain||Promise.resolve()).catch(function(){}).then(function(){
+                var local=App.Storage.getRecords()||[];
+                // R1-19：本地为空且本次会话从未成功读过云端 → 必须先读，绝不能拿空表盖云端
+                if(!local.length&&!self._everReadOk){
+                    return self._readCloudRecords(user,pwd,fid).then(function(cloud){
+                        if(cloud===null){self._scheduleReconcile();return;}
+                        self._mergeLocalRecords(cloud);
+                        return self._writeRecordsNow().then(function(){return self._reconcileRecords(user,pwd,fid,0)});
+                    });
+                }
+                return self._writeRecordsNow().then(function(){return self._reconcileRecords(user,pwd,fid,0)});
+            });
+            this._recordsChain=chain.catch(function(){});
             return this._recordsChain;
+        },
+        // 后台对账：读云端→并集进本地→云端缺本地场次就重写→再校验；失败保留 dirty 并定时重试
+        _reconcileRecords:function(user,pwd,fid,attempt){
+            var self=this;
+            return this._readCloudRecords(user,pwd,fid).then(function(cloud){
+                if(cloud===null){
+                    if(attempt<2)return new Promise(function(r){setTimeout(r,3000*Math.pow(2,attempt))}).then(function(){return self._reconcileRecords(user,pwd,fid,attempt+1)});
+                    try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'records_read_failed',msg:'云端成绩读取失败，本机数据已保留'}))}catch(_){}
+                    self._recordsDirty=true;self._scheduleReconcile();return false;
+                }
+                self._mergeLocalRecords(cloud);
+                var ids={};cloud.forEach(function(r){if(r&&r.id)ids[r.id]=1});
+                var local=App.Storage.getRecords()||[];
+                var missing=local.filter(function(r){return r&&r.id&&!ids[r.id]});
+                if(!missing.length){self._recordsDirty=false;return true}
+                return self._writeRecordsNow().then(function(){
+                    if(attempt<2)return new Promise(function(r){setTimeout(r,1000)}).then(function(){return self._reconcileRecords(user,pwd,fid,attempt+1)});
+                    self._recordsDirty=true;self._scheduleReconcile();return false;
+                });
+            }).catch(function(){self._recordsDirty=true;self._scheduleReconcile();return false});
+        },
+        _scheduleReconcile:function(){
+            var self=this;
+            if(this._reconcileTimer)return;
+            this._reconcileTimer=setTimeout(function(){
+                self._reconcileTimer=null;
+                if(!self._recordsDirty)return;
+                if(!App.Login||!App.Login.isLoggedIn())return;
+                try{self._pushRecordsMerged()}catch(e){}
+            },20000);
         },
         _writeRecordsNow:function(){
             this._skipRecordsMerge=true;
@@ -2414,6 +2455,9 @@
             var msg={type:'fileDeleted_local',fileId:fileId,name:bank?bank.name:'',
                      username:(App.Login&&App.Login._username)||localStorage.getItem('exam_auth_user')||'',
                      password:(App.Login&&App.Login._password)||localStorage.getItem('exam_auth_pass')||''};
+            // M16：删题库不能连带把该库历史场次弄丢，删完对账一次成绩并集（云端缺场次会补回）
+            var _self=this;
+            setTimeout(function(){try{_self._pushRecordsMerged()}catch(e){}},3000);
             // 后台管理器帧未就绪时先排队，fmReady 后再发，避免消息发进空白帧丢掉
             if(!this._anyFrameReady){
                 this._pendingBankDeletes=this._pendingBankDeletes||[];
@@ -2814,7 +2858,9 @@
                         }catch(e){}
                         var _lastOK=0;
                         try{_lastOK=parseInt(localStorage.getItem('exam_gate_ok_'+self._username)||'0')||0}catch(e){}
-                        var _fast=!_pendingSys&&_lastOK>0&&(Date.now()-_lastOK)<10*60*1000;
+                        // R1-03：10 分钟内已校验通过就直接放行（不再因「本地有待上传」而被拖去等云端）；
+                        // 待上传内容由后台定时补推，门禁校验改为后台静默重验
+                        var _fast=_lastOK>0&&(Date.now()-_lastOK)<10*60*1000;
                         if(_fast){
                             App.Sync._gateDone=true;
                             if(App.Sync._hideGate)App.Sync._hideGate();
