@@ -56,6 +56,8 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
             this.renderBankModal();
         },
         modalFolderEnter:function(tag){
+            // R1-10：题库弹层最多「题型→科目」两层，不允许再往下钻
+            if((this._modalPath||[]).length>=2)return;
             this._modalPath=(this._modalPath||[]).concat([tag]);
             this.renderBankModal();
         },
@@ -80,7 +82,8 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
                 var tags=App.BankTypes.tagsOfBank(b);
                 if(!tags||tags[0]!==need)return;
                 // R1-10：弹层固定「题型 → 科目」两级；没有科目标签的题库归入「未分类」科目文件夹
-                if(tags.length<=path.length)tags=tags.concat(['未分类']);
+                if(tags.length<2)tags=[tags[0],'未分类'];
+                tags=tags.slice(0,2);
                 if(!under(tags))return;
                 if(tags.length>path.length){folders[tags[path.length]]=(folders[tags[path.length]]||0)+1;return}
                 items.push({kind:'bank',id:b.id,name:b.name});
@@ -96,7 +99,8 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
                 var tags=App.BankTypes.tagsOfName(f.name);
                 if(!tags.length)return;
                 // R1-10：云端旧库同样归入科目层，无科目标签进「未分类」
-                if(tags.length<=path.length)tags=tags.concat(['未分类']);
+                if(tags.length<2)tags=[tags[0],'未分类'];
+                tags=tags.slice(0,2);
                 if(!under(tags))return;
                 if(tags.length>path.length){folders[tags[path.length]]=(folders[tags[path.length]]||0)+1;return}
                 items.push({kind:'cloud',id:f.id,name:base});
@@ -498,6 +502,10 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
             var _tagRaw=((document.getElementById('inp-bank-tags')||{}).value)||'';
             var _tags=[type].concat(String(_tagRaw).split(/[,，/]/).map(function(x){return App.BankTypes.cleanTag(x)}).filter(function(x){return !!x}));
             var banks=App.Storage.getBanks();
+            // R1-22：同名题库（忽略类型/科目标签）直接拦截，避免建出一堆同名库
+            var _baseName=App.BankTypes.stripAllTags(name);
+            var _dup=banks.filter(function(b){return App.BankTypes.stripAllTags(b.name)===_baseName})[0];
+            if(_dup){App.Toast.show('已存在同名题库「'+_baseName+'」，请换一个名字','error');return}
             var bank={id:App.genBankId(),name:name,description:desc,type:type,tags:_tags,questions:[],createdAt:Date.now(),_newFile:true};
             if(type==='reading'){var ta=document.getElementById('inp-bank-article');bank.article=ta?ta.value.trim():''}
             banks.push(bank);App.Storage.setBanks(banks);App.Modal.close();this.render();
