@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.21
+  存储测试网页版 · 文件管理器        当前版本 6.22
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.22 (2026-11-09) 修「登录门禁一直重试（跑到第十几、二十几次）」：_callCloudAPICore 的 lastError / lastIsNetworkError 原本声明在 apiUrl 循环体内，循环结束后拼失败回执时越界 → 每次云端调用都直接抛 ReferenceError（lastIsNetworkError is not defined），门禁拿到的永远是 ok:false，无限重试。现把两个变量提到循环外声明，并移除旧的 window.lastError 兜底。
     6.21 (2026-11-07) 登录门禁的 4 个系统文件改为「并行单文件读取」：既避开云端函数 3 秒上限，又把门禁等待从 20 多秒压到 2~3 秒；配合 6.20 的逐文件重试，冷启动也能稳定拿到云端内容。
     6.20 (2026-11-07) 登录门禁取内容改为「逐个系统文件读取 + 每个重试3次」：云端函数有 3 秒执行上限，一次批量读多个系统文件容易整体超时，导致门禁虽然过了但内容为空、界面只剩演示数据。配合表格收缩到 67 行，读取索引稳定在 2 秒内。
     6.19 (2026-11-07) 修同步竞态与登录门禁：①批量同步回执只在「上传期间本地没再改」时才清待上传标记，避免旧快照把本地新数据标成已同步；②批量/单文件下载遇到本地未上传改动一律跳过，绝不用云端旧内容覆盖；③上传回执过期判定用当前索引而不用旧快照；④抢锁重试 3→5 次；⑤登录门禁「读取索引」失败时改用「查找 ID 999999999」兜底，避免偶发超时导致一直提示读取不到校验行。
@@ -90,7 +91,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.21</title>
+<title>文件管理 v6.22</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -132,7 +133,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.21</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.22</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -325,8 +326,6 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 const PRIMARY_API_URLS=['https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com'];
 const FALLBACK_API_URLS=[];
 const MAX_CLOUD_CHARS=30000;
-// 全局兜底：任何 catch 分支引用 lastError 时不再抛 ReferenceError（批量拉取异常：lastError is not defined）
-window.lastError=window.lastError||null;
 
 // APP_PREFIX：应用唯一前缀，不同应用必须使用不同前缀
 // 可通过同步设置修改，也可通过 postMessage('initConfig') 初始化
@@ -1109,9 +1108,12 @@ async function _callCloudAPICore(action,params={}){
   const fetchTimeout=30000;
   let lockRetryCount=0; // 抢锁重试计数
   const maxLockRetries=5; // 最多抢锁重试5次（多账号同时在线时给对方留出释放时间）
+  // lastError / lastIsNetworkError 必须在所有 apiUrl 循环之外声明，循环结束后的失败回执要用到
+  let lastError=null;
+  let lastIsNetworkError=true;
   for(const apiUrl of allUrls){
-    let lastError=null;
-    let lastIsNetworkError=true;
+    lastError=null;
+    lastIsNetworkError=true;
     for(let attempt=0;attempt<maxRetries;attempt++){
       try{
         const ctrl=new AbortController();
@@ -4592,45 +4594,48 @@ window.addEventListener('message',function(e){
     case 'loginGateReadAll':
       (async function(){
         try{
-          const idxRes=await callCloudAPI('读取索引',{});
-          if(!idxRes||idxRes.status!=='success'){
-            // 兜底：索引偶发超时/失败时，单独按 ID 查验证行，避免登录被卡死
-            try{
-              const vr=await callCloudAPI('查找',{列名:'ID',关键字:'999999999'});
-              if(vr&&vr.status==='success'&&Array.isArray(vr.数据)&&vr.数据.length){
-                notifyParent('loginGateResult',{ok:true,rows:vr.数据,contents:{},tongzhi:'索引失败，已用验证行兜底'});
-                return;
-              }
-            }catch(e2){}
-            notifyParent('loginGateResult',{ok:false,rows:[],contents:{},tongzhi:(idxRes&&idxRes.tongzhi)||''});
-            return;
-          }
-          const rows=idxRes.数据||[];
           const userName=AUTH_USERNAME||'';
-          const sysRows=rows.filter(function(r){
-            const nm=String(r.文件名||'');const ow=String(r.拥有者||'').trim();
-            return nm.indexOf('系统-')===0&&(!ow||ow===userName);
-          });
-          const contents={};
-          const ids=sysRows.map(function(r){return r.ID}).filter(Boolean);
-          // 逐个文件读但并行发出：云端函数有 3 秒执行上限，单文件读最稳；并行可把门禁等待压到 2~3 秒
-          async function readSysOne(fid){
+          const STD=[['EXAM_SYS_STUDENT_INFO','系统-学生信息'],['EXAM_SYS_RECORDS','系统-考试数据'],['EXAM_SYS_LEVELS','系统-等级设置']];
+          // 一次「批量读取」直接拿回验证行 + 3 个系统文件（含内容），约 1 秒；
+          // 不用「读取索引」——表格行数多了以后它要逐格读上千个单元格，云端函数 3 秒上限一到就整体超时，
+          // 门禁便永远拿不到数据、一直重试（第几次第几次停不下来）。
+          async function readByIds(ids){
             for(let t=0;t<3;t++){
               try{
-                const rd=await callCloudAPI('批量读取',{ID列表:[fid]});
-                if(rd&&rd.status==='success'&&Array.isArray(rd.数据)&&rd.数据.length){
-                  const row=rd.数据[0];
-                  let c=extractCloudContent(row);
-                  if(!c){try{c=(JSON.parse(row['文件JSON']||'{}').内容)||''}catch(e){}}
-                  return c||'';
-                }
+                const rd=await callCloudAPI('批量读取',{ID列表:ids});
+                if(rd&&rd.status==='success'&&Array.isArray(rd.数据))return rd.数据;
               }catch(e){}
             }
-            return '';
+            return [];
           }
-          const _pairs=await Promise.all(ids.map(function(fid){return readSysOne(fid).then(function(c){return {fid:fid,content:c}}) }));
-          for(const _p of _pairs)contents[_p.fid]=_p.content;
-          notifyParent('loginGateResult',{ok:true,rows:rows,contents:contents,tongzhi:''});
+          const ids=['999999999'].concat(STD.map(function(p){return p[0]+'__'+userName}));
+          let rows=await readByIds(ids);
+          // 老账号系统文件没有 __账号 后缀：缺哪个就用裸 ID 再批量读一次
+          const got={};rows.forEach(function(r){got[String(r.ID)]=1});
+          const miss=[];
+          STD.forEach(function(p){if(!got[p[0]+'__'+userName]&&!got[p[0]])miss.push(p[0])});
+          if(miss.length){
+            const more=await readByIds(miss);
+            more.forEach(function(r){
+              const ow=String(r.拥有者||'').trim();
+              if(!ow||ow===userName)rows.push(r);
+            });
+          }
+          if(!rows.some(function(r){return String(r.ID)==='999999999'})){
+            // 极端兜底：验证行单独查一次
+            try{
+              const vr=await callCloudAPI('查找',{列名:'ID',关键字:'999999999'});
+              if(vr&&vr.status==='success'&&(vr.数据||[]).length)rows.push(vr.数据[0]);
+            }catch(e){}
+          }
+          const contents={};
+          rows.forEach(function(r){
+            let c=extractCloudContent(r);
+            if(!c){try{c=(JSON.parse(r['文件JSON']||'{}').内容)||''}catch(e){}}
+            contents[String(r.ID)]=c||'';
+          });
+          const hasVerify=rows.some(function(r){return String(r.ID)==='999999999'});
+          notifyParent('loginGateResult',{ok:hasVerify,rows:rows,contents:contents,tongzhi:''});
         }catch(e){
           notifyParent('loginGateResult',{ok:false,rows:[],contents:{},error:String((e&&e.message)||e)});
         }
