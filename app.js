@@ -690,9 +690,18 @@
             html+='<div>分账：答对 '+r.ledger.correct+' / 总题 '+r.ledger.total+' · 积分 '+r.ledger.points+'</div>';
             html+='<div style="color:var(--text-muted);margin-top:4px">学生 '+r.students+' 人 · 场次 '+r.records+' 场</div>';
             if(r.mismatches.length){
-                html+='<div style="margin-top:8px;font-weight:600">对不上的学生（'+r.mismatches.length+'）：</div>';
-                r.mismatches.forEach(function(m){
-                    html+='<div>· '+m.name+'（'+m.absId+'） 账本 '+m.stats.c+'/'+m.stats.t+'/'+m.stats.p+' vs 重算 '+m.recalc.c+'/'+m.recalc.t+'/'+m.recalc.p+'</div>';
+                var _badList=r.mismatches.filter(function(m){return !m.orphan});
+                if(_badList.length){
+                    html+='<div style="margin-top:8px;font-weight:600">对不上的学生（'+_badList.length+'）：</div>';
+                    _badList.forEach(function(m){
+                        html+='<div>· '+m.name+'（'+m.absId+'） 账本 '+m.stats.c+'/'+m.stats.t+'/'+m.stats.p+' vs 重算 '+m.recalc.c+'/'+m.recalc.t+'/'+m.recalc.p+'</div>';
+                    });
+                }
+            }
+            if(r.orphans&&r.orphans.length){
+                html+='<div style="margin-top:8px;font-weight:600;color:var(--text-muted)">已不在名单的孤儿场次（'+r.orphans.length+'，单列不参与核对）：</div>';
+                r.orphans.forEach(function(m){
+                    html+='<div style="color:var(--text-muted)">· '+m.name+'（'+m.absId+'） 孤儿累计 '+m.recalc.c+'/'+m.recalc.t+'/'+m.recalc.p+'</div>';
                 });
             }
             if(el)el.innerHTML=html;
@@ -790,7 +799,12 @@
                 return true;
             });
             recs.sort(function(a,b){return b.date-a.date});
-            if(!recs.length){box.innerHTML='<p style="color:var(--text-muted);padding:10px 0">该类型还没有考试记录</p>';return}
+            if(!recs.length){
+                // R1-11：本地缺场次、但该生确有答题记录 → 多半是并发同步没拉全，不能显示成 0 条
+                var _any=App.Storage.getRecords().some(function(r){var sr=(r.studentResults||{})[sid];return sr&&sr.totalCount>0});
+                box.innerHTML='<p style="color:var(--text-muted);padding:10px 0">'+(_any?'该生有记录但这场同步尚未拉全，正在从云端同步，请稍后刷新':'该类型还没有考试记录')+'</p>';
+                return;
+            }
             var html='<div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">共 '+recs.length+' 场</div>';
             recs.forEach(function(r){
                 var sr=r.studentResults[sid];
@@ -922,17 +936,36 @@
                     rows.push({name:s.name,absId:this.absIdOf(s),stats:{c:st.totalCorrect||0,t:st.totalCount||0,p:st.totalPoints||0},recalc:{c:acc.correct,t:acc.total,p:acc.points}});
                 }
             }.bind(this));
+            // R1-02：已不在名单的学生（孤儿场次）单列归档，不参与名单内核对，不让 audit 永久变红
+            var orphan={correct:0,total:0,points:0},orphanRows=[];
             Object.keys(per).forEach(function(id){
                 if(exist[id])return;
                 var a=per[id];
-                rows.push({name:(a.name||id)+'（已不在学生名单）',absId:id,stats:{c:0,t:0,p:0},recalc:{c:a.correct,t:a.total,p:a.points}});
+                orphan.correct+=a.correct;orphan.total+=a.total;orphan.points+=a.points;
+                orphanRows.push({name:(a.name||id)+'（已不在学生名单）',absId:id,orphan:true,stats:{c:0,t:0,p:0},recalc:{c:a.correct,t:a.total,p:a.points}});
             });
-            return {ok:rows.length===0&&total.correct===led.correct&&total.total===led.total&&total.points===led.points,
-                    total:total,ledger:led,mismatches:rows,students:students.length,records:records.length};
+            var rowsIn=rows.length;
+            var ok=rowsIn===0
+                &&(total.correct-orphan.correct)===led.correct
+                &&(total.total-orphan.total)===led.total
+                &&(total.points-orphan.points)===led.points;
+            return {ok:ok,
+                    total:total,ledger:led,orphan:orphan,orphans:orphanRows,
+                    mismatches:rows.concat(orphanRows),students:students.length,records:records.length};
         }
     };
 
     App.Leaderboard = {
+        _view:'personal',
+        // R1-01：个人榜 / 班级榜切换
+        setView:function(v){
+            this._view=(v==='group')?'group':'personal';
+            try{
+                var bs=document.querySelectorAll('#lb-tabs .lb-tab');
+                for(var i=0;i<bs.length;i++)bs[i].classList.toggle('active',bs[i].getAttribute('data-lb')===this._view);
+            }catch(e){}
+            this.render();
+        },
         render:function(){
             var students=App.Storage.getStudents();
             // 学生模式只看自己，不暴露全班榜单
@@ -950,6 +983,27 @@
                 var st=statsMap[s.id]||{totalPoints:0};
                 return{id:s.id,name:s.name,avatar:s.avatar,totalPoints:st.totalPoints};
             });
+            // R1-01：班级榜——按小组聚合总积分（无小组归「未分组」；学生模式只看自己组）
+            if(this._view==='group'){
+                var _byId={};App.Storage.getStudents().forEach(function(s){_byId[s.id]=s});
+                var gmap={};
+                enriched.forEach(function(e){
+                    var g=String((_byId[e.id]&&_byId[e.id].group)||'').trim()||'未分组';
+                    if(!gmap[g])gmap[g]={name:g,points:0,members:0};
+                    gmap[g].points+=e.totalPoints;gmap[g].members++;
+                });
+                var glist=Object.keys(gmap).map(function(k){return gmap[k]}).sort(function(a,b){return b.points-a.points});
+                if(_me)glist=glist.filter(function(g){return g.name===(String(_me.group||'').trim()||'未分组')});
+                container.textContent='👥 班级小组积分榜';
+                podium.innerHTML='';
+                list.innerHTML=glist.length
+                    ? ('<div class="remaining-list"><div class="remaining-grid">'+glist.map(function(g,i){
+                        var lv=getLevel(g.points);
+                        return '<div class="flb-item"><div class="flb-rank">#'+(i+1)+'</div><div class="flb-avatar">👥</div><div class="flb-name">'+g.name+'（'+g.members+'人）</div><div class="flb-level">'+lv.name+'</div><div class="flb-pts">⭐ '+g.points+'</div></div>';
+                    }).join('')+'</div></div>')
+                    : '<p style="color:var(--text-muted);padding:10px 0">还没有小组数据，请先在学生管理里填写「小组」</p>';
+                return;
+            }
             var sorted=enriched.slice().sort(function(a,b){return b.totalPoints-a.totalPoints});
             var avMap=buildAvatarCharMap(sorted);
             var podiumCount=Math.min(sorted.length,7);
@@ -1036,6 +1090,24 @@
                 html+='</div>';
             });
             container.innerHTML=html;
+            // R1-15：等级输入改完即时落盘（原来只有「添加/删除」会写，改名字/积分/评语一律不保存）
+            if(!container._levelBound){
+                container._levelBound=true;
+                var _saveLv=function(ev){
+                    var t=ev.target;
+                    if(!t||!t.dataset||t.dataset.idx===undefined)return;
+                    var idx=parseInt(t.dataset.idx);if(isNaN(idx))return;
+                    var st=App.Storage.getSettings();var arr=st.levels||[];
+                    if(!arr[idx])return;
+                    if(t.classList.contains('level-name-input'))arr[idx].name=t.value;
+                    else if(t.classList.contains('level-pts-input'))arr[idx].minPoints=parseInt(t.value||0)||0;
+                    else if(t.classList.contains('level-comment-input'))arr[idx].comment=t.value;
+                    else return;
+                    st.levels=arr;App.Storage.setSettings(st);
+                };
+                container.addEventListener('change',_saveLv);
+                container.addEventListener('blur',_saveLv,true);
+            }
         },
         addLevel:function(){
             var settings=App.Storage.getSettings();
@@ -1175,7 +1247,8 @@
             var statusText='未同步';
             if(lastTime>0){
                 var d=new Date(lastTime);
-                statusText='上次同步：'+d.toLocaleString('zh-CN');
+                var _p2=function(n){return n<10?'0'+n:''+n};
+                statusText='上次同步：'+_p2(d.getHours())+':'+_p2(d.getMinutes());
             }
             el.textContent=statusText;
         },
@@ -1421,6 +1494,11 @@
     };
 
     App.switchView = function(view){
+        // R1-04：登录门禁未通过时核心视图切换一律拒绝（遮罩只能挡点击，挡不住控制台直调）
+        if(App.Sync&&App.Sync._gateBlocked&&!App.Sync._gateDone){
+            try{if(App.Toast)App.Toast.show('正在校验云端数据，请稍候…','warning')}catch(e){}
+            return false;
+        }
         document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});
         document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('active')});
         var viewEl=document.getElementById('view-'+view);
@@ -1600,7 +1678,15 @@
                     case 'syncComplete':
                         // 登录门禁未完成时，不允许同步完成消息提前把门禁撤掉
                         if(App.Sync._gateDone)App.Sync._hideGate();
+                        // R1-16：同步完成真的回写时间戳（以前永不回写，状态栏恒「未同步」）
+                        try{
+                            localStorage.setItem('exam_last_sync_time',String(Date.now()));
+                            var _sb=document.getElementById('btn-sync-now');
+                            if(_sb){_sb.disabled=false;_sb.textContent='☁️ 立即同步'}
+                        }catch(e){}
                         if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
+                        // R1-09：本轮上传过的题库把索引 isNewFile 转正
+                        try{self._markUploaded()}catch(e){}
                         if(!self._pulling)self.pullAllCloudContent();
                         if(App.Questions)App.Questions.render();
                         break;
@@ -1761,6 +1847,9 @@
             if(!this._frameReady){this._pending=this._pending||[];this._pending.push({name:name,content:content});return}
             this._pushQueue=this._pushQueue||[];
             this._pushQueue.push({name:name,content:content});
+            // R1-09：记下本次要上传的文件名，同步完成后据此把索引 isNewFile 转正
+            this._pushNames=this._pushNames||{};
+            this._pushNames[name]=Date.now();
             if(this._pushTimer)return;
             var self=this;
             this._pushTimer=setTimeout(function(){
@@ -1772,6 +1861,32 @@
             if(!this._pending||!this._pending.length)return;
             var q=this._pending;this._pending=[];
             if(q.length)this.postToFileManager({type:'contentBatch',items:q});
+        },
+        // R1-09：一轮同步结束后，把已上传成功的题库索引 isNewFile 置否（否则删库只删本地、云端留孤儿行）
+        _markUploaded:function(){
+            if(!this._pushNames)return;
+            try{
+                var idx=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                var names=this._pushNames,ch=false;
+                idx.forEach(function(f){if(f&&f.isNewFile&&names[f.name]){f.isNewFile=false;ch=true}});
+                if(ch)localStorage.setItem('exam_file_index',JSON.stringify(idx));
+            }catch(e){}
+            this._pushNames={};
+        },
+        // R1-17：清理云端历史遗留的明文 AI 配置文件行（AI 配置自 2.052 起只存本机）
+        _purgeLegacyAiConfig:function(){
+            try{
+                var user=App.Login&&App.Login._username;
+                if(!user)return;
+                var fid='EXAM_SYS_AI_CONFIG__'+user;
+                var flagKey='exam_ai_cloud_purged_'+user;
+                if(localStorage.getItem(flagKey)==='1')return;
+                var idx=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                var hit=idx.find(function(f){return f&&f.id===fid});
+                if(!hit)return;      // 本地索引没有这行＝云端本来就无该行，无需调用
+                localStorage.setItem(flagKey,'1');
+                this.postToFileManager({type:'fileDeleted_local',fileId:fid,name:hit.name||'系统-AI配置',username:user,password:App.Login._password});
+            }catch(e){}
         },
         _ensureCoreStars:function(){
             try{
@@ -1847,6 +1962,26 @@
                     return;
                 }
                 }
+                // R1-14：即使门禁放行（force），本地有未上传的系统文件改动时，云端旧快照也不得整份回灌
+                if(force){
+                    try{
+                        var _fid3=this._getFileIdForDataType(dataType);
+                        if(_fid3){
+                            var _idx3=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                            var _ent3=_idx3.find(function(x){return x.id===_fid3});
+                            if(_ent3&&(_ent3.isNewFile||((_ent3.e||0)>(_ent3.s||0)))){
+                                console.log('[Sync] 本地有未上传改动，云端旧快照暂缓回灌：'+dataType);
+                                return;
+                            }
+                        }
+                    }catch(_e3){}
+                }
+                // R1-14：即使门禁放行（force），本地 3 秒内刚加/改/删过数据，云端旧快照也不得整份回灌；
+                // 先让 1.5 秒防抖的上行把本地变推送上去，后续拉取再对齐，避免新增学生被旧名单盖回
+                if(force&&this._localEditAt&&this._localEditAt[dataType]&&(Date.now()-this._localEditAt[dataType]<3000)){
+                    console.log('[Sync] 本地刚改过，云端旧快照暂缓回灌：'+dataType);
+                    return;
+                }
                 var data=JSON.parse(content);
                 // 全演示学生数据一律不应用（防止云端被污染的演示名单覆盖本机真实名单）
                 if(dataType==='students'&&Array.isArray(data)&&data.length&&data.every(function(x){return x&&x._demo})){
@@ -1856,11 +1991,16 @@
                 App.Storage._syncSilent=true;
                 try{
                     if(dataType==='students'){
-                        App.Storage.set('students',data);
+                        // R1-14：名单按 id 取并集（本地新增的保留），不再用云端旧快照整体覆盖
+                        var _locStu=App.Storage.getStudents()||[];
+                        var _cloIds={};data.forEach(function(s){if(s&&s.id)_cloIds[s.id]=1});
+                        var _extraStu=_locStu.filter(function(s){return s&&s.id&&!_cloIds[s.id]});
+                        App.Storage.set('students',_extraStu.length?data.concat(_extraStu):data);
                         App.Students.render();
                         if(App.Settings&&App.Settings.StudentMgmt&&App.Settings.StudentMgmt.render)App.Settings.StudentMgmt.render();
                     }else if(dataType==='records'){
-                        App.Storage.set('records',data);
+                        // R1-19/R1-11：成绩按场次 id 取并集，本地多出来的场次不得被云端快照抹掉
+                        App.Sync._mergeLocalRecords(data);
                         if(App.Settings&&App.Settings.renderRecords)App.Settings.renderRecords();
                     }else if(dataType==='levels'){
                         var curSettings=App.Storage.getSettings();
@@ -2078,6 +2218,9 @@
         forceSaveFile:function(name){
             if(!name)return;
             if(App.Login&&!App.Login.isLoggedIn())return;
+            // R1-19：成绩文件必须走「读云端→按场次并集合并→写回→回读校验」，
+            // 不能让文件管理器拿本地旧快照整表覆盖云端（并发时就是丢场次的元凶）
+            if(name==='系统-考试数据'){try{return this._pushRecordsMerged()}catch(e){}}
             if(!this._anyFrameReady){
                 this._pendingForceSaves=this._pendingForceSaves||[];
                 this._pendingForceSaves.push(name);
@@ -2126,9 +2269,21 @@
                 }catch(e){}
                 console.log('[Sync] 系统文件已直传云端：'+name+' v'+v);
             };
+            var attempt=0;
+            var send=function(){
             return call({表格名:'抽奖考试',操作:'同步提交',用户名:user,密码:pwd,锁登记处:dev,ID:fid,起点号:String(s),终点号:String(e),本地新文件标识:isNew?'true':'false',数据:data}).then(function(r){
                 var jr=r&&r.判定结果;
-                if(!r||r.status==='error'){unlock();return}
+                if(!r||r.status==='error'){
+                    // R1-12：上云失败/超时退避重试（1s→2s→4s，最多 3 次），不无限等、不静默丢
+                    if(attempt<3){
+                        attempt++;
+                        return new Promise(function(res){setTimeout(res,1000*Math.pow(2,attempt-1))}).then(send);
+                    }
+                    unlock();
+                    try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'upload_failed',name:name,msg:'系统文件上传失败，本机数据已保留'}))}catch(_){}
+                    try{if(App.Toast)App.Toast.show(name+' 上传失败，本机数据已保留，稍后自动重试','warning')}catch(_){}
+                    return;
+                }
                 if(jr==='无需上传'){unlock();return}
                 var newS=parseInt(r.终点号||r.起点号||e)||e;
                 if(jr==='全新接收'){done(newS);unlock();return}
@@ -2139,16 +2294,27 @@
                     });
                 }
                 unlock();
-            }).catch(function(){unlock()});
+            }).catch(function(){
+                if(attempt<3){
+                    attempt++;
+                    return new Promise(function(res){setTimeout(res,1000*Math.pow(2,attempt-1))}).then(send);
+                }
+                unlock();
+            });
+            };
+            return send();
         },
-        // 读云端成绩内容（容忍分片/解析失败，读不到就当空，不阻断写入）
+        // 读云端成绩内容：读失败一律返回 null（R1-19），并由 R1-12 串行化避免高频读被打回
         _readCloudRecords:function(user,pwd,fid){
+            var doRead=function(){
             var call=function(argv){
                 var body={webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/519302387327/script/V2-6t4db1ZSsEPesqKsD7aj3/sync_task',message:{Context:{argv:argv}}};
                 return fetch('https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
                     .then(function(r){return r.json()}).then(function(j){return (j.data&&j.data.result)||j});
             };
             return call({表格名:'抽奖考试',操作:'批量读取',用户名:user,密码:pwd,ID列表:[fid]}).then(function(rd){
+                // R1-19：读接口自身报错（WPS API 内部错误/数据解析失败）= 读取失败，绝不当成「云端为空」
+                if(!rd||rd.status==='error')return null;
                 var rows=(rd&&rd.数据)||[];var row=null;
                 for(var i=0;i<rows.length;i++){if(rows[i]&&rows[i].ID===fid){row=rows[i];break}}
                 // 读不到行 → 返回 null（读取失败），绝不能当成「云端没有成绩」拿空数组往上写
@@ -2156,9 +2322,18 @@
                 var txt='';
                 try{var p=JSON.parse(row['文件JSON']||'');txt=(p&&p.内容)||''}catch(e){}
                 if(!txt)txt=row['内容']||'';
-                if(!String(txt).trim())return [];
+                if(!String(txt).trim()){
+                    // R1-19：云端行还在、字符数还 >0，这次却读回空串 → 限流/解析失败，不是真空表
+                    if((parseInt(row['内容字符数']||0)||0)>0)return null;
+                    return [];
+                }
                 try{var arr=JSON.parse(txt);return Array.isArray(arr)?arr:null}catch(e){return null}
             }).catch(function(){return null});
+            };
+            // R1-12：云端读取串行化（同一时刻只放一个读请求），避免 2 秒级高频读触发 WPS「数据解析失败」
+            var p=(this._readChain||Promise.resolve()).catch(function(){}).then(doRead);
+            this._readChain=p.catch(function(){});
+            return p;
         },
         _mergeLocalRecords:function(cloud){
             var local=App.Storage.getRecords()||[];
@@ -2181,8 +2356,11 @@
                 return self._readCloudRecords(user,pwd,fid).then(function(cloud){
                     // 云端读不到（null）就本轮不写，避免把本地空数据盖上去；稍后重试
                     if(cloud===null){
-                        try{console.warn('[Sync] 云端成绩读取失败，本轮跳过写入')}catch(_){}
+                        try{console.warn('[Sync] 云端成绩读取失败，本轮跳过写入（第'+(attempt+1)+'次）')}catch(_){}
                         if(attempt<3)return new Promise(function(r){setTimeout(r,1500)}).then(function(){return run(attempt+1)});
+                        // R1-19：连续读失败 → 落日志 + 明确告诉用户「本机已保留、没上传」，不静默吞掉
+                        try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'records_read_failed',msg:'云端成绩读取失败，本机数据已保留'}))}catch(_){}
+                        try{if(App.Toast)App.Toast.show('成绩同步失败：云端读取异常，本机成绩已保留，稍后自动重试','warning')}catch(_){}
                         return;
                     }
                     self._mergeLocalRecords(cloud);
@@ -2378,10 +2556,24 @@
         },
         _showGate:function(txt){
             var m=document.getElementById('gate-mask');var t=document.getElementById('gate-text');
+            // R1-03：门禁超过 3 秒必须有可见进度（秒数实时走，别让用户以为卡死）
+            if(!this._gateAt)this._gateAt=Date.now();
+            if(txt)this._gateBaseText=txt;
             if(t&&txt)t.textContent=txt;
             if(m)m.style.display='flex';
+            if(!this._gateTick){
+                var self=this;
+                this._gateTick=setInterval(function(){
+                    var s=Math.max(0,Math.round((Date.now()-self._gateAt)/1000));
+                    if(s<3)return;
+                    var tt=document.getElementById('gate-text');
+                    if(tt)tt.textContent=(self._gateBaseText||'正在校验云端数据…')+'（已等 '+s+' 秒）';
+                },1000);
+            }
         },
         _hideGate:function(){
+            if(this._gateTick){clearInterval(this._gateTick);this._gateTick=null}
+            this._gateAt=0;this._gateBaseText='';
             var m=document.getElementById('gate-mask');
             if(m)m.style.display='none';
         },
@@ -2468,6 +2660,24 @@
                                     }
                                 }
                             }catch(e4){}
+                        }else if(nm==='系统-学生信息'&&String(content).trim()!==''){
+                            // R1-14：本地有未上传的新增/修改时，与云端取并集（同 id 以本地为准），
+                            // 绝不用云端旧名单整份覆盖；合并结果下面统一标记为待上传，门禁等它推完再放行
+                            try{
+                                var _ent0=idx.find(function(x){return x.id===fid});
+                                var _pendS=!!(_ent0&&(_ent0.isNewFile||((_ent0.e||0)>(_ent0.s||0))));
+                                if(_pendS){
+                                    var _ls=JSON.parse(localStorage.getItem('exam_students')||'[]')||[];
+                                    var _cs=JSON.parse(content)||[];
+                                    if(Array.isArray(_ls)&&Array.isArray(_cs)){
+                                        var _smap={};
+                                        _cs.forEach(function(x){if(x&&x.id)_smap[x.id]=x});
+                                        _ls.forEach(function(x){if(x&&x.id)_smap[x.id]=x});
+                                        var _allS=[];for(var _sk in _smap)_allS.push(_smap[_sk]);
+                                        if(_allS.length>_cs.length){content=JSON.stringify(_allS);_merged=true}
+                                    }
+                                }
+                            }catch(e6){}
                         }
                         var e=idx.find(function(x){return x.id===fid});
                         if(!e){
@@ -2522,6 +2732,8 @@
                 }
                 App.Sync._gateBlocked=false;
                 App.Sync._gateDone=true;
+                // R1-17：历史遗留的云端明文 AI 配置文件（EXAM_SYS_AI_CONFIG__账号）登录后清理一次
+                try{App.Sync._purgeLegacyAiConfig()}catch(e){}
                 try{localStorage.setItem('exam_gate_ok_'+(App.Login&&App.Login._username||''),String(Date.now()))}catch(e){}
                 // 系统文件若本地还有更高版本待上传，等同步完成再放行
                 var pending=false;
