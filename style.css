@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+/* 2.086：已移除 Google Fonts 的 @import。
+   原因：该外部样式表在国内网络常被卡住，浏览器执行脚本前要等样式表，
+   导致 DOMContentLoaded 被拖到 10~16 秒，登录后页面长时间点不动。
+   字体改用系统字体栈（下方 body 的 -apple-system/BlinkMacSystemFont/sans-serif 兜底）。 */
 
 :root {
     --bg-primary: #0a0a1a;
