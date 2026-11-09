@@ -1605,6 +1605,9 @@
             this._studentsDirty=false;
             this._studentsChain=null;
             this._studentsReconcileTimer=null;
+            // R1-03：门禁降级放行标记（本机缓存秒进时为真，后台仍继续校验）
+            // 2.082：登录放行在 Login.init 里先发生，这里只在未初始化时置默认值，绝不反向清掉已放行状态
+            if(typeof this._gateSoftReleased==='undefined')this._gateSoftReleased=false;
             window.addEventListener('message',function(e){
                 if(!e.data||typeof e.data!=='object')return;
                 var msg=e.data;
@@ -1670,6 +1673,9 @@
                         if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
                         break;
                     case 'syncToast':
+                        // 2.085（R4-04）：开考补下载题库期间静默「已从云端下载」正向提示，0 题题库只留一句
+                        // 「所选题库中没有题目，请换一个题库」，不再出现自相矛盾的两条提示
+                        if(self._silentToastUntil&&Date.now()<self._silentToastUntil&&/^已从云端下载/.test(msg.message||''))break;
                         if(!self._isFileManagerOpen)App.Toast.show(msg.message||'','info');
                         break;
                     case 'ledgerSummaries':
@@ -2276,7 +2282,8 @@
             var f=idx.find(function(x){return x.id===fid});
             var s=f?(parseInt(f.s||0)||0):0,e=f?(parseInt(f.e||0)||0):0,isNew=f?!!f.isNewFile:true;
             if(e<=s)e=s+1;
-            var dev='';try{dev=localStorage.getItem('exam_device_id')||('H'+Date.now().toString(36))}catch(e){}
+            // 2.084：持锁期间写完必须用同一把锁的标识去提交，否则云端会判「抢锁失败」
+            var dev=this._activeLockId||'';try{if(!dev)dev=localStorage.getItem('exam_device_id')||('H'+Date.now().toString(36))}catch(e){}
             var now=new Date(),pad=function(n){return n<10?'0'+n:''+n};
             var ts=''+now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
             var folder='FOLDER_SYS__'+user;
@@ -2288,6 +2295,7 @@
             };
             var unlock=function(){try{var p=call({表格名:'抽奖考试',操作:'解锁',用户名:user,密码:pwd,锁登记处:dev});if(p&&p.catch)p.catch(function(){})}catch(e){}};
             var done=function(v){
+                self._markSynced();   // 2.085（R4-02）：系统文件直传成功（全新接收/转正）也回写「上次同步」
                 try{
                     var ix=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
                     var ff=ix.find(function(x){return x.id===fid});
@@ -2396,37 +2404,72 @@
             var user=App.Login._username,pwd=App.Login._password;
             var fid='EXAM_SYS_RECORDS__'+user;
             this._recordsDirty=true;
-            var chain=(this._recordsChain||Promise.resolve()).catch(function(){}).then(function(){
-                // 先读-合并-写，失败再按 2s/4s 重试两轮（并发方稍后写入的场次也能被并回来）
-                return self._reconcileRecords(user,pwd,fid,0);
-            });
-            this._recordsChain=chain.catch(function(){});
-            return this._recordsChain;
+            // 2.083（R1-03 回归修复）：连续交卷合并成一轮——300ms 内的多次交卷只做一次「读—合并—写」，
+            // 不再每次交卷都额外排队一轮全量读（实测云端单文件读 0.7s、写 1.2s，慢的是排队不是平台）。
+            if(this._recordsDebounce){clearTimeout(this._recordsDebounce)}
+            this._recordsDebounce=setTimeout(function(){
+                self._recordsDebounce=null;
+                var chain=(self._recordsChain||Promise.resolve()).catch(function(){}).then(function(){
+                    // 先读-合并-写，失败再按 2s/4s 重试两轮（并发方稍后写入的场次也能被并回来）
+                    return self._reconcileRecords(user,pwd,fid,0);
+                });
+                self._recordsChain=chain.catch(function(){});
+            },300);
+            return Promise.resolve();
         },
         _syncRecordsOnce:function(user,pwd,fid){
             var self=this;
+            var _t0=Date.now();
             return this._readCloudRecords(user,pwd,fid).then(function(cloud){
                 // R1-19/R1-11：读失败一律放弃本次写，保留本地、稍后重试；绝不把失败当空表写回
-                if(cloud===null){self._recordsDirty=true;self._scheduleReconcile();return false}
+                if(cloud===null){self._recordsDirty=true;self._trace('records_read_null',Date.now()-_t0);self._scheduleReconcile();return false}
                 var merged=self._mergeLocalRecords(cloud)||[];   // 云端 ∪ 本地，按场次 id 去重
                 var cloudIds={};cloud.forEach(function(r){if(r&&r.id)cloudIds[r.id]=1});
                 var hasExtra=merged.some(function(r){return r&&r.id&&!cloudIds[r.id]});
-                if(!hasExtra){self._recordsDirty=false;return true}
-                return self._writeRecordsNow().then(function(){return self._readCloudRecords(user,pwd,fid)}).then(function(cloud2){
-                    // 乐观校验：回读后合并结果一场不缺（条数只增不减）
-                    if(cloud2===null){self._recordsDirty=true;self._scheduleReconcile();return false}
-                    var have={};cloud2.forEach(function(r){if(r&&r.id)have[r.id]=1});
-                    var miss=merged.filter(function(r){return r&&r.id&&!have[r.id]});
-                    if(!miss.length){self._recordsDirty=false;return true}
-                    try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'records_missing',msg:miss.length+' 场未上云，稍后自动重试'}))}catch(_){}
-                    self._recordsDirty=true;self._scheduleReconcile();return false;
+                if(!hasExtra){self._recordsDirty=false;self._trace('records_no_change',Date.now()-_t0);return true}
+                return self._writeRecordsNow().then(function(){
+                    // 2.083：写完立刻返回，不再同步阻塞做第二次全量回读（那一跳是纯排队成本，用户感知的上云时延）
+                    // 校验改成后台延迟做：3 秒后回读一次，只标记脏位，不拦当前这次交卷
+                    self._recordsDirty=false;
+                    self._trace('records_written',Date.now()-_t0);
+                    self._markSynced();   // 2.085（R4-02）：普通交卷增量上云成功也回写「上次同步」
+                    if(self._verifyTimer)clearTimeout(self._verifyTimer);
+                    self._verifyTimer=setTimeout(function(){
+                        self._verifyTimer=null;
+                        self._readCloudRecords(user,pwd,fid).then(function(cloud2){
+                            if(cloud2===null)return;
+                            var have={};cloud2.forEach(function(r){if(r&&r.id)have[r.id]=1});
+                            var miss=merged.filter(function(r){return r&&r.id&&!have[r.id]});
+                            if(!miss.length)return;
+                            try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'records_missing',msg:miss.length+' 场未上云，稍后自动重试'}))}catch(_){}
+                            self._recordsDirty=true;self._scheduleReconcile();
+                        }).catch(function(){});
+                    },3000);
+                    return true;
                 });
-            }).catch(function(){self._recordsDirty=true;self._scheduleReconcile();return false});
+            }).catch(function(){self._recordsDirty=true;self._trace('records_exception',Date.now()-_t0);self._scheduleReconcile();return false});
+        },
+        // 2.085（R4-02）：任何一次成功上云后都回写「上次同步」，不再只有全量同步（syncComplete）才更新
+        _markSynced:function(){
+            try{
+                localStorage.setItem('exam_last_sync_time',String(Date.now()));
+                if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus();
+            }catch(e){}
+        },
+        // 2.083：同步耗时埋点（只留最近 30 条，供排查上云时延用；不参与任何业务判断）
+        _trace:function(tag,ms){
+            try{
+                var a=JSON.parse(localStorage.getItem('exam_sync_trace')||'[]');
+                a.push({t:Date.now(),tag:tag,ms:ms||0});
+                if(a.length>30)a=a.slice(a.length-30);
+                localStorage.setItem('exam_sync_trace',JSON.stringify(a));
+            }catch(e){}
         },
         // 后台对账：失败保留 dirty 并按 2s/4s 退避重试，仍失败交给 20 秒自愈
         _reconcileRecords:function(user,pwd,fid,attempt){
             var self=this;
-            return this._syncRecordsOnce(user,pwd,fid).then(function(ok){
+            // 2.084：整轮「读—合并—写」放进云端锁里跑，锁外不读——两家同时读旧表各写各的必丢行
+            return this._withCloudLock(function(){return self._syncRecordsOnce(user,pwd,fid)}).then(function(ok){
                 if(ok)return true;
                 if(attempt<2)return new Promise(function(r){setTimeout(r,2000*Math.pow(2,attempt))}).then(function(){return self._reconcileRecords(user,pwd,fid,attempt+1)});
                 return false;
@@ -2446,6 +2489,58 @@
             this._skipRecordsMerge=true;
             try{return this._pushSystemToCloud('系统-考试数据')||Promise.resolve()}
             finally{this._skipRecordsMerge=false}
+        },
+        // 2.084（并发行级丢写）：整表「读—合并—写」必须互斥。云端脚本自带抢锁/解锁（锁登记处=设备标识，
+        // 60 秒过期、同持有者续期），所以先抢锁→拿到锁再读最新→合并→写→解锁；抢不到就整轮重来。
+        // 绝不在锁外读：锁外读到的旧表合并后写回，会把对方刚写的行吃掉（总管实测 6→7、7→8、9→10）。
+        _lockId:function(){
+            try{
+                var id=sessionStorage.getItem('exam_lock_id');
+                if(id)return id;
+                id='L'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+                sessionStorage.setItem('exam_lock_id',id);
+                return id;
+            }catch(e){return 'L'+Date.now().toString(36)}
+        },
+        _cloudCall:function(argv){
+            var body={webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/519302387327/script/V2-6t4db1ZSsEPesqKsD7aj3/sync_task',message:{Context:{argv:argv}}};
+            return fetch('https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+                .then(function(r){return r.json()}).then(function(j){return (j.data&&j.data.result)||j});
+        },
+        _withCloudLock:function(fn,maxWait){
+            var self=this;
+            if(!App.Login||!App.Login.isLoggedIn())return Promise.resolve(false);
+            var locker=this._lockId();
+            var user=App.Login._username,pwd=App.Login._password;
+            var deadline=Date.now()+(maxWait||15000);
+            var unlock=function(){
+                self._activeLockId='';
+                return self._cloudCall({表格名:'抽奖考试',操作:'解锁',用户名:user,密码:pwd,锁登记处:locker}).catch(function(){});
+            };
+            var attempt=function(){
+                return self._cloudCall({表格名:'抽奖考试',操作:'抢锁',用户名:user,密码:pwd,锁登记处:locker}).then(function(r){
+                    if(r&&r.status==='success'){
+                        self._activeLockId=locker;
+                        return Promise.resolve().then(fn).then(function(v){
+                            return unlock().then(function(){return v});
+                        },function(e){
+                            unlock();
+                            throw e;
+                        });
+                    }
+                    if(Date.now()<deadline){
+                        var wait=800;
+                        try{var rem=parseInt(r&&r.剩余秒,10)||0;if(rem>0)wait=Math.min(1500,Math.max(600,rem*250))}catch(e){}
+                        return new Promise(function(res){setTimeout(res,wait)}).then(attempt);
+                    }
+                    self._trace('lock_busy',0);
+                    return false;
+                }).catch(function(){
+                    if(Date.now()<deadline)return new Promise(function(res){setTimeout(res,1000)}).then(attempt);
+                    return false;
+                });
+            };
+            return attempt();
         },
         // 通用：读云端某个系统文件里的 JSON 数组（读失败一律 null，绝不当空表）
         _readCloudArray:function(user,pwd,fid){return this._readCloudRecords(user,pwd,fid)},
@@ -2476,15 +2571,27 @@
                 App.Storage._syncSilent=true;
                 try{App.Storage.set('students',merged)}finally{App.Storage._syncSilent=false}
                 try{if(App.Students&&App.Students.render)App.Students.render()}catch(e){}
-                var hasExtra=local.some(function(s){return !cloudIds[s.id]});
+                // R4-01：不只看「有没有新 id」，改名/改组/换头像同样算本地改动，必须写回云端；
+                // 以前只比 id 是否存在，改名后被判成「无变化」直接跳过写，云端一直停在旧名。
+                var cloudById={};cloud.forEach(function(s){if(s&&s.id)cloudById[s.id]=s});
+                var _sameStu=function(a,b){
+                    if(!a||!b)return false;
+                    return String(a.name||'')===String(b.name||'')&&
+                        String(a.absId||a.id||'')===String(b.absId||b.id||'')&&
+                        String(a.gender||'')===String(b.gender||'')&&
+                        String(a.group||'')===String(b.group||'')&&
+                        String(a.avatar||'')===String(b.avatar||'');
+                };
+                var hasChange=local.some(function(s){return !cloudIds[s.id]||!_sameStu(s,cloudById[s.id])});
                 // 本地空、云端有：只做下行合并，绝不把空名单写上去盖掉云端
-                if(!hasExtra||!local.length){self._studentsDirty=false;return true}
+                if(!hasChange||!local.length){self._studentsDirty=false;return true}
                 return self._writeStudentsNow().then(function(){return self._readCloudArray(user,pwd,fid)}).then(function(cloud2){
                     if(cloud2===null){self._studentsDirty=true;self._scheduleStudentsReconcile();return false}
-                    var have={};cloud2.forEach(function(s){if(s&&s.id)have[s.id]=1});
-                    var miss=merged.filter(function(s){return !have[s.id]});
+                    var haveById={};cloud2.forEach(function(s){if(s&&s.id)haveById[s.id]=s});
+                    // 回读校验：既要条数在，也要字段（含姓名）真的对上，改名没写上去同样算失败
+                    var miss=merged.filter(function(s){return !haveById[s.id]||!_sameStu(s,haveById[s.id])});
                     if(!miss.length){self._studentsDirty=false;return true}
-                    try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'students_missing',msg:miss.length+' 名学生未上云，稍后自动重试'}))}catch(_){}
+                    try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'students_missing',msg:miss.length+' 名学生未上云或改名未对齐，稍后自动重试'}))}catch(_){}
                     self._studentsDirty=true;self._scheduleStudentsReconcile();return false;
                 });
             }).catch(function(){self._studentsDirty=true;self._scheduleStudentsReconcile();return false});
@@ -2492,7 +2599,8 @@
         // 名单对账：失败按 2s/4s 退避重试，仍失败交给 20 秒自愈
         _reconcileStudents:function(user,pwd,fid,attempt){
             var self=this;
-            return this._syncStudentsOnce(user,pwd,fid).then(function(ok){
+            // 2.084：名单同步同样整轮进锁，避免两家同时读旧名单各写各的
+            return this._withCloudLock(function(){return self._syncStudentsOnce(user,pwd,fid)}).then(function(ok){
                 if(ok)return true;
                 if(attempt<2)return new Promise(function(r){setTimeout(r,2000*Math.pow(2,attempt))}).then(function(){return self._reconcileStudents(user,pwd,fid,attempt+1)});
                 return false;
@@ -2512,6 +2620,21 @@
                 if(!App.Login||!App.Login.isLoggedIn())return;
                 try{self._pushStudentsMerged()}catch(e){}
             },20000);
+        },
+        // R1-03（2.082）：门禁后台异步校验。登录不等云端，先放人；这里按 8 秒一轮静默拉取，
+        // 拉到就自动对齐并回写同步时间，失败也不拦人（最多 12 轮 ≈ 96 秒，覆盖「2 分钟内追平」）。
+        startGateBackground:function(times){
+            var self=this;var n=0;var max=times||12;
+            self._gateBgAligned=0;
+            var fire=function(){
+                if(n>=max)return;n++;
+                // 2.083：成绩/名单有待上传时先让业务同步走，后台校验不抢云端读取（避免把上云时延拖长）
+                if(self._recordsDirty||self._studentsDirty){setTimeout(fire,8000);return}
+                if((self._gateBgAligned||0)>=2)return;   // 已连续对齐两轮就不再打扰云端
+                try{self.postToFileManager({type:'loginGateReadAll'})}catch(e){}
+                setTimeout(fire,8000);
+            };
+            setTimeout(fire,600);
         },
         _recordsAllInCloud:function(user,pwd,fid){
             return this._readCloudRecords(user,pwd,fid).then(function(cloud){
@@ -2860,11 +2983,11 @@
                     return cl>0 && !String((msg.contents&&msg.contents[String(r.ID)])||'').trim();
                 });
                 if(missContent){
-                    if(!App.Sync._gateSoftReleased)App.Sync._showGate('正在读取云端系统文件…');
+                    if(!App.Sync._gateSoftReleased&&!App.Sync._gateDone)App.Sync._showGate('正在读取云端系统文件…');
                     return;
                 }
                 if(_mismatch){
-                    App.Sync._showGate('系统文件正在对齐本地…');
+                    if(!App.Sync._gateSoftReleased&&!App.Sync._gateDone)App.Sync._showGate('系统文件正在对齐本地…');
                     return;
                 }
                 App.Sync._gateBlocked=false;
@@ -2872,13 +2995,18 @@
                 // R1-17：历史遗留的云端明文 AI 配置文件（EXAM_SYS_AI_CONFIG__账号）登录后清理一次
                 try{App.Sync._purgeLegacyAiConfig()}catch(e){}
                 try{localStorage.setItem('exam_gate_ok_'+(App.Login&&App.Login._username||''),String(Date.now()))}catch(e){}
+                // R1-03（2.082）：后台拉取成功即回写「上次同步」时间，状态栏可见，用户知道云端已追平
+                try{localStorage.setItem('exam_last_sync_time',String(Date.now()))}catch(e){}
+                // 2.083：记一次成功对齐，连续两轮成功后后台轮询自动停，少读云端、少拖延上云
+                try{App.Sync._gateBgAligned=(App.Sync._gateBgAligned||0)+1}catch(e){}
+                try{if(App.Settings&&App.Settings.updateSyncStatus)App.Settings.updateSyncStatus()}catch(e){}
                 // 系统文件若本地还有更高版本待上传，等同步完成再放行
                 var pending=false;
                 try{
                     var idx2=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
                     pending=idx2.some(function(x){return String(x.id).indexOf('EXAM_SYS')===0&&((x.isNewFile)||((x.e||0)>(x.s||0)))});
                 }catch(e){}
-                if(pending&&!App.Sync._gateSoftReleased)App.Sync._showGate('系统文件正在对齐云端…');
+                if(pending&&!App.Sync._gateSoftReleased&&!App.Sync._gateDone)App.Sync._showGate('系统文件正在对齐云端…');
                 else App.Sync._hideGate();
                 console.log('[Gate] 云端校验通过，系统文件 '+sysRows.length+' 个');
             }catch(e){console.error('[Gate] 校验异常:',e)}
@@ -2915,6 +3043,23 @@
                 return;
             }
 
+            // R1-03（2.082）：登录不再等云端——本机缓存立即放行（不弹遮罩、不拦点击），
+            // 云端 6 个文件的全量拉取整段挪到后台（每 8 秒静默一轮，约 2 分钟内追平），断网/超时一律不拦人。
+            var _hasCache=false;
+            try{
+                var _cs0=JSON.parse(localStorage.getItem('exam_students')||'[]')||[];
+                var _cr0=JSON.parse(localStorage.getItem('exam_records')||'[]')||[];
+                _hasCache=(_cs0.length>0)||(_cr0.length>0);
+            }catch(e){}
+            if(App.Sync){
+                App.Sync._gateBlocked=false;
+                App.Sync._gateDone=true;
+                App.Sync._gateSoftReleased=true;
+                if(App.Sync._hideGate)App.Sync._hideGate();
+                if(App.Sync.startGateBackground)App.Sync.startGateBackground(12);
+            }
+            if(!_hasCache){try{App.Toast.show('正在后台校验云端数据，可先使用本机数据…','info')}catch(e){}}
+
             // 延迟：验证已有凭据。校验不到结果不等于账号失效，不能因此踢人
             setTimeout(function(){
                 self.verifyCredentials(self._username, self._password, function(ok, info){
@@ -2941,42 +3086,10 @@
                         }
                         localStorage.setItem('exam_last_account',self._username);
                     }catch(e){}
-                    // 登录门禁：10 分钟内已对齐且本地无待上传改动时走快路（秒进），后台仍静默重验一次；
-                    // 否则照旧严格等待云端对齐，保证数据可信。
-                    if(App.Sync&&App.Sync.postToFileManager){
-                        var _pendingSys=false;
-                        try{
-                            var _ix0=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
-                            _pendingSys=_ix0.some(function(x){return String(x.id).indexOf('EXAM_SYS')===0&&((x.isNewFile)||((x.e||0)>(x.s||0)))});
-                        }catch(e){}
-                        var _lastOK=0;
-                        try{_lastOK=parseInt(localStorage.getItem('exam_gate_ok_'+self._username)||'0')||0}catch(e){}
-                        // R1-03：10 分钟内已校验通过就直接放行（不再因「本地有待上传」而被拖去等云端）；
-                        // 待上传内容由后台定时补推，门禁校验改为后台静默重验
-                        var _fast=_lastOK>0&&(Date.now()-_lastOK)<10*60*1000;
-                        if(_fast){
-                            App.Sync._gateDone=true;
-                            if(App.Sync._hideGate)App.Sync._hideGate();
-                            setTimeout(function(){try{App.Sync.postToFileManager({type:'loginGateReadAll'})}catch(e){}},5000);
-                        }else{
-                            if(App.Sync._showGate)App.Sync._showGate('正在同步云端系统文件…');
-                            var gateTries=0,gateBusy=false,gateStartAt=Date.now();
-                            var gateTimer=setInterval(function(){
-                                if(App.Sync._gateDone){clearInterval(gateTimer);return}
-                                if(gateBusy)return;
-                                // 文件管理器 iframe 还没握手完时发过去也只会拿到「未登录」，白跑一轮；最多等 8 秒
-                                if(!App.Sync._sessionReady&&(Date.now()-gateStartAt)<8000)return;
-                                gateBusy=true;gateTries++;
-                                var gt=document.getElementById('gate-text');
-                                if(gt)gt.textContent='正在同步云端系统文件…（第'+gateTries+'次）';
-                                App.Sync.postToFileManager({type:'loginGateReadAll'});
-                                setTimeout(function(){gateBusy=false},2500);
-                            },1200);
-                            App.Sync.postToFileManager({type:'loginGateReadAll'});
-                        }
-                    }
+                    // R1-03（2.082）：登录门禁改成「登录不等云端」——放行与后台校验都在 init 开头完成，
+                    // 这里只负责换账号清理与凭据记录，不再有任何阻塞式等待（16 秒全量重拉的坑就此绕开）。
                 });
-            }, 2000);
+            }, 800);
         },
 
         // 记录最近一次登录校验结果，便于排查“明明登录了还被踢”
