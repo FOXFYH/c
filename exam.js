@@ -372,6 +372,7 @@
             if(mode!=='lottery'){
             // 检查所选题库是否缺少题目内容（仅有索引），按需从云端下载
             var missingBanks=[];
+            var _shellBanks=[];
             var fileIndex=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
             bankIds.forEach(function(bid){
                 var b=banks.find(function(x){return x.id===bid});
@@ -384,7 +385,7 @@
                         banks.push(b);
                         App.Storage._syncSilent=true;
                         try{App.Storage.setBanks(banks)}finally{App.Storage._syncSilent=false}
-                        missingBanks.push(b);
+                        missingBanks.push(b);_shellBanks.push(b);
                     }
                 }else if(!b.questions||b.questions.length===0){
                     missingBanks.push(b);
@@ -407,6 +408,23 @@
                     }
                 }
                 banks=App.Storage.getBanks();
+                // R1-08：下载没落地的空壳要撤掉，否则本地多一个「空题库」把云端题库卡挡住（没下载按钮）
+                var _emptyShellIds={};
+                _shellBanks.forEach(function(sb){
+                    var fb=banks.find(function(x){return x.id===sb.id});
+                    if(fb&&(!fb.questions||!fb.questions.length))_emptyShellIds[sb.id]=1;
+                });
+                if(Object.keys(_emptyShellIds).length){
+                    banks=banks.filter(function(x){return !_emptyShellIds[x.id]});
+                    App.Storage._syncSilent=true;
+                    try{App.Storage.setBanks(banks)}finally{App.Storage._syncSilent=false}
+                    try{
+                        var _fi4=JSON.parse(localStorage.getItem('exam_file_index')||'[]');
+                        _fi4.forEach(function(f){if(_emptyShellIds[f.id])f.cloudOnly=true});
+                        localStorage.setItem('exam_file_index',JSON.stringify(_fi4));
+                    }catch(e){}
+                    if(App.Questions&&App.Questions.render)App.Questions.render();
+                }
             }
             bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions&&App.BankTypes.of(b)===App.BankTypes.allowedForMode(App.Exam.currentMode))allQ=allQ.concat(b.questions)});
             if(allQ.length===0){App.Toast.show('所选题库中没有题目','warning');return}
@@ -496,6 +514,8 @@
             }
             examStudents.forEach(function(s){exam.playerScores[s.id]=0});
             this.currentExam=exam;
+            // R1-23：开考即落盘（含抽签动画期间），中途刷新/关标签也能恢复整场
+            try{this._saveProgress()}catch(e){}
             document.getElementById('exam-setup').classList.add('hidden');
             document.getElementById('exam-drawing').classList.add('hidden');
             document.getElementById('exam-playing').classList.add('hidden');
@@ -977,6 +997,8 @@
             // 今日随机：真正抽到才记入今日已抽名单（不是预演时提前记）
             if(exam.mode==='lottery'&&exam._lotteryMode==='daily')this.recordDailyDraw(student.id);
             exam.answered=false;
+            // R1-23：换人这一刻也落盘（抽签动画前），刷新后可接着当前选手继续
+            try{this._saveProgress()}catch(e){}
             if(exam.mode==='lottery'){exam.playerScores[student.id]=(exam.playerScores[student.id]||0)+1}
             this.renderWarReport(false);
             var settings=App.Storage.getSettings();
