@@ -392,6 +392,9 @@
                 }
             });
             if(missingBanks.length>0&&App.Sync&&App.Sync.ready){
+                // 2.085（R4-04）：这批下载是为开考补内容，成功提示没有意义；静默 15 秒内文件管理器的
+                //「已从云端下载」，0 题题库最终只显示一句「所选题库中没有题目，请换一个题库」
+                try{App.Sync._silentToastUntil=Date.now()+15000}catch(e){}
                 App.Toast.show('正在下载题库内容（'+missingBanks.length+'个）...','info');
                 for(var mi=0;mi<missingBanks.length;mi++){
                     var mb=missingBanks[mi];
@@ -427,7 +430,7 @@
                 }
             }
             bankIds.forEach(function(bid){var b=banks.find(function(x){return x.id===bid});if(b&&b.questions&&App.BankTypes.of(b)===App.BankTypes.allowedForMode(App.Exam.currentMode))allQ=allQ.concat(b.questions)});
-            if(allQ.length===0){App.Toast.show('所选题库中没有题目','warning');return}
+            if(allQ.length===0){App.Toast.show('所选题库中没有题目，请换一个题库','warning');return}
             }
             var timeLimit=0;
             var autoNext=App.Storage.getSettings().autoNext!==false;
