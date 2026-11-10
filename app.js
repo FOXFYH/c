@@ -1781,14 +1781,14 @@
                     if(self._recordsDirty){try{self._pushRecordsMerged()}catch(e){}}
                     if(self._studentsDirty){try{self._pushStudentsMerged()}catch(e){}}
                 }
-                if(document.hidden&&self.ready){ self.syncOnExit(); }
+                if(document.hidden&&self.ready){ self.syncOnExit(); self._unlockKeepalive(); }
             });
             window.addEventListener('online',function(){
                 if(App.Sync&&App.Sync._recordsDirty){try{App.Sync._pushRecordsMerged()}catch(e){}}
                 if(App.Sync&&App.Sync._studentsDirty){try{App.Sync._pushStudentsMerged()}catch(e){}}
             });
-            window.addEventListener('pagehide',function(){ if(App.Sync)App.Sync.syncOnExit(); });
-            window.addEventListener('beforeunload',function(){ if(App.Sync)App.Sync.syncOnExit(); });
+            window.addEventListener('pagehide',function(){ if(App.Sync){App.Sync.syncOnExit();App.Sync._unlockKeepalive();} });
+            window.addEventListener('beforeunload',function(){ if(App.Sync){App.Sync.syncOnExit();App.Sync._unlockKeepalive();} });
             setTimeout(function(){
                 self.migrateOldData();
                 // 绝对ID：历史学生补齐（沿用原 id，旧记录不受影响）
@@ -2306,6 +2306,14 @@
                 }catch(e){}
                 console.log('[Sync] 系统文件已直传云端：'+name+' v'+v);
             };
+            // 2.087（R1-19 第2条）：判定结果白名单之外的任何回执一律当失败——
+            // 保留脏位、进重试、绝不 _markSynced()、给用户可见提示；不许只 unlock() 就完事。
+            var fail=function(type,msg){
+                if(name==='系统-考试数据')self._recordsDirty=true;
+                if(name==='系统-学生信息')self._studentsDirty=true;
+                try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:type,name:name,msg:msg}))}catch(_){}
+                try{if(App.Toast)App.Toast.show(name+' 同步失败：'+msg+'（本机数据已保留，稍后自动重试）','error')}catch(_){}
+            };
             var attempt=0;
             var send=function(){
             return call({表格名:'抽奖考试',操作:'同步提交',用户名:user,密码:pwd,锁登记处:dev,ID:fid,起点号:String(s),终点号:String(e),本地新文件标识:isNew?'true':'false',数据:data}).then(function(r){
@@ -2317,8 +2325,8 @@
                         return new Promise(function(res){setTimeout(res,1500*Math.pow(2,attempt-1))}).then(send);
                     }
                     unlock();
-                    try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'lock_busy',name:name,msg:'云端写锁被占用，本机数据已保留'}))}catch(_){}
-                    return;
+                    fail('lock_busy','云端写锁被占用');
+                    return false;
                 }
                 if(!r||r.status==='error'){
                     // R1-12：上云失败/超时退避重试（1s→2s→4s，最多 3 次），不无限等、不静默丢
@@ -2327,26 +2335,35 @@
                         return new Promise(function(res){setTimeout(res,1000*Math.pow(2,attempt-1))}).then(send);
                     }
                     unlock();
-                    try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'upload_failed',name:name,msg:'系统文件上传失败，本机数据已保留'}))}catch(_){}
-                    try{if(App.Toast)App.Toast.show(name+' 上传失败，本机数据已保留，稍后自动重试','warning')}catch(_){}
-                    return;
+                    fail('upload_failed','上传失败'+(r&&r.tongzhi?('（'+r.tongzhi+'）'):''));
+                    return false;
                 }
-                if(jr==='无需上传'){unlock();return}
+                if(jr==='无需上传'){unlock();return true}
                 var newS=parseInt(r.终点号||r.起点号||e)||e;
-                if(jr==='全新接收'){done(newS);unlock();return}
+                if(jr==='全新接收'){done(newS);unlock();return true}
                 if(jr==='收为临时'){
                     return call({表格名:'抽奖考试',操作:'转正确认',用户名:user,密码:pwd,锁登记处:dev,ID:fid,起点号:String(newS)}).then(function(r2){
-                        if(r2&&r2.status==='success')done(newS);
+                        var jr2=r2&&r2.判定结果;
+                        if(r2&&r2.status==='success'&&(jr2==='转正成功'||jr2==='全新接收'||jr2==='无需上传')){
+                            done(newS);unlock();return true;
+                        }
                         unlock();
-                    });
+                        fail('promote_failed','转正未成功（'+(jr2||(r2&&r2.tongzhi)||'无明确结果')+'）');
+                        return false;
+                    },function(){unlock();fail('promote_failed','转正请求异常');return false});
                 }
+                // 同步冲突 / 转正失败·非本端临时行 / 标识错乱 / 权限不足 / 空判定：全部按失败处理
                 unlock();
+                fail('unexpected_result','云端判定为「'+(jr||'无判定结果')+'」');
+                return false;
             }).catch(function(){
                 if(attempt<3){
                     attempt++;
                     return new Promise(function(res){setTimeout(res,1000*Math.pow(2,attempt-1))}).then(send);
                 }
                 unlock();
+                fail('upload_exception','网络异常，上传未完成');
+                return false;
             });
             };
             return send();
@@ -2427,7 +2444,11 @@
                 var cloudIds={};cloud.forEach(function(r){if(r&&r.id)cloudIds[r.id]=1});
                 var hasExtra=merged.some(function(r){return r&&r.id&&!cloudIds[r.id]});
                 if(!hasExtra){self._recordsDirty=false;self._trace('records_no_change',Date.now()-_t0);return true}
-                return self._writeRecordsNow().then(function(){
+                // 2.087（R1-19 第3条）：写前记云端 id 集合 S0，写后读 S1 校验 S0 ⊆ S1，缺行就报警并立刻补写
+                var s0=Object.keys(cloudIds);
+                return self._writeRecordsNow().then(function(ok){
+                    // 2.087（R1-19 第2条）：写回执不是白名单成功 → 保留脏位交上层重试，绝不标记已同步
+                    if(ok===false){self._recordsDirty=true;self._trace('records_write_failed',Date.now()-_t0);return false}
                     // 2.083：写完立刻返回，不再同步阻塞做第二次全量回读（那一跳是纯排队成本，用户感知的上云时延）
                     // 校验改成后台延迟做：3 秒后回读一次，只标记脏位，不拦当前这次交卷
                     self._recordsDirty=false;
@@ -2440,9 +2461,20 @@
                             if(cloud2===null)return;
                             var have={};cloud2.forEach(function(r){if(r&&r.id)have[r.id]=1});
                             var miss=merged.filter(function(r){return r&&r.id&&!have[r.id]});
-                            if(!miss.length)return;
-                            try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'records_missing',msg:miss.length+' 场未上云，稍后自动重试'}))}catch(_){}
-                            self._recordsDirty=true;self._scheduleReconcile();
+                            // 2.087：基线一条都不能少——不只看本端这次写的行
+                            var lostBase=s0.filter(function(id){return !have[id]});
+                            if(!lostBase.length&&!miss.length){self._verifyRetry=0;return}
+                            try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'records_missing',msg:'云端缺基线'+lostBase.length+'条、缺本端'+miss.length+'场，已触发补写'}))}catch(_){}
+                            self._recordsDirty=true;
+                            // 2.087：不再干等 20 秒兜底——立刻再跑一轮「读-合并-写」把缺行补回去，最多补 2 轮防死循环
+                            var rt=parseInt(self._verifyRetry||0,10)||0;
+                            if(rt<2){
+                                self._verifyRetry=rt+1;
+                                try{self._pushRecordsMerged()}catch(_){}
+                            }else{
+                                self._verifyRetry=0;
+                                self._scheduleReconcile();
+                            }
                         }).catch(function(){});
                     },3000);
                     return true;
@@ -2507,6 +2539,22 @@
             return fetch('https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
                 .then(function(r){return r.json()}).then(function(j){return (j.data&&j.data.result)||j});
         },
+        // 2.087（R1-19 第4条）：页面隐藏/关闭时主动解锁，把 60 秒死锁窗口压掉。
+        // 只在没有写操作在飞时才放锁（_lockInFlight），避免把正在「读-合并-写」的那一轮放成两端并发。
+        _unlockKeepalive:function(){
+            var locker=this._activeLockId;
+            if(!locker||this._lockInFlight)return;
+            if(!App.Login||!App.Login.isLoggedIn())return;
+            this._activeLockId='';
+            try{
+                var body=JSON.stringify({webhookUrl:'https://www.kdocs.cn/api/v3/ide/file/519302387327/script/V2-6t4db1ZSsEPesqKsD7aj3/sync_task',message:{Context:{argv:{表格名:'抽奖考试',操作:'解锁',用户名:App.Login._username,密码:App.Login._password,锁登记处:locker}}}});
+                var url='https://1408347752-dxgsap4qrj.ap-guangzhou.tencentscf.com';
+                if(navigator.sendBeacon){
+                    try{ if(navigator.sendBeacon(url,new Blob([body],{type:'application/json'})))return }catch(_){}
+                }
+                fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:body,keepalive:true}).catch(function(){});
+            }catch(e){}
+        },
         _withCloudLock:function(fn,maxWait){
             var self=this;
             if(!App.Login||!App.Login.isLoggedIn())return Promise.resolve(false);
@@ -2515,12 +2563,14 @@
             var deadline=Date.now()+(maxWait||15000);
             var unlock=function(){
                 self._activeLockId='';
+                self._lockInFlight=false;
                 return self._cloudCall({表格名:'抽奖考试',操作:'解锁',用户名:user,密码:pwd,锁登记处:locker}).catch(function(){});
             };
             var attempt=function(){
                 return self._cloudCall({表格名:'抽奖考试',操作:'抢锁',用户名:user,密码:pwd,锁登记处:locker}).then(function(r){
                     if(r&&r.status==='success'){
                         self._activeLockId=locker;
+                        self._lockInFlight=true;
                         return Promise.resolve().then(fn).then(function(v){
                             return unlock().then(function(){return v});
                         },function(e){
