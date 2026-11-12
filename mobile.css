@@ -652,7 +652,7 @@ html[data-ui="mobile"] .exam-play-main {
 /* 手机竖版：战报侧栏不再占首屏，比分在答题卡里已有；题目与手写板直接可见 */
 html[data-ui="mobile"] .exam-play-sidebar { display: none !important; }
 html[data-ui="mobile"] .fill-item { width: 100%; padding: 10px; }
-html[data-ui="mobile"] .fill-pad-wrap { max-width: 240px; margin: 0 auto; }
+html[data-ui="mobile"] .fill-pad-wrap { max-width: none; margin: 0; }
 html[data-ui="mobile"] .fill-tools button { min-height: 40px; }
 html[data-ui="mobile"] .fill-submit { position: sticky; bottom: 0; z-index: 3; }
 html[data-ui="mobile"] .btn-play-fs {
