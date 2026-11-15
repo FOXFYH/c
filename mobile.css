@@ -655,6 +655,8 @@ html[data-ui="mobile"] .fill-item { width: 100%; padding: 10px; }
 html[data-ui="mobile"] .fill-pad-wrap { max-width: none; margin: 0; }
 html[data-ui="mobile"] .fill-tools button { min-height: 40px; }
 html[data-ui="mobile"] .fill-submit { position: sticky; bottom: 0; z-index: 3; }
+/* 2.096：引擎状态条移到最底后，给 sticky 提交按钮留出悬浮空间，防止盖住状态条 */
+html[data-ui="mobile"] .fill-panel { padding-bottom: 44px; }
 html[data-ui="mobile"] .btn-play-fs {
     display: inline-flex;
     align-items: center;
