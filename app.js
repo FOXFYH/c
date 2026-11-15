@@ -434,6 +434,9 @@
             if(students.length===0){wrap.innerHTML='';empty.classList.add('show');return}
             empty.classList.remove('show');
             var statsMap=getAllStudentStats();
+            // 新架构：总分展示源换云端（EXAM_SYS_TOTALS），查不到的学生保持本地口径
+            try{App.CloudLedger.applyToStatsMap(students,statsMap)}catch(e){}
+            try{App.CloudLedger.refreshTotalsThrottled()}catch(e){}
             var groups=App.Storage.getGroups();
             var filterHTML='<div class="student-filters">';
             filterHTML+='<select id="sf-group" onchange="App.Students._filterGroup=this.value;App.Students.render()"><option value="">全部小组</option>';
@@ -487,21 +490,34 @@
             wrap.innerHTML=html;
             if(App.Students&&App.Students.renderRanking)App.Students.renderRanking();
         },
-        // 全班总账排名：优先用云端批量读回的总账，没有就用本地统计
+        // 全班总账排名：优先用云端 EXAM_SYS_TOTALS 总成绩文件，其次旧总账缓存，最后本地统计
         renderRanking:function(){
             var el=document.getElementById('ledger-rank');
             if(!el)return;
-            var cache=App.Ledger?App.Ledger.getCachedSummaries():{at:0,items:[]};
-            var rows=cache.items&&cache.items.length?cache.items.map(function(x){
-                return {name:x.name||'',absId:x.absId||'',points:x.points||0,accuracy:x.accuracy||0,sessions:x.sessions||0,fromCloud:true};
-            }):App.Storage.getStudents().map(function(s){
-                var st=getStudentStats(s.id)||{totalPoints:0,accuracy:0,sessions:0};
-                return {name:s.name,absId:App.Ledger?App.Ledger.absIdOf(s):s.id,points:st.totalPoints||0,accuracy:st.accuracy||0,sessions:st.sessions||0,fromCloud:false};
-            });
+            var rows,src;
+            var ct=App.CloudLedger?App.CloudLedger.getCachedTotals():null;
+            if(ct){
+                var _at=0;try{_at=(JSON.parse(localStorage.getItem('exam_cloud_totals')||'{}').at)||0}catch(e){}
+                rows=App.Storage.getStudents().map(function(s){
+                    var absId=App.Ledger?App.Ledger.absIdOf(s):s.id;
+                    var st=getStudentStats(s.id)||{totalPoints:0,accuracy:0,sessions:0};
+                    var cv=App.CloudLedger.lookupTotal(absId,s.name);
+                    return {name:s.name,absId:absId,points:(cv!==null?cv:(st.totalPoints||0)),accuracy:st.accuracy||0,sessions:st.sessions||0,fromCloud:cv!==null};
+                });
+                src='☁️ 云端总成绩（流水账） · '+(_at?new Date(_at).toLocaleTimeString('zh-CN')+' 读取 · ':'')+rows.length+' 人';
+            }else{
+                var cache=App.Ledger?App.Ledger.getCachedSummaries():{at:0,items:[]};
+                rows=cache.items&&cache.items.length?cache.items.map(function(x){
+                    return {name:x.name||'',absId:x.absId||'',points:x.points||0,accuracy:x.accuracy||0,sessions:x.sessions||0,fromCloud:true};
+                }):App.Storage.getStudents().map(function(s){
+                    var st=getStudentStats(s.id)||{totalPoints:0,accuracy:0,sessions:0};
+                    return {name:s.name,absId:App.Ledger?App.Ledger.absIdOf(s):s.id,points:st.totalPoints||0,accuracy:st.accuracy||0,sessions:st.sessions||0,fromCloud:false};
+                });
+                src=cache.at?('☁️ 云端总账 · '+new Date(cache.at).toLocaleTimeString('zh-CN')+' 读取 · '+rows.length+' 人'):'📱 本地统计（点右上角从云端批量读取）';
+            }
             if(!rows.length){el.innerHTML='<span style="color:var(--text-muted)">暂无学生</span>';return}
             rows.sort(function(a,b){return b.points-a.points});
-            var when=cache.at?new Date(cache.at).toLocaleTimeString('zh-CN'):'';
-            var html='<div style="color:var(--text-muted);font-size:12px;margin-bottom:6px">'+(cache.at?('☁️ 云端总账 · '+when+' 读取 · '+rows.length+' 人'):'📱 本地统计（点右上角从云端批量读取）')+'</div>';
+            var html='<div style="color:var(--text-muted);font-size:12px;margin-bottom:6px">'+src+'</div>';
             html+='<div style="display:flex;flex-direction:column;gap:2px">';
             rows.forEach(function(r,i){
                 var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
@@ -574,20 +590,59 @@
                     body+='</div>';
                 });
             }
+            body+='<div id="cl-detail" style="margin-top:14px"><div style="color:var(--text-muted);font-size:12px">☁️ 云端流水账读取中…</div></div>';
             body+='</div>';
             App.Modal.open('📊 '+student.name+' 的积分详情',body,'');
+            // 新架构：明细场次从云端「读活格」拿（一生一个流水账文件），本地记录仍保留兜底
+            var _absId=App.Ledger?App.Ledger.absIdOf(student):id;
+            try{
+                App.CloudLedger.readAlive(_absId).then(function(r){
+                    var box=document.getElementById('cl-detail');if(!box)return;
+                    if(!r||r.status==='error'){box.innerHTML='<div style="color:var(--text-muted);font-size:12px">☁️ 云端流水账读取失败（以上展示为本地记录）</div>';return}
+                    var sessions=r.sessions||[];var hd=r.header||{};
+                    var html='<div style="font-weight:700;font-size:14px;margin:0 0 8px">☁️ 云端流水账（'+(r.场次数||sessions.length)+'场 · 云端总分 '+((hd.total!==undefined&&hd.total!==null)?hd.total:'-')+'）</div>';
+                    if((hd.carryIn||0)>0)html+='<div style="color:var(--text-muted);font-size:12px;margin-bottom:6px">另有历史死格存档（前账承接 '+hd.carryIn+' 分），当前活格 '+String(hd.cell||'')+'</div>';
+                    if(!sessions.length){html+='<div style="color:var(--text-muted);font-size:12px">云端暂无场次（本场结束后自动上云）</div>'}
+                    sessions.slice().reverse().forEach(function(s){
+                        var nat=s.性质||s.nature||'';
+                        var pts=(s.得分!==undefined?s.得分:(s.points!==undefined?s.points:'-'));
+                        var q=(s.答题情况||s.detail||'');
+                        var tm=s.时间||s.time||s.date||'';
+                        var sid2=s.场次号||s.sessionId||'';
+                        html+='<div class="sh-session">';
+                        html+='<div class="sh-session-header"><span class="sh-session-time">'+nat+(tm?(' · '+tm):'')+'</span><span class="sh-session-score">+'+pts+' 分</span></div>';
+                        html+='<div class="sh-session-detail">'+(q||'')+(sid2?(' <span style="color:var(--text-muted);font-size:11px">场号 '+sid2+'</span>'):'')+'</div>';
+                        html+='</div>';
+                    });
+                    box.innerHTML=html;
+                }).catch(function(){
+                    var box=document.getElementById('cl-detail');
+                    if(box)box.innerHTML='<div style="color:var(--text-muted);font-size:12px">☁️ 云端流水账读取失败（以上展示为本地记录）</div>';
+                });
+            }catch(e){}
         }
     };
 
     App.Records = {
+        _page:1,
         render:function(){
             var records=App.Storage.getRecords();var list=document.getElementById('records-list');var empty=document.getElementById('records-empty');
             var _mf=(document.getElementById('records-mode-filter')||{}).value||'all';
             if(_mf!=='all')records=records.filter(function(r){return r.mode===_mf});
-            if(records.length===0){list.innerHTML='';empty.classList.add('show');return}
+            if(records.length===0){list.innerHTML='';empty.classList.add('show');this._page=1;return}
             empty.classList.remove('show');records.sort(function(a,b){return b.date-a.date});
-            var html='';
-            records.forEach(function(rec){
+            // 场次列表翻页：每页 10 条（上一页/页码/下一页）
+            var per=10,total=records.length,pages=Math.max(1,Math.ceil(total/per));
+            if(this._page>pages)this._page=pages;
+            if(this._page<1)this._page=1;
+            var pageRecords=records.slice((this._page-1)*per,this._page*per);
+            var html='<div style="display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:13px;color:var(--text-muted)">'
+                +'<span>共 '+total+' 场 · 第 '+this._page+'/'+pages+' 页</span>'
+                +'<span style="flex:1"></span>'
+                +'<button class="btn-sm btn-secondary" onclick="App.Records.gotoPage('+(this._page-1)+')"'+(this._page<=1?' disabled':'')+'>上一页</button>'
+                +'<button class="btn-sm btn-secondary" onclick="App.Records.gotoPage('+(this._page+1)+')"'+(this._page>=pages?' disabled':'')+'>下一页</button>'
+                +'</div>';
+            pageRecords.forEach(function(rec){
                 var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':rec.mode==='pinyin'?'拼 拼音练习':rec.mode==='fill'?'✍️ 填空练习':rec.mode==='reading'?'📖 阅读选择':rec.mode==='practice'?'📝 选择练习':rec.mode==='smart'?'🧠 智能抽查':rec.mode==='group'?'👥 分组':'🎮 未知';
                 var dateStr=new Date(rec.date).toLocaleString('zh-CN');
                 var srs=rec.studentResults||{};var sNames=Object.keys(srs).map(function(k){return srs[k].name});
@@ -652,6 +707,7 @@
             });
             list.innerHTML=html;
         },
+        gotoPage:function(p){this._page=parseInt(p,10)||1;this.render()},
         toggleDetail:function(el){el.classList.toggle('expanded')},
         viewLeaderboard:function(recordId){
             var records=App.Storage.getRecords();
@@ -955,6 +1011,123 @@
         }
     };
 
+    // ========== 云端积分流水账（新架构 2026-11-15） ==========
+    // 设计文书：本地不算账、不存全量账本；结束一场→云端「流水账追加」直接记账；
+    // 查询走云端（读活格/批量读取 EXAM_SYS_TOTALS）；本地只记「本场是否已同步」标记。
+    // 双保险：本地标记是第一道闸，云端场次号查重是最后兜底（跳过:true 也算成功）。
+    App.CloudLedger = {
+        genSessionId:function(){return 'sess'+Date.now()+(''+Math.floor(1000+Math.random()*9000))},
+        _markKey:function(sid,absId){return 'exam_sess_synced_'+sid+'_'+absId},
+        isSynced:function(sid,absId){try{return localStorage.getItem(this._markKey(sid,absId))==='1'}catch(e){return false}},
+        markSynced:function(sid,absId){try{localStorage.setItem(this._markKey(sid,absId),'1')}catch(e){}},
+        _call:function(argv){
+            if(!App.Sync||!App.Sync._cloudCall)return null;
+            return App.Sync._cloudCall(argv);
+        },
+        // 一场结束：逐生把本场成绩追加进他自己的流水账（一生一个文件，云端算总分）
+        onSessionRecord:function(record){
+            var self=this;
+            if(!record||!record.sessionId)return;
+            if(!App.Login||!App.Login.isLoggedIn())return;
+            var user=App.Login._username,pwd=App.Login._password;
+            var students=App.Storage.getStudents();
+            var byId={};students.forEach(function(s){byId[s.id]=s});
+            Object.keys(record.studentResults||{}).forEach(function(sid){
+                var sr=record.studentResults[sid];if(!sr)return;
+                var stu=byId[sid];
+                var absId=(stu&&(stu.absId||stu.id))||sid;
+                if(self.isSynced(record.sessionId,absId))return;   // 第一道闸：本地已确认上过云
+                var total=sr.totalCount||0,cor=sr.correctCount||0;
+                var pct=total>0?Math.round(cor/total*100):0;
+                var argv={表格名:'抽奖考试',操作:'流水账追加',用户名:user,密码:pwd,
+                    学生终身号:absId,学生姓名:String(sr.name||(stu?stu.name:'')||''),
+                    场次号:record.sessionId,
+                    场次记录:{性质:record.mode==='practice'?'练习':'考试',得分:sr.pointsEarned||0,
+                        答题情况:'答对'+cor+'/'+total+'题'+(total>0?('（'+pct+'%）'):''),
+                        题库:(record.bankNames||[]).join('、'),模式:record.mode||'',
+                        时间:new Date(record.date).toLocaleString('zh-CN')}};
+                var p=self._call(argv);
+                if(!p)return;
+                p.then(function(r){
+                    // 云端明确报错→不打标记，留给下次；跳过:true=云端已有同场号，同样按成功处理
+                    if(r&&r.status==='error'){console.warn('[CloudLedger] 追加失败',r);return}
+                    self.markSynced(record.sessionId,absId);
+                    console.log('[CloudLedger] 场次已上云',record.sessionId,absId,r&&(r.格ID||''),r&&r.跳过?'（云端查重跳过）':'');
+                    self.refreshTotalsSoon();
+                }).catch(function(e){console.warn('[CloudLedger] 追加异常',e)});
+            });
+        },
+        // 读某生活格：header{cell,carryIn,alive,total} + sessions[]/entries[]
+        readAlive:function(absId){
+            if(!App.Login||!App.Login.isLoggedIn())return Promise.resolve(null);
+            var user=App.Login._username,pwd=App.Login._password;
+            var p=this._call({表格名:'抽奖考试',操作:'读活格',用户名:user,密码:pwd,学生终身号:absId});
+            return p||Promise.resolve(null);
+        },
+        // 全班总分：批量读取 EXAM_SYS_TOTALS__<用户名>（快登录口径：不拉全量场次，只读总成绩文件）
+        fetchTotals:function(){
+            var self=this;
+            if(!App.Login||!App.Login.isLoggedIn())return Promise.resolve(false);
+            if(!App.Sync||!App.Sync._cloudCall)return Promise.resolve(false);
+            var user=App.Login._username,pwd=App.Login._password;
+            var fid='EXAM_SYS_TOTALS__'+user;
+            return App.Sync._cloudCall({表格名:'抽奖考试',操作:'批量读取',用户名:user,密码:pwd,ID列表:[fid]}).then(function(rd){
+                if(!rd||rd.status==='error')return false;
+                var rows=(rd&&rd.数据)||[],row=null;
+                for(var i=0;i<rows.length;i++){if(rows[i]&&rows[i].ID===fid){row=rows[i];break}}
+                if(!row)return false;
+                var txt='';
+                try{var p=JSON.parse(row['文件JSON']||'');txt=(p&&p.内容)||''}catch(e){txt=row['内容']||''}
+                if(!txt)return false;
+                var obj=null;try{obj=JSON.parse(txt)}catch(e){return false}
+                var map=(obj&&obj['学生'])||null;
+                if(!map||typeof map!=='object')return false;
+                try{localStorage.setItem('exam_cloud_totals',JSON.stringify({at:Date.now(),map:map}))}catch(e){}
+                return true;
+            }).catch(function(){return false});
+        },
+        getCachedTotals:function(){
+            try{var o=JSON.parse(localStorage.getItem('exam_cloud_totals')||'null');return (o&&o.map)||null}catch(e){return null}
+        },
+        // 查某生云端总分：键可能是终身号也可能是姓名，两种都试；值可能是数字也可能是对象
+        lookupTotal:function(absId,name){
+            var map=this.getCachedTotals();if(!map)return null;
+            var v=map[absId]!==undefined?map[absId]:map[name];
+            if(v===undefined)return null;
+            if(typeof v==='number')return v;
+            if(v&&typeof v==='object'){var p=v.总分!==undefined?v.总分:(v.total!==undefined?v.total:(v.points!==undefined?v.points:null));return (typeof p==='number')?p:null}
+            return null;
+        },
+        // 用云端总分覆盖统计表的 totalPoints（查不到的保持本地口径）
+        applyToStatsMap:function(students,statsMap){
+            if(!statsMap||!this.getCachedTotals())return;
+            students.forEach(function(s){
+                var absId=App.Ledger?App.Ledger.absIdOf(s):s.id;
+                var cv=App.CloudLedger.lookupTotal(absId,s.name);
+                if(cv!==null&&statsMap[s.id])statsMap[s.id].totalPoints=cv;
+            });
+        },
+        refreshTotalsSoon:function(){
+            var self=this;
+            if(this._totalsTimer)return;
+            this._totalsTimer=setTimeout(function(){
+                self._totalsTimer=null;
+                self.fetchTotals().then(function(ok){
+                    if(ok&&App.Students&&App.Students.renderRanking)App.Students.renderRanking();
+                });
+            },1500);
+        },
+        // 登录/进学情页时的节流刷新（60 秒内只拉一次）
+        refreshTotalsThrottled:function(){
+            var self=this;
+            if(Date.now()-(this._lastAuto||0)<60000)return;
+            this._lastAuto=Date.now();
+            this.fetchTotals().then(function(ok){
+                if(ok&&App.Students&&App.Students.renderRanking)App.Students.renderRanking();
+            });
+        }
+    };
+
     App.Leaderboard = {
         _view:'personal',
         // R1-01：个人榜 / 班级榜切换
@@ -979,6 +1152,9 @@
             if(students.length===0){podium.innerHTML='';list.innerHTML='';empty.classList.add('show');return}
             empty.classList.remove('show');
             var statsMap=getAllStudentStats();
+            // 新架构：榜单总分展示源换云端（EXAM_SYS_TOTALS），查不到的保持本地口径
+            try{App.CloudLedger.applyToStatsMap(students,statsMap)}catch(e){}
+            try{App.CloudLedger.refreshTotalsThrottled()}catch(e){}
             var enriched=students.map(function(s){
                 var st=statsMap[s.id]||{totalPoints:0};
                 return{id:s.id,name:s.name,avatar:s.avatar,totalPoints:st.totalPoints};
