@@ -2408,7 +2408,22 @@
                 // 读不到行 → 返回 null（读取失败），绝不能当成「云端没有成绩」拿空数组往上写
                 if(!row)return null;
                 var txt='';
-                try{var p=JSON.parse(row['文件JSON']||'');txt=(p&&p.内容)||''}catch(e){}
+                try{var p=JSON.parse(row['文件JSON']||'');txt=(p&&p.内容)||''}
+                catch(e){
+                    /* 2.097：文件JSON 超 WPS 单元格 32767 字符上限被接口截断时，外壳 JSON.parse 必失败，
+                       但「内容」值本体通常仍完整闭合（尾部 ]）——手工反转义提取兜底，恢复成绩读取、消同步冲突。
+                       若截断已吃进内容中部，提取出的 JSON 仍解析失败 → txt 保持空 → 走原 R1-19「读取失败」路径，不恶化。 */
+                    var fj=row['文件JSON']||'';
+                    var PFX='"内容":"';
+                    var k=fj.indexOf(PFX);
+                    if(k>=0){
+                        var inner=fj.slice(k+PFX.length);
+                        var e2=inner.lastIndexOf(']');
+                        if(e2>=0){
+                            try{var dec=JSON.parse('"'+inner.slice(0,e2+1)+'"');if(dec&&String(dec).trim())txt=dec}catch(_){}
+                        }
+                    }
+                }
                 if(!txt)txt=row['内容']||'';
                 if(!String(txt).trim()){
                     // R1-19：云端行还在、字符数还 >0，这次却读回空串 → 限流/解析失败，不是真空表
