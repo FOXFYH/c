@@ -1554,10 +1554,33 @@
         }
     };
     App._syncFullscreenBtn = function(){
+        var t=document.fullscreenElement?'退出全屏':'全屏';
         var b=document.querySelector('.btn-play-fs');
-        if(b)b.textContent=document.fullscreenElement?'退出全屏':'全屏';
+        if(b)b.textContent=t;
+        var b2=document.querySelector('.nav-fs-btn');
+        if(b2)b2.textContent=t;
     };
     document.addEventListener('fullscreenchange',function(){App._syncFullscreenBtn()});
+
+    // 2.095 全屏态专业考试界面：把答题区的学生名/得分同步到顶栏（仅全屏态由 CSS 显示）
+    // 得分写入点分散在 exam.js/fill.js/pinyin.js 多处，用 MutationObserver 统一跟随，零侵入
+    (function(){
+        function _syncNavExamInfo(){
+            var n=document.getElementById('exam-student-name'),
+                p=document.getElementById('exam-student-points'),
+                s=document.getElementById('nav-exam-stu'),
+                c=document.getElementById('nav-exam-score');
+            if(!s||!c)return;
+            var nv=n?String(n.textContent||'').trim():'';
+            var pv=p?String(p.textContent||'').trim():'';
+            if(nv){s.textContent=nv;s.classList.remove('hidden')}else{s.textContent='';s.classList.add('hidden')}
+            if(pv){c.textContent=pv;c.classList.remove('hidden')}else{c.textContent='';c.classList.add('hidden')}
+        }
+        var ids=['exam-student-name','exam-student-points','exam-student-level','exam-student-comment'];
+        var mo=new MutationObserver(_syncNavExamInfo);
+        ids.forEach(function(id){var el=document.getElementById(id);if(el)mo.observe(el,{childList:true,characterData:true,subtree:true})});
+        _syncNavExamInfo();
+    })();
 
     App._zoomLevel=100;
     App.zoomIn=function(){
