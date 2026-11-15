@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.22
+  存储测试网页版 · 文件管理器        当前版本 6.24
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.24 (2026-11-16) 老板指正回退+真折叠：① 撤掉 6.23 的「🏛系统/🎒学生/📚题库」三组卡片（组头+计数是新风格，老板不接受），恢复原列表风格；② 根目录真折叠——currentFolder==='' 时只渲染文件夹行（子文件夹/仅云端文件夹），任何文件行都不许出现在根目录；③ 点进文件夹才渲染「文件夹路径」==该文件夹ID 的文件行（场次记录仍按【终身号】聚合成一条 📒 流水账）；④ 老索引缓存缺「文件夹路径」字段（folder undefined）时自动强制重拉一次「读取索引」，用云端列补 folder，避免文件因归不进夹而消失。
     6.23 (2026-11-15) 新架构积分流水账展示：① 根目录按行「文件夹路径」列把文件归入 系统(FOLDER_SYS__)/学生(FOLDER_STU__)/题库(FOLDER_TK__) 三组分组展示（组头带计数，仍可点子文件夹进入）；② 学生文件夹里的「场次记录_<姓名>_【<终身号>】」行（一生多行=活格/死格接力）按【终身号】聚合成一个 📒 流水账文件展示（只认终身号，姓名仅供查看）；③ 仅存于云端的文件夹行照常可进入（挪出原「仅存于云端」区块，文件并入各组）。
     6.22 (2026-11-09) 修「登录门禁一直重试（跑到第十几、二十几次）」：_callCloudAPICore 的 lastError / lastIsNetworkError 原本声明在 apiUrl 循环体内，循环结束后拼失败回执时越界 → 每次云端调用都直接抛 ReferenceError（lastIsNetworkError is not defined），门禁拿到的永远是 ok:false，无限重试。现把两个变量提到循环外声明，并移除旧的 window.lastError 兜底。
     6.21 (2026-11-07) 登录门禁的 4 个系统文件改为「并行单文件读取」：既避开云端函数 3 秒上限，又把门禁等待从 20 多秒压到 2~3 秒；配合 6.20 的逐文件重试，冷启动也能稳定拿到云端内容。
@@ -92,7 +93,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.22</title>
+<title>文件管理 v6.24</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -134,7 +135,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.23</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.24</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -2030,6 +2031,15 @@ function renderFileList(){
   const list=document.getElementById('fileList');
   const idx=getFileIndex().sort((a,b)=>b.time-a.time||a.name.localeCompare(b.name));
   const localIds=new Set(idx.map(f=>f.id));
+  // 2.101：老索引缓存里没有「文件夹路径」字段（folder undefined）时，文件归不进任何文件夹、根目录又不许平铺 →
+  // 自动强制重拉一次「读取索引」，用云端「文件夹路径」列把本地 folder 补齐（成功后 refreshCloudIndex 会重绘）
+  if(!window._fmFolderRepairAsked){
+    const _lackFolder=idx.some(f=>!isFolderItem(f)&&typeof f.folder==='undefined');
+    if(_lackFolder){
+      window._fmFolderRepairAsked=true;
+      setTimeout(()=>{try{refreshCloudIndex()}catch(e){}},400);
+    }
+  }
   let html='';
   if(idx.length===0&&cloudFileCache.size===0){list.innerHTML='<div style="text-align:center;color:#999;padding:30px 0">暂无保存的文件</div>';return}
   // 当前文件夹下的子文件夹（基于文件夹ID）
@@ -2137,7 +2147,8 @@ function renderFileList(){
       <span class="file-time">-</span>
       <div class="file-acts"></div>
     </div>`;
-  const renderGroup=(title,loc,cloud)=>{
+  // 2.101：本文件夹内的文件行（原列表风格，不再套分组卡片；场次记录仍按【终身号】聚合成一条 📒）
+  const renderFilesPlain=(loc,cloud)=>{
     if(!loc.length&&!cloud.length)return '';
     const aggMap={},aggOrder=[],plainL=[],plainC=[];
     loc.forEach(f=>{
@@ -2150,7 +2161,7 @@ function renderFileList(){
       if(a){if(!aggMap[a]){aggMap[a]={absId:a,title:ledgerTitle(f.name),count:0};aggOrder.push(a)}aggMap[a].count++}
       else plainC.push(f);
     });
-    let h='<div style="padding:6px 10px 2px;font-size:11px;color:#b8860b;font-weight:bold;border-top:1px solid #eee;margin-top:4px">'+title+'（'+(loc.length+cloud.length)+'）</div>';
+    let h='';
     aggOrder.forEach(a=>{h+=ledgerRow(aggMap[a])});
     h+=plainL.map(localRow).join('');
     h+=plainC.map(cloudRow).join('');
@@ -2174,20 +2185,9 @@ function renderFileList(){
       </div>`;
     }
   }
-  if(currentFolder===''){
-    // 根目录：按「文件夹路径」列把文件归入 系统/学生/题库 三组展示
-    const G=[['FOLDER_SYS__','🏛 系统文件夹'],['FOLDER_STU__','🎒 学生文件夹'],['FOLDER_TK__','📚 题库文件夹']];
-    G.forEach(pair=>{
-      const pfx=pair[0],label=pair[1];
-      html+=renderGroup(label,
-        idx.filter(f=>!isFolderItem(f)&&String(f.folder||'').startsWith(pfx)),
-        cloudAll.filter(f=>String(f.folder||'').startsWith(pfx)));
-    });
-    html+=renderGroup('📄 根目录',
-      idx.filter(f=>!isFolderItem(f)&&!String(f.folder||'')),
-      cloudAll.filter(f=>!String(f.folder||'')));
-  }else{
-    html+=renderGroup('📄 本文件夹', displayFiles, cloudAll.filter(f=>f.folder===currentFolder));
+  // 2.101：根目录真折叠——只列出文件夹，子层文件绝不在根目录平铺；进哪个文件夹才列哪个夹的文件
+  if(currentFolder!==''){
+    html+=renderFilesPlain(displayFiles, cloudAll.filter(f=>f.folder===currentFolder));
   }
   list.innerHTML=html;
 }
