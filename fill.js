@@ -71,7 +71,9 @@
         document.getElementById('exam-progress-text').textContent='第 '+(exam.currentIndex+1)+'/'+exam.questions.length+' 题 · 填空手写';
 
         var panel=document.getElementById('question-options');
-        var body='<div class="fill-panel" id="fill-panel"><div class="fill-engine" id="fill-engine">手写引擎准备中…</div><div class="fill-blanks" id="fill-blanks"></div><button type="button" class="fill-submit" id="fill-submit" disabled>全部填完才能提交</button></div>';
+        /* 2.096：引擎状态条移到最底（老板 2026-11-15 令：这行不重要，别占顶部紧张位置；
+           顺序改为 填空板 → 提交按钮 → 引擎状态条，状态条比确认提交还靠下） */
+        var body='<div class="fill-panel" id="fill-panel"><div class="fill-blanks" id="fill-blanks"></div><button type="button" class="fill-submit" id="fill-submit" disabled>全部填完才能提交</button><div class="fill-engine" id="fill-engine">手写引擎准备中…</div></div>';
         panel.innerHTML=body;
         panel.setAttribute('aria-readonly','true');
 
