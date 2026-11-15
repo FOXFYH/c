@@ -1076,10 +1076,13 @@
                 var rows=(rd&&rd.数据)||[],row=null;
                 for(var i=0;i<rows.length;i++){if(rows[i]&&rows[i].ID===fid){row=rows[i];break}}
                 if(!row)return false;
-                var txt='';
-                try{var p=JSON.parse(row['文件JSON']||'');txt=(p&&p.内容)||''}catch(e){txt=row['内容']||''}
-                if(!txt)return false;
-                var obj=null;try{obj=JSON.parse(txt)}catch(e){return false}
+                var obj=null;
+                try{var p=JSON.parse(row['文件JSON']||'');
+                    if(p&&typeof p.内容==='string'&&p.内容.trim()){obj=(function(){try{return JSON.parse(p.内容)}catch(e){return null}})()}
+                    else if(p&&p['学生']){obj=p}   // 兼容：文件JSON 本身就是总成绩对象（无「内容」包裹）
+                }catch(e){}
+                if(!obj){try{obj=JSON.parse(row['内容']||'')}catch(e){}}
+                if(!obj)return false;
                 var map=(obj&&obj['学生'])||null;
                 if(!map||typeof map!=='object')return false;
                 try{localStorage.setItem('exam_cloud_totals',JSON.stringify({at:Date.now(),map:map}))}catch(e){}
