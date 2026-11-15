@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.23 (2026-11-15) 新架构积分流水账展示：① 根目录按行「文件夹路径」列把文件归入 系统(FOLDER_SYS__)/学生(FOLDER_STU__)/题库(FOLDER_TK__) 三组分组展示（组头带计数，仍可点子文件夹进入）；② 学生文件夹里的「场次记录_<姓名>_【<终身号>】」行（一生多行=活格/死格接力）按【终身号】聚合成一个 📒 流水账文件展示（只认终身号，姓名仅供查看）；③ 仅存于云端的文件夹行照常可进入（挪出原「仅存于云端」区块，文件并入各组）。
     6.22 (2026-11-09) 修「登录门禁一直重试（跑到第十几、二十几次）」：_callCloudAPICore 的 lastError / lastIsNetworkError 原本声明在 apiUrl 循环体内，循环结束后拼失败回执时越界 → 每次云端调用都直接抛 ReferenceError（lastIsNetworkError is not defined），门禁拿到的永远是 ok:false，无限重试。现把两个变量提到循环外声明，并移除旧的 window.lastError 兜底。
     6.21 (2026-11-07) 登录门禁的 4 个系统文件改为「并行单文件读取」：既避开云端函数 3 秒上限，又把门禁等待从 20 多秒压到 2~3 秒；配合 6.20 的逐文件重试，冷启动也能稳定拿到云端内容。
     6.20 (2026-11-07) 登录门禁取内容改为「逐个系统文件读取 + 每个重试3次」：云端函数有 3 秒执行上限，一次批量读多个系统文件容易整体超时，导致门禁虽然过了但内容为空、界面只剩演示数据。配合表格收缩到 67 行，读取索引稳定在 2 秒内。
@@ -133,7 +134,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.22</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.23</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -2061,7 +2062,19 @@ function renderFileList(){
   const folderIdSet = new Set(idx.filter(isFolderItem).map(f => f.id));
   const orphanFolder = f => currentFolder === '' && !!f.folder && !folderIdSet.has(f.folder);
   const displayFiles = idx.filter(f => !isFolderItem(f) && ((f.folder || '') === currentFolder || orphanFolder(f)));
-  html+=displayFiles.map(f=>{
+  // —— 6.23 新架构积分体系：按三文件夹分组展示 + 场次记录按【终身号】聚合成一个文件 ——
+  const cloudAll=[];
+  if(cloudFileCache.size>0){
+    for(const[cid,cf]of cloudFileCache){
+      if(localIds.has(cid))continue;
+      if(!cf.ID||isFolderId(cid))continue;
+      if(!cf.文件名||!cf.文件名.trim())continue;
+      const cp=parseCharCountStr(cf.内容字符数);
+      if(cp&&cp.part>1)continue;
+      cloudAll.push({id:cid,name:cf.文件名,ver:cf.起点号||'0',内容字符数:cf.内容字符数||'',folder:cf.文件夹路径||''});
+    }
+  }
+  const localRow=f=>{
     const d=new Date(f.time);
     const ts=d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     const active=f.name===currentFileName?' active':'';
@@ -2091,67 +2104,90 @@ function renderFileList(){
       <span class="file-time">${ts}</span>
       <div class="file-acts">${starHtml}<span class="file-del" data-del="${fid}">✕</span></div>
     </div>`;
-  }).join('');
-  // 仅存于云端的文件和文件夹
+  };
+  const cloudRow=cf=>{
+    const cloudChar=cf.内容字符数?((()=>{const p=parseCharCountStr(cf.内容字符数);return p?p.total:parseInt(cf.内容字符数)||0})()) :0;
+    const charHtml=`<span style="font-size:9px;color:#999" title="云端字符数">${cloudChar}字</span> `;
+    const localVer='<span style="color:#ccc">-</span>';
+    const syncVer='<span style="color:#ccc">-</span>';
+    const cloudVerHtml=`<span style="color:#9b59b6">☁${cf.ver}</span>`;
+    const verInfo=`<span style="font-size:9px" title="起点号S">${syncVer}</span><span style="font-size:9px;color:#aaa;margin:0 1px">/</span><span style="font-size:9px" title="终点号E">${localVer}</span><span style="font-size:9px;color:#aaa;margin:0 1px">/</span><span style="font-size:9px" title="云端正统版本号">${cloudVerHtml}</span>`;
+    const idHtml=`<span style="font-size:8px;color:#aaa;font-family:monospace" title="文件ID">${cf.id.substring(0,8)}</span> `;
+    const cloudStarred=isStarred(cf.id);
+    const starHtml=`<span data-star="${cf.id}" title="${cloudStarred?'已星标（内容常年落盘 localStorage）：点击取消':'未星标（内容存 IndexedDB）：点击设为星标'}" style="cursor:pointer;font-size:12px;margin-left:3px;color:${cloudStarred?'#f5b301':'#ccc'}">${cloudStarred?'★':'☆'}</span>`;
+    return `<div class="file-item" data-id="${cf.id}" data-name="${encodeURIComponent(cf.name)}" style="opacity:0.7">
+      <div class="file-check" data-check="cloudFile" data-id="${cf.id}"><div class="chkbox${selectedBatchSet.has(cf.id)?' checked':''}"><span class="chktick">✓</span></div></div>
+      <div class="file-main">
+        <div class="file-name" title="${cf.name}">☁️ ${cf.name}</div>
+        <div class="file-meta">${idHtml}${verInfo}${charHtml}<span>仅存于云端</span></div>
+      </div>
+      <span class="file-time">-</span>
+      <div class="file-acts">${starHtml}</div>
+    </div>`;
+  };
+  // 场次记录行（文件名规约：场次记录_<姓名>_【<终身号>】）聚合成一个文件展示；解析只认【终身号】
+  const ledgerAbsId=name=>{const m=/^场次记录_.+_【([^】]+)】$/.exec(String(name||''));return m?m[1]:''};
+  const ledgerTitle=name=>{const m=/^场次记录_(.+)_【([^】]+)】$/.exec(String(name||''));return m?('场次记录_'+m[1]+'【'+m[2]+'】'):String(name||'')};
+  const ledgerRow=agg=>`
+    <div class="file-item" style="background:#fffbe8">
+      <div class="file-main">
+        <div class="file-name" title="学生场次流水账（一生一个文件，云端按活格/死格接力存储）">📒 ${ledgerTitle(agg.title)}</div>
+        <div class="file-meta"><span style="font-size:9px;color:#888;font-family:monospace" title="终身号">${agg.absId}</span><span style="font-size:9px;color:#2e7d32">流水账 · ${agg.count}格</span></div>
+      </div>
+      <span class="file-time">-</span>
+      <div class="file-acts"></div>
+    </div>`;
+  const renderGroup=(title,loc,cloud)=>{
+    if(!loc.length&&!cloud.length)return '';
+    const aggMap={},aggOrder=[],plainL=[],plainC=[];
+    loc.forEach(f=>{
+      const a=ledgerAbsId(f.name);
+      if(a){if(!aggMap[a]){aggMap[a]={absId:a,title:ledgerTitle(f.name),count:0};aggOrder.push(a)}aggMap[a].count++}
+      else plainL.push(f);
+    });
+    cloud.forEach(f=>{
+      const a=ledgerAbsId(f.name);
+      if(a){if(!aggMap[a]){aggMap[a]={absId:a,title:ledgerTitle(f.name),count:0};aggOrder.push(a)}aggMap[a].count++}
+      else plainC.push(f);
+    });
+    let h='<div style="padding:6px 10px 2px;font-size:11px;color:#b8860b;font-weight:bold;border-top:1px solid #eee;margin-top:4px">'+title+'（'+(loc.length+cloud.length)+'）</div>';
+    aggOrder.forEach(a=>{h+=ledgerRow(aggMap[a])});
+    h+=plainL.map(localRow).join('');
+    h+=plainC.map(cloudRow).join('');
+    return h;
+  };
+  // 仅存于云端的文件夹也要能进入（如 FOLDER_SYS__3333 还没落到本地索引时）
   if(cloudFileCache.size>0){
-    const cloudOnlyFolders=[];
-    const cloudOnlyFiles=[];
     for(const[cid,cf]of cloudFileCache){
-      if(localIds.has(cid))continue;  // 本地已有
-      if(!cf.ID)continue;
-      const cfFolder=cf.文件夹路径||'';
-      if(cfFolder!==currentFolder)continue;  // 不在当前文件夹
-      if(isFolderId(cid)){
-        // 云端文件夹：文件名作为显示名
-        if(cf.文件名&&cf.文件名.trim()){
-          cloudOnlyFolders.push({id:cid,name:cf.文件名});
-        }
-      }else{
-        // 云端文件：必须有文件名
-        if(cf.文件名&&cf.文件名.trim()){
-          // 跳过拆分片段
-          const cp=parseCharCountStr(cf.内容字符数);
-          if(cp&&cp.part>1)continue;
-          cloudOnlyFiles.push({id:cid,name:cf.文件名,ver:cf.起点号||'0',内容字符数:cf.内容字符数||''});
-        }
-      }
+      if(localIds.has(cid))continue;
+      if(!cf.ID||!isFolderId(cid))continue;
+      if((cf.文件夹路径||'')!==currentFolder)continue;
+      if(!cf.文件名||!cf.文件名.trim())continue;
+      html+=`<div class="file-item" data-folder="${cid}" style="background:#f5f0e8;opacity:0.7;cursor:pointer">
+        <div class="file-main">
+          <div class="file-name">📁 ${cf.文件名}</div>
+          <div class="file-meta"><span>仅云端</span></div>
+        </div>
+        <div class="file-time"></div>
+        <div class="file-acts"><span class="file-del" data-del-folder="${cid}">✕</span></div>
+        <div class="file-check" data-check="cloudFolder" data-id="${cid}"><div class="chkbox${selectedBatchSet.has(cid)?' checked':''}"><span class="chktick">✓</span></div></div>
+      </div>`;
     }
-    if(cloudOnlyFolders.length>0||cloudOnlyFiles.length>0){
-      html+='<div style="padding:4px 10px;font-size:10px;color:#999;border-top:1px solid #eee;margin-top:2px">☁️ 以下仅存于云端</div>';
-      // 云端文件夹
-      for(const cf of cloudOnlyFolders){
-        html+=`<div class="file-item" data-folder="${cf.id}" style="background:#f5f0e8;opacity:0.7;cursor:pointer">
-          <div class="file-main">
-            <div class="file-name">📁 ${cf.name}</div>
-            <div class="file-meta"><span>仅云端</span></div>
-          </div>
-          <div class="file-time"></div>
-          <div class="file-acts"><span class="file-del" data-del-folder="${cf.id}">✕</span></div>
-          <div class="file-check" data-check="cloudFolder" data-id="${cf.id}"><div class="chkbox${selectedBatchSet.has(cf.id)?' checked':''}"><span class="chktick">✓</span></div></div>
-        </div>`;
-      }
-      // 云端文件
-      html+=cloudOnlyFiles.map(cf=>{
-        const cloudChar=cf.内容字符数?((()=>{const p=parseCharCountStr(cf.内容字符数);return p?p.total:parseInt(cf.内容字符数)||0})()) :0;
-        const charHtml=`<span style="font-size:9px;color:#999" title="云端字符数">${cloudChar}字</span> `;
-        const localVer='<span style="color:#ccc">-</span>';
-        const syncVer='<span style="color:#ccc">-</span>';
-        const cloudVerHtml=`<span style="color:#9b59b6">☁${cf.ver}</span>`;
-        const verInfo=`<span style="font-size:9px" title="起点号S">${syncVer}</span><span style="font-size:9px;color:#aaa;margin:0 1px">/</span><span style="font-size:9px" title="终点号E">${localVer}</span><span style="font-size:9px;color:#aaa;margin:0 1px">/</span><span style="font-size:9px" title="云端正统版本号">${cloudVerHtml}</span>`;
-        const idHtml=`<span style="font-size:8px;color:#aaa;font-family:monospace" title="文件ID">${cf.id.substring(0,8)}</span> `;
-        const cloudStarred=isStarred(cf.id);
-        const starHtml=`<span data-star="${cf.id}" title="${cloudStarred?'已星标（内容常年落盘 localStorage）：点击取消':'未星标（内容存 IndexedDB）：点击设为星标'}" style="cursor:pointer;font-size:12px;margin-left:3px;color:${cloudStarred?'#f5b301':'#ccc'}">${cloudStarred?'★':'☆'}</span>`;
-        return `<div class="file-item" data-id="${cf.id}" data-name="${encodeURIComponent(cf.name)}" style="opacity:0.7">
-          <div class="file-check" data-check="cloudFile" data-id="${cf.id}"><div class="chkbox${selectedBatchSet.has(cf.id)?' checked':''}"><span class="chktick">✓</span></div></div>
-          <div class="file-main">
-            <div class="file-name" title="${cf.name}">☁️ ${cf.name}</div>
-            <div class="file-meta">${idHtml}${verInfo}${charHtml}<span>仅存于云端</span></div>
-          </div>
-          <span class="file-time">-</span>
-          <div class="file-acts">${starHtml}</div>
-        </div>`;
-      }).join('');
-    }
+  }
+  if(currentFolder===''){
+    // 根目录：按「文件夹路径」列把文件归入 系统/学生/题库 三组展示
+    const G=[['FOLDER_SYS__','🏛 系统文件夹'],['FOLDER_STU__','🎒 学生文件夹'],['FOLDER_TK__','📚 题库文件夹']];
+    G.forEach(pair=>{
+      const pfx=pair[0],label=pair[1];
+      html+=renderGroup(label,
+        idx.filter(f=>!isFolderItem(f)&&String(f.folder||'').startsWith(pfx)),
+        cloudAll.filter(f=>String(f.folder||'').startsWith(pfx)));
+    });
+    html+=renderGroup('📄 根目录',
+      idx.filter(f=>!isFolderItem(f)&&!String(f.folder||'')),
+      cloudAll.filter(f=>!String(f.folder||'')));
+  }else{
+    html+=renderGroup('📄 本文件夹', displayFiles, cloudAll.filter(f=>f.folder===currentFolder));
   }
   list.innerHTML=html;
 }
