@@ -53,6 +53,7 @@
             var exam={
                 mode:progress.mode,
                 participationType:progress.participationType,
+                sessionId:progress.sessionId||'',
                 questions:progress.questions,
                 timeLimit:progress.timeLimit,
                 autoNext:progress.autoNext,
@@ -367,6 +368,21 @@
                 }
             }
             examStudents=students.filter(function(s){return selectedIds.indexOf(s.id)!==-1});
+            // 新架构「下次继续」：非练习模式进同一题库时，若存有同模式同题库同学生的未完场次，弹「继续上次场次？」
+            if(!isPractice&&!isLottery&&bankIds.length>0){
+                var sp=App.Storage.getExamProgress();
+                if(sp&&sp.mode===mode&&sp.questions&&sp.questions.length>0&&sp._bankIds&&sp._bankIds.length>0
+                    &&JSON.stringify(sp._bankIds)===JSON.stringify(bankIds)
+                    &&(sp.students||[]).length===examStudents.length
+                    &&(sp.students||[]).every(function(ps){return examStudents.some(function(es){return es.id===ps.id})})){
+                    var _ans=sp.results?sp.results.length:0;
+                    var _tot=sp.questions.length;
+                    var body2='<p style="text-align:center;font-size:1.1em;padding:12px 0">检测到上次未完成的场次<br>已答 <b style="color:var(--accent-1)">'+_ans+'/'+_tot+'</b> 题<br><span style="color:var(--text-muted);font-size:0.9em">是否继续上次场次？</span></p>';
+                    var footer2='<button class="btn-secondary" onclick="App.Modal.close();App.Exam._startFreshExam()">重新开始</button><button class="btn-glow" onclick="App.Modal.close();App.Exam._resumeExamGeneric()">🔄 继续场次</button>';
+                    App.Modal.open('⏯ 发现未完成场次',body2,footer2);
+                    return;
+                }
+            }
             await this._ensureCloudFor(bankIds,App.BankTypes.allowedForMode(this.currentMode));
             var banks=App.Storage.getBanks(),allQ=[];
             if(mode!=='lottery'){
@@ -1231,6 +1247,14 @@
             if(groupCount>=3)return 6;
             return 8;
         },
+        // 场次号（新架构 2026-11-15）：开考生成、全程携带；没有就当场补发，保证同一场次全程稳定
+        _sessId:function(exam){
+            if(!exam)return '';
+            if(!exam.sessionId){
+                exam.sessionId=(App.CloudLedger&&App.CloudLedger.genSessionId)?App.CloudLedger.genSessionId():('sess'+Date.now());
+            }
+            return exam.sessionId;
+        },
         _saveProgress:function(){
             var exam=this.currentExam;
             if(!exam)return;
@@ -1238,6 +1262,7 @@
             var progress={
                 mode:exam.mode,
                 participationType:exam.participationType,
+                sessionId:this._sessId(exam),
                 questions:exam.questions,
                 timeLimit:exam.timeLimit,
                 autoNext:exam.autoNext,
@@ -1353,7 +1378,27 @@
             if(exam.currentIndex>=exam.questions.length){this.showResult();return}
             this._nextPlayer();
         },
-        endExam:function(){var exam=this.currentExam;var isPractice=exam&&exam.mode==='practice';var answered=exam?exam.results.length:0;var total=exam?exam.questions.length:0;var isMidway=isPractice&&answered<total;var msg=isMidway?'确定要暂停练习吗？进度将自动保存，下次可继续！':'确定要结束本次挑战吗？';var body='<p style="text-align:center;font-size:1.1em;padding:12px 0">'+msg+'</p>';var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button><button class="'+(isMidway?'btn-primary':'btn-danger')+'" onclick="App.Modal.close();App.Exam._doEndExam()">'+(isMidway?'💾 保存并退出':'⏹ 结束挑战')+'</button>';App.Modal.open(isMidway?'💾 暂停练习':'⏹ 结束挑战',body,footer)},
+        // 结束弹窗二选一（设计文书第六节 2026-11-15）：「结束考试」当场统计上云；「下次继续」存进度改日再战
+        endExam:function(){
+            var exam=this.currentExam;if(!exam)return;
+            var answered=exam.results.length;var total=exam.questions.length;
+            var body='<p style="text-align:center;font-size:1.1em;padding:8px 0">本场已答 <b style="color:var(--accent-1)">'+answered+'/'+total+'</b> 题</p>'
+                +'<p style="text-align:center;color:var(--text-muted);font-size:0.9em;padding:0 12px">「结束考试」＝当场统计成绩并记入云端流水账<br>「下次继续」＝保存进度，下次进入同一题库接着做</p>';
+            var footer='<button class="btn-secondary" onclick="App.Modal.close()">取消</button>'
+                +'<button class="btn-primary" onclick="App.Modal.close();App.Exam._endExamContinue()">💾 下次继续</button>'
+                +'<button class="btn-danger" onclick="App.Modal.close();App.Exam._doEndExam()">⏹ 结束考试</button>';
+            App.Modal.open('⏹ 结束挑战',body,footer);
+        },
+        // 「下次继续」：进度（含场次号）落 localStorage，回首页，不清进度
+        _endExamContinue:function(){
+            var exam=this.currentExam;if(!exam)return;
+            try{this._saveProgress()}catch(e){}
+            var answered=(exam.results||[]).length,total=exam.questions.length;
+            this._exitToHome();
+            var body='<p style="text-align:center;font-size:1.1em;padding:12px 0">进度已保存！<br>已完成 <b style="color:var(--accent-1)">'+answered+'/'+total+'</b> 题<br><span style="color:var(--text-muted);font-size:0.9em">下次进入同一题库可继续本场次（场号 '+((exam&&exam.sessionId)||'').slice(0,17)+'…）</span></p>';
+            var footer='<button class="btn-primary" onclick="App.Modal.close()">确定</button>';
+            App.Modal.open('💾 进度已保存',body,footer);
+        },
         _doEndExam:function(){
             if(this.timerInterval)clearInterval(this.timerInterval);
             var navMode=document.getElementById('nav-exam-mode');if(navMode)navMode.classList.add('hidden');
@@ -1391,6 +1436,7 @@
             var exam={
                 mode:progress.mode,
                 participationType:progress.participationType,
+                sessionId:progress.sessionId||'',
                 questions:progress.questions,
                 timeLimit:progress.timeLimit,
                 autoNext:progress.autoNext,
@@ -1428,6 +1474,58 @@
             this.renderWarReport(false);
             this.showQuestion();
             App.Toast.show('已恢复练习进度','success');
+        },
+        // 「重新开始」：丢掉未完场次进度，从零开考（非练习模式）
+        _startFreshExam:function(){
+            App.Storage.clearExamProgress();
+            this.startExam();
+        },
+        // 「继续场次」：恢复任意模式的未完场次（练习模式仍走 _resumePractice）
+        _resumeExamGeneric:function(){
+            var progress=App.Storage.getExamProgress();
+            if(!progress||!progress.questions||!progress.questions.length){App.Toast.show('没有可恢复的进度','warning');return}
+            var exam={
+                mode:progress.mode,
+                participationType:progress.participationType,
+                sessionId:progress.sessionId||'',
+                questions:progress.questions,
+                timeLimit:progress.timeLimit,
+                autoNext:progress.autoNext,
+                students:progress.students,
+                currentIndex:progress.currentIndex,
+                results:progress.results||[],
+                playerScores:progress.playerScores||{},
+                totalEarned:progress.totalEarned||0,
+                playerQueue:progress.playerQueue,
+                queueIndex:progress.queueIndex,
+                avgQuestions:progress.avgQuestions,
+                groupNames:progress.groupNames||[],
+                groupRotation:progress.groupRotation||'alternate',
+                groupMap:progress.groupMap||null,
+                groupScores:progress.groupScores||null,
+                _pointsPerQ:progress._pointsPerQ||null,
+                _isRetry:progress._isRetry||false,
+                _smartProbMap:progress._smartProbMap||null,
+                _bankNames:progress._bankNames||[]
+            };
+            if(progress.currentStudentId){
+                var cs=exam.students.find(function(s){return s.id===progress.currentStudentId});
+                if(cs)exam.currentStudent=cs;
+            }
+            this.currentExam=exam;
+            document.getElementById('exam-setup').classList.add('hidden');
+            document.getElementById('exam-drawing').classList.add('hidden');
+            document.getElementById('exam-playing').classList.remove('hidden');
+            document.getElementById('exam-play-sidebar').classList.remove('hidden');
+            var hc=document.querySelector('.home-container');if(hc)hc.classList.add('in-exam');
+            var labels=window.ParticipationLabels||{};
+            var label=(labels[exam.participationType]&&labels[exam.participationType][exam.mode])||exam.mode;
+            var navMode=document.getElementById('nav-exam-mode');if(navMode){navMode.textContent=label;navMode.classList.remove('hidden')}
+            var navEnd=document.getElementById('nav-exam-end');if(navEnd)navEnd.classList.remove('hidden');
+            App._autoFS();
+            this.renderWarReport(false);
+            this.showQuestion();
+            App.Toast.show('已恢复上次场次','success');
         },
         _startFreshPractice:function(){
             App.Storage.clearExamProgress();
@@ -1540,9 +1638,10 @@
                     var nextPPQ=Math.max(1,Math.floor(ppq/2));
                     App.Storage.setWrongSet(sid,bid,{wrongQuestionIds:wrongIds,lastAttempt:Date.now(),bankId:bid,pendingPoints:originalPending+pendingPoints,nextPointsPerQ:nextPPQ,lastInitialPPQ:currentInitialPPQ});
                 }
-                var record={id:App.genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,bankIds:(bankIds||[]).slice(),totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,practicePassed:allCorrect,allParticipants:allParticipants||undefined};
+                var record={id:App.genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',sessionId:this._sessId(exam),bankNames:bankNames,bankIds:(bankIds||[]).slice(),totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,practicePassed:allCorrect,allParticipants:allParticipants||undefined};
                 var records=App.Storage.getRecords();
                 records.push(record);App.Storage.setRecords(records);
+                try{App.CloudLedger.onSessionRecord(record)}catch(e){}
                 if(allCorrect)App.Sync.syncNow();
                 this.currentExam=null;
                 App.Storage.clearExamProgress();
@@ -1612,8 +1711,9 @@
                     });
                 }
             }
-            var record={id:App.genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',bankNames:bankNames,bankIds:(bankIds||[]).slice(),totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,allParticipants:allParticipants||undefined};
+            var record={id:App.genId(),date:Date.now(),mode:exam.mode,participationType:exam.participationType||'personal',sessionId:this._sessId(exam),bankNames:bankNames,bankIds:(bankIds||[]).slice(),totalQuestions:exam.questions.length,totalCorrect:correct,totalEarned:exam.totalEarned,studentResults:studentResults,allParticipants:allParticipants||undefined};
             var records=App.Storage.getRecords();records.push(record);App.Storage.setRecords(records);this.currentExam=null;
+            try{App.CloudLedger.onSessionRecord(record)}catch(e){}
             App.Storage.clearExamProgress();
             App.Sync.syncNow();
             App.Effects.playVictory();App.Effects.spawnConfetti(window.innerWidth/2,window.innerHeight/3,80);
