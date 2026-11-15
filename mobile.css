@@ -682,12 +682,18 @@ html[data-ui="mobile"] .exam-play-sidebar {
     max-height: 240px;
     padding: 8px;
 }
-html[data-ui="mobile"] .exam-student-card { padding: 8px 10px; }
-html[data-ui="mobile"] .student-avatar { width: 44px; height: 44px; font-size: 18px; border-width: 2px; }
-html[data-ui="mobile"] .student-info { gap: 8px; }
-html[data-ui="mobile"] #exam-student-name { font-size: 18px !important; }
+/* 2.094：老板令——手机版考试学生横幅减半高、头像不再独占一行。
+   原因：style.css @media(max-width:480px) 把卡片改 column 导致头像独占一行；
+   这里恢复 row 横排、头像 44→32、内边距 8→4，整卡高约 80px→约 40px */
+html[data-ui="mobile"] .exam-student-card { flex-direction: row; text-align: left; padding: 4px 10px; gap: 8px; }
+html[data-ui="mobile"] .student-avatar { width: 32px; height: 32px; font-size: 14px; border-width: 2px; }
+html[data-ui="mobile"] .student-info { gap: 6px; }
+html[data-ui="mobile"] #exam-student-name { font-size: 16px !important; }
 html[data-ui="mobile"] #exam-student-comment,
-html[data-ui="mobile"] #exam-student-level { font-size: 14px !important; }
+html[data-ui="mobile"] #exam-student-level { font-size: 13px !important; }
+html[data-ui="mobile"] .student-group { font-size: 13px !important; font-style: italic; }
+html[data-ui="mobile"] .student-points { font-size: 13px !important; margin-left: auto; }
+html[data-ui="mobile"] .student-level { padding: 1px 8px; }
 html[data-ui="mobile"] .question-card { padding: 14px; }
 html[data-ui="mobile"] #question-text,
 html[data-ui="mobile"] .question-text { font-size: 15px !important; line-height: 1.6; margin-bottom: 14px; }
