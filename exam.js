@@ -1392,6 +1392,8 @@
         // 「下次继续」：进度（含场次号）落 localStorage，回首页，不清进度
         _endExamContinue:function(){
             var exam=this.currentExam;if(!exam)return;
+            if(exam._autoNextTimer){clearTimeout(exam._autoNextTimer);exam._autoNextTimer=null}
+            if(this.timerInterval){clearInterval(this.timerInterval);this.timerInterval=null}
             try{this._saveProgress()}catch(e){}
             var answered=(exam.results||[]).length,total=exam.questions.length;
             this._exitToHome();
