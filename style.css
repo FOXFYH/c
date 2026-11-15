@@ -4235,3 +4235,34 @@ body.reading-open{overflow:hidden}
        手机版由 mobile.css 的 order:3/4 正常排布，不套 absolute。 */
     html:not([data-ui="mobile"]) #nav-exam-end { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 1003; }
 }
+
+/* ===== 2.095 全屏态＝专业考试界面（老板 2026-11-15 定） =====
+   全屏时顶栏只给一行预算：模式 / 学生 / 得分 / 结束 / 退出全屏；
+   品牌、5 导航、音效、版本、账号、缩放、切换按钮全部隐藏。
+   非全屏态恢复丰富顶栏。手机版微调在 mobile.css 同版本段。 */
+#nav-exam-stu, #nav-exam-score {
+    display: none;
+    font-size: 13px;
+    color: var(--text-primary);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#nav-exam-score { color: var(--gold); font-weight: 600; }
+#nav-exam-stu.hidden, #nav-exam-score.hidden { display: none !important; }
+html:fullscreen #nav-exam-stu:not(.hidden), html:fullscreen #nav-exam-score:not(.hidden) { display: inline-block; }
+html:fullscreen #main-nav { height: 40px; padding: 0 10px; gap: 6px; }
+html:fullscreen .nav-items,
+html:fullscreen .nav-sound,
+html:fullscreen #nav-ver,
+html:fullscreen #nav-zoom-controls,
+html:fullscreen #ui-mode-toggle,
+html:fullscreen .nav-fullscreen { display: none !important; }
+html:fullscreen #nav-login-status,
+html:fullscreen .nav-login-btn { display: none !important; }
+/* 窄视口(≤768px)下电脑版「结束」有 absolute 钉右规则(2.085 R4-03)，全屏态顶栏已是
+   单行 40px，absolute 会压住 login 区里的「退出全屏」按钮——全屏态一律回归正常流 */
+html[data-ui]:fullscreen #nav-exam-end { position: static; transform: none; top: auto; right: auto; z-index: auto; }
+html:fullscreen .nav-fs-btn { display: inline-flex !important; align-items: center; height: 30px; padding: 0 10px; font-size: 13px; border: 1px solid var(--border-color); border-radius: 8px; background: transparent; color: var(--text-primary); cursor: pointer; }
+html:fullscreen .nav-exam-ctrl { padding: 3px 10px; font-size: 13px; }
