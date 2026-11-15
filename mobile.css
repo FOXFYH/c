@@ -1008,3 +1008,17 @@ html[data-ui="mobile"] .reading-sheet { max-height: 94vh; border-radius: 12px; }
 html[data-ui="mobile"] .reading-body { font-size: 17px; line-height: 1.9; padding: 4px 16px 14px; }
 html[data-ui="mobile"] .reading-btn { padding: 10px 12px; font-size: 14px; }
 html[data-ui="mobile"] .reading-meta { font-size: 12px; }
+
+/* ===== 2.095 手机全屏态＝专业考试界面：顶栏强制单行 40px =====
+   只留：模式 / 学生 / 得分 / 结束 / 退出全屏；logo 与账号区其余内容全藏。
+   两行 flex（mobile 顶栏默认）在全屏态必须压回单行。 */
+html:fullscreen #main-nav { height: 40px !important; min-height: 0 !important; flex-wrap: nowrap !important; align-content: center; padding: 0 8px !important; }
+html:fullscreen .nav-brand { display: none !important; }
+html:fullscreen #nav-login-status { display: none !important; }
+html:fullscreen #nav-exam-mode,
+html:fullscreen #nav-exam-end { order: 3; min-height: 30px; max-width: none; }
+html:fullscreen #nav-exam-end { order: 6; }
+html:fullscreen #nav-login-area { order: 7; margin-left: auto; height: auto; }
+html:fullscreen #nav-exam-stu { order: 4; max-width: 74px; font-size: 13px; }
+html:fullscreen #nav-exam-score { order: 5; max-width: 110px; font-size: 13px; }
+html:fullscreen .nav-fs-btn { height: 30px; padding: 0 10px; font-size: 13px; }
