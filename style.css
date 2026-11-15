@@ -4230,5 +4230,8 @@ body.reading-open{overflow:hidden}
     #nav-login-status { display: none; }
     .nav-login-btn { width: 26px; height: 26px; }
     .nav-exam-ctrl { padding: 3px 8px; font-size: 12px; }
-    #nav-exam-end { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 1003; }
+    /* 2.093：只对电脑版界面生效。手机版界面顶栏是两行 flex，「结束」absolute 钉右上
+       会正好压在第一行最右的「全屏」按钮上（z-index 1003 更高，全屏点不到）。
+       手机版由 mobile.css 的 order:3/4 正常排布，不套 absolute。 */
+    html:not([data-ui="mobile"]) #nav-exam-end { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 1003; }
 }
