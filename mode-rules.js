@@ -39,7 +39,7 @@ var ModeRules = {
         groupExtra: '获胜小组全员每题额外 +5 分'
     },
     practice: {
-        title: '📝 选择练习',
+        title: '📝 单选练习',
         icon: '📝',
         rules: [
             '首轮每题 10 积分，答错不得分',
@@ -135,7 +135,7 @@ var ParticipationLabels = {
         farm: '🌾 个人打野',
         challenge: '🎯 个人挑战',
         pk: '⚔️ 个人PK',
-        practice: '📝 个人选择练习',
+        practice: '📝 个人单选练习',
         smart: '🧠 个人智能抽查',
         lottery: '🎲 个人抽签',
         pinyin: '拼 个人拼音练习',
