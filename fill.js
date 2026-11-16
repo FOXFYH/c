@@ -1,6 +1,10 @@
-/* 填空题模式（手写作答 · 按需加载）v2.034
+/* 填空题模式（手写作答 · 按需加载）v2.035
    复用 HanziLookupJS + mmah.json；答案区全是只读 div，禁键盘/粘贴/语音。
-   每题可多个空，每个空一块手写板；写完自动识别，点候选字上屏；全部填完才能提交。 */
+   每题可多个空，每个空一块手写板；写完自动识别，点候选字上屏；全部填完才能提交。
+   v2.035（老板 2026-11-16 令）：一个空可以是多字词。仍只给一块手写板，每点一个候选字就
+   累积到该空，画布清空接着写下一字，写满答案字数自动完成（写错可「撤销一笔」退掉最后上屏的字）。
+   例：答案「空间」＝第 1 字写「空」→ 第 2 字写「间」，拼成「空间」才判对；
+   旧版每空只存一个字，多字答案永远写不出、永远判错。 */
 (function(){
     'use strict';
     var App=window.App=window.App||{};
@@ -83,7 +87,8 @@
         for(var k=0;k<n;k++){
             var item=document.createElement('div');
             item.className='fill-item';item.dataset.i=String(k);
-            item.innerHTML='<div class="fill-item-head">第 '+(k+1)+' 空 <span class="fill-picked">（未写）</span></div>'+
+            var need=(answers[k]!=null&&String(answers[k]).length)?String(answers[k]).length:1;
+            item.innerHTML='<div class="fill-item-head">第 '+(k+1)+' 空 <span class="fill-picked">（未写 · '+need+' 字）</span></div>'+
                 '<div class="fill-pad-wrap"><canvas width="'+(SIZE*SCALE)+'" height="'+(SIZE*SCALE)+'"></canvas><div class="fill-tip">在此手写</div></div>'+
                 '<div class="fill-tools"><button type="button" data-act="undo">撤销一笔</button><button type="button" data-act="clear">清空</button><button type="button" data-act="redo">重写</button></div>'+
                 '<div class="fill-cands" aria-label="候选字"></div>';
@@ -92,7 +97,7 @@
             var ctx=canvas.getContext('2d');
             ctx.setTransform(SCALE,0,0,SCALE,0,0);
             ctx.lineCap='round';ctx.lineJoin='round';
-            var b={strokes:[],cur:null,drawing:false,timer:null,cands:[],picked:'',canvas:canvas,ctx:ctx,item:item};
+            var b={strokes:[],cur:null,drawing:false,timer:null,cands:[],picked:'',word:'',need:need,canvas:canvas,ctx:ctx,item:item};
             st.blanks.push(b);
             bindPad(k);
             bindTools(k);
@@ -175,20 +180,33 @@
             btn.onclick=function(){
                 if(st.done)return;
                 var act=btn.dataset.act;
-                if(act==='undo'){b.strokes.pop();redraw(b);schedule(i);return}
+                if(act==='undo'){
+                    // 有未上屏的笔画就撤笔画；没有就退掉最后上屏的那一个字
+                    if(b.strokes.length){b.strokes.pop();redraw(b);schedule(i);return}
+                    if((b.word||'').length){b.word=b.word.slice(0,-1);b.picked='';updatePicked(i);renderCands(i,[]);updateSubmitBtn()}
+                    return
+                }
                 if(act==='clear'){clearPad(i);return}
-                if(act==='redo'){clearPad(i);b.picked='';updatePicked(i);renderCands(i,[])}
+                if(act==='redo'){resetBlank(i)}
             };
         });
     }
 
-    function clearPad(i,keepPicked){
+    /* 清掉当前这一字的笔画与候选（已经上屏的字保留），接着写下一字 */
+    function clearPad(i){
         var b=st.blanks[i];
         clearTimeout(b.timer);b.timer=null;
         b.strokes=[];b.cur=null;b.drawing=false;
         redraw(b);b.cands=[];renderCands(i,[]);
         var tip=b.item.querySelector('.fill-tip');if(tip)tip.style.display='';
-        if(!keepPicked&&b.picked){b.picked='';updatePicked(i)}
+    }
+
+    /* 整空重写：连已上屏的字一起清掉 */
+    function resetBlank(i){
+        var b=st.blanks[i];
+        clearPad(i);
+        b.word='';b.picked='';
+        updatePicked(i);updateSubmitBtn();
     }
 
     function schedule(i){
@@ -242,18 +260,29 @@
 
     function pick(i,ch){
         var b=st.blanks[i];
-        b.picked=ch;
-        clearPad(i,true);
+        var need=b.need||1;
+        b.word=(b.word||'')+ch;              // 逐字累积，绝不覆盖前面的字
+        if(b.word.length>=need)b.picked=b.word;
+        clearPad(i);
         updatePicked(i);
-        // 自动跳到下一个未填的空
-        for(var k=0;k<st.blanks.length;k++){
-            var idx=(i+1+k)%st.blanks.length;
-            if(!st.blanks[idx].picked){
-                var it=st.blanks[idx].item;
-                if(it&&it.scrollIntoView)try{it.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
-                break;
+        updateSubmitBtn();
+        if(b.picked){
+            // 本空写满，自动跳到下一个还没写完的空
+            for(var k=0;k<st.blanks.length;k++){
+                var idx=(i+1+k)%st.blanks.length;
+                if(!st.blanks[idx].picked){
+                    var it=st.blanks[idx].item;
+                    if(it&&it.scrollIntoView)try{it.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
+                    break;
+                }
             }
+        }else{
+            // 还没写满，停在本空接着写下一字
+            if(b.item.scrollIntoView)try{b.item.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
         }
+    }
+
+    function updateSubmitBtn(){
         var all=st.blanks.every(function(x){return !!x.picked});
         var sb=document.getElementById('fill-submit');
         if(sb){sb.disabled=!all;sb.textContent=all?'提交本题':'还差 '+(st.blanks.filter(function(x){return !x.picked}).length)+' 个空'}
@@ -261,12 +290,17 @@
 
     function updatePicked(i){
         var b=st.blanks[i];
+        var need=b.need||1,got=b.word||'';
         var head=b.item.querySelector('.fill-picked');
-        if(head)head.textContent=b.picked||'（未写）';
+        if(head)head.textContent=b.picked?
+            ('已写完「'+b.picked+'」（共 '+need+' 字）'):
+            (got?
+            ('已写「'+got+'」 · 再写第 '+(got.length+1)+' 字（共 '+need+' 字）'):
+            ('（未写 · '+need+' 字）'));
         var blank=document.querySelector('.fill-blank[data-i="'+i+'"]');
         if(blank){
-            blank.textContent=b.picked||'?';
-            blank.classList.toggle('filled',!!b.picked);
+            blank.textContent=b.picked||(got+new Array(Math.max(0,need-got.length)+1).join('_'));
+            blank.classList.toggle('filled',!!got);
         }
     }
 
