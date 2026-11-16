@@ -138,7 +138,7 @@
         getStudents:function(){
             var s=this.get('students',[])||[];
             // 演示名单已停用：任何位置读到演示学生一律剔除，顺手清理存储
-            var clean=(s||[]).filter(function(x){return x&&!x._demo});
+            var clean=(s||[]).filter(function(x){return x&&!x._demo&&!x._sys&&x.id!=='__DEL__'});
             // 2.100 删除墓碑：已被删掉的学生（按终身号）即使本地旧数据里还在，也不许复活
             try{
                 var tomb=JSON.parse(localStorage.getItem('exam_student_tombstones')||'[]');
@@ -150,7 +150,14 @@
             if(clean.length!==s.length){this.set('students',clean)}
             return clean;
         },
-        setStudents:function(s){var hasReal=s.some(function(x){return!x._demo});if(hasReal){s=s.filter(function(x){return!x._demo})}this.set('students',s);if(!this._syncSilent)App.Sync.notifyChange('students',s)},
+        setStudents:function(s){var hasReal=s.some(function(x){return!x._demo});if(hasReal){s=s.filter(function(x){return!x._demo})}this.set('students',s);if(!this._syncSilent){App.Sync.notifyChange('students',s);if(App.Sync._studentsDirtyFlag)App.Sync._studentsDirtyFlag(true)}},
+        // 2.107：写云端的名单 = 在线学生 + 一条 _sys 墓碑哨兵（把删除也带到云端，别的设备才看得见）
+        getStudentsForCloud:function(){
+            var list=(this.getStudents()||[]).slice();
+            var tomb=(App.Sync&&App.Sync._tombstones)?App.Sync._tombstones():[];
+            if(tomb.length)list.push({id:'__DEL__',_sys:1,ts:Date.now(),tombstones:tomb});
+            return list;
+        },
         getBanks:function(){
             var banks=this.get('banks',[]);
             // 本地始终保留且仅保留一条测试题库；只写本地，不写 exam_file_index，不上云
@@ -2171,7 +2178,7 @@
             return null;
         },
         _getContentForDataType:function(dataType){
-            if(dataType==='students')return JSON.stringify(App.Storage.getStudents());
+            if(dataType==='students')return JSON.stringify(App.Storage.getStudentsForCloud());
             if(dataType==='records')return JSON.stringify(App.Storage.getRecords());
             if(dataType==='levels')return JSON.stringify(App.Storage.getSettings().levels||[]);
             if(dataType==='aiConfig')return JSON.stringify({aiApiUrl:App.Storage.getSettings().aiApiUrl||'',aiApiKey:App.Storage.getSettings().aiApiKey||'',aiModel:App.Storage.getSettings().aiModel||''});
@@ -2230,6 +2237,8 @@
                     return;
                 }
                 var data=JSON.parse(content);
+                // 2.107：云端名单先吸收墓碑哨兵，别让已删学生在别的设备上借并集复活
+                if(dataType==='students'&&Array.isArray(data)&&App.Sync&&App.Sync._absorbCloudTombstones)data=App.Sync._absorbCloudTombstones(data);
                 // 全演示学生数据一律不应用（防止云端被污染的演示名单覆盖本机真实名单）
                 if(dataType==='students'&&Array.isArray(data)&&data.length&&data.every(function(x){return x&&x._demo})){
                     console.log('[Sync] 忽略全演示学生数据');
@@ -2245,7 +2254,9 @@
                         var _dataAlive=(data||[]).filter(function(s){return s&&s.id&&!tombSet[_absOf(s)]});
                         var _locStu=App.Storage.getStudents()||[];
                         var _cloIds={};_dataAlive.forEach(function(s){if(s&&s.id)_cloIds[s.id]=1});
-                        var _extraStu=_locStu.filter(function(s){return s&&s.id&&!_cloIds[s.id]&&!tombSet[_absOf(s)]});
+                        var _cleanFlag=(App.Sync&&App.Sync._studentsIsDirty)?!App.Sync._studentsIsDirty():false;
+                        // 2.107：本机没改过名单 → 云端整份为准（跨设备删除才能落地），不做并集
+                        var _extraStu=_cleanFlag?[]:_locStu.filter(function(s){return s&&s.id&&!_cloIds[s.id]&&!tombSet[_absOf(s)]});
                         App.Storage.set('students',_extraStu.length?_dataAlive.concat(_extraStu):_dataAlive);
                         App.Students.render();
                         if(App.Settings&&App.Settings.StudentMgmt&&App.Settings.StudentMgmt.render)App.Settings.StudentMgmt.render();
@@ -2493,7 +2504,7 @@
             var user=App.Login._username,pwd=App.Login._password;
             var st=App.Storage.getSettings();
             var map={
-                '系统-学生信息':['EXAM_SYS_STUDENT_INFO',JSON.stringify(App.Storage.getStudents())],
+                '系统-学生信息':['EXAM_SYS_STUDENT_INFO',JSON.stringify(App.Storage.getStudentsForCloud())],
                 '系统-考试数据':['EXAM_SYS_RECORDS',JSON.stringify(App.Storage.getRecords())],
                 '系统-等级设置':['EXAM_SYS_LEVELS',JSON.stringify(st.levels||[])]
             };
@@ -2830,6 +2841,10 @@
         },
         // 通用：读云端某个系统文件里的 JSON 数组（读失败一律 null，绝不当空表）
         _readCloudArray:function(user,pwd,fid){return this._readCloudRecords(user,pwd,fid)},
+        // ===== 2.107 名单「本地有没有未上传改动」标记（决定同步方向）=====
+        // clean＝本机没动过名单 → 云端为准（云端删了谁，本机就少谁）；dirty＝本机有改动 → 并集上行。
+        _studentsDirtyFlag:function(on){try{localStorage.setItem('exam_students_dirty',on?'1':'0')}catch(e){}},
+        _studentsIsDirty:function(){try{return localStorage.getItem('exam_students_dirty')==='1'}catch(e){return true}},
         // ===== 2.100 学生删除墓碑（云端名单只有「并集合并」没有删除通道，靠墓碑做减法）=====
         // 键 exam_student_tombstones 存被删学生的终身号数组；云端并集前先剔除，合并结果再过一遍。
         // 写回成功后墓碑保留（防老设备再合并回来；老版本设备仍可能回写，已知限制）。
@@ -2841,7 +2856,9 @@
             var a=this._tombstones();
             if(a.indexOf(absId)<0){a.push(absId);try{localStorage.setItem('exam_student_tombstones',JSON.stringify(a))}catch(e){}}
         },
-        _clearTombstones:function(){try{localStorage.removeItem('exam_student_tombstones')}catch(e){}},
+        _clearTombstones:function(){
+            try{localStorage.removeItem('exam_student_tombstones');localStorage.setItem('exam_tomb_cleared_at',String(Date.now()))}catch(e){}
+        },
         _tombSet:function(){
             var ts={};this._tombstones().forEach(function(a){ts[String(a)]=1});return ts;
         },
@@ -2859,19 +2876,45 @@
             this._studentsChain=chain.catch(function(){});
             return this._studentsChain;
         },
+        // 2.107：云端墓碑吸收器——名单尾部一条 _sys 哨兵记录携带被删学生终身号。
+        // 读云端后先把终身号并进本机墓碑（除非本机此后做过「导入覆盖」），再返回纯学生数组。
+        _absorbCloudTombstones:function(list){
+            var arr=Array.isArray(list)?list:[];
+            var tomb=[],sentTs=0,stu=[];
+            arr.forEach(function(s){
+                if(s&&s._sys){
+                    (s.tombstones||[]).forEach(function(a){if(a)tomb.push(String(a))});
+                    sentTs=Math.max(sentTs,parseInt(s.ts,10)||0);
+                }else if(s&&s.id!=='__DEL__'){stu.push(s)}
+            });
+            if(tomb.length){
+                var clearedAt=parseInt(localStorage.getItem('exam_tomb_cleared_at')||'0',10)||0;
+                if(sentTs>clearedAt){
+                    var cur=this._tombstones(),added=false;
+                    tomb.forEach(function(a){if(cur.indexOf(a)<0){cur.push(a);added=true}});
+                    if(added){try{localStorage.setItem('exam_student_tombstones',JSON.stringify(cur))}catch(e){}}
+                }
+            }
+            return stu;
+        },
         _syncStudentsOnce:function(user,pwd,fid){
             var self=this;
             return this._readCloudArray(user,pwd,fid).then(function(cloud){
-                if(cloud===null){self._studentsDirty=true;self._scheduleStudentsReconcile();return false}
-                // 2.100：读云端后先按墓碑剔除已删学生（云端只有并集、没有删除通道，这是唯一的减法入口）
+                if(cloud===null){self._studentsDirty=true;self._studentsDirtyFlag(true);self._scheduleStudentsReconcile();return false}
+                // 2.107：先吸收云端墓碑（删除才能跨设备生效），再按墓碑剔除已删学生
+                var cloudStu=self._absorbCloudTombstones(cloud);
                 var tombSet=self._tombSet();
                 var _absOf=function(s){return String((s&&(s.absId||s.id))||'')};
                 var cloudHadTomb=false;
-                cloud.forEach(function(s){if(s&&s.id&&tombSet[_absOf(s)])cloudHadTomb=true});
-                var cloudAlive=cloud.filter(function(s){return s&&s.id&&!s._demo&&!tombSet[_absOf(s)]});
+                cloudStu.forEach(function(s){if(s&&s.id&&tombSet[_absOf(s)])cloudHadTomb=true});
+                var cloudAlive=cloudStu.filter(function(s){return s&&s.id&&!s._demo&&!tombSet[_absOf(s)]});
                 var map={},cloudIds={};
                 cloudAlive.forEach(function(s){if(s&&s.id&&!s._demo){map[s.id]=s;cloudIds[s.id]=1}});
                 var local=(App.Storage.getStudents()||[]).filter(function(s){return s&&s.id&&!s._demo&&!tombSet[_absOf(s)]});
+                // 2.107：本机没改过名单 → 云端为准（云端删掉的人本机也要消失，不再被并集复活）；
+                // 云端名单为空时不敢整份替换，避免误把本机名单清空。
+                var localDirty=self._studentsIsDirty();
+                if(!localDirty&&cloudAlive.length>0)local=cloudAlive.slice();
                 local.forEach(function(s){map[s.id]=s});          // 同 id 以本地为准
                 var merged=[];for(var k in map)merged.push(map[k]);
                 // 合并结果也要落本地，两端最终看到同一份名单
@@ -2894,19 +2937,20 @@
                 // 包含「本地已删空、云端还全是墓碑学生」的极端场景：写空名单才是正确结果（有墓碑做依据，不是拿空表盖云端）。
                 var needWrite=hasChange||(cloudHadTomb&&(merged.length>0||cloudAlive.length===0));
                 // 本地空、云端有、且无墓碑：只做下行合并，绝不把空名单写上去盖掉云端
-                if(!needWrite){self._studentsDirty=false;return true}
+                if(!needWrite){self._studentsDirty=false;self._studentsDirtyFlag(false);return true}
                 return self._writeStudentsNow().then(function(){return self._readCloudArray(user,pwd,fid)}).then(function(cloud2){
-                    if(cloud2===null){self._studentsDirty=true;self._scheduleStudentsReconcile();return false}
-                    var haveById={};cloud2.forEach(function(s){if(s&&s.id)haveById[s.id]=s});
+                    if(cloud2===null){self._studentsDirty=true;self._studentsDirtyFlag(true);self._scheduleStudentsReconcile();return false}
+                    var cloud2Stu=self._absorbCloudTombstones(cloud2);
+                    var haveById={};cloud2Stu.forEach(function(s){if(s&&s.id)haveById[s.id]=s});
                     // 回读校验：既要条数在，也要字段（含姓名）真的对上，改名没写上去同样算失败
                     var miss=merged.filter(function(s){return !haveById[s.id]||!_sameStu(s,haveById[s.id])});
                     // 2.100：回读云端不许再有墓碑学生（删除必须真的落地）
-                    var leftover=cloud2.filter(function(s){return s&&s.id&&tombSet[_absOf(s)]});
-                    if(!miss.length&&!leftover.length){self._studentsDirty=false;return true}
+                    var leftover=cloud2Stu.filter(function(s){return s&&s.id&&tombSet[_absOf(s)]});
+                    if(!miss.length&&!leftover.length){self._studentsDirty=false;self._studentsDirtyFlag(false);return true}
                     try{localStorage.setItem('exam_sync_last_error',JSON.stringify({at:Date.now(),type:'students_missing',msg:miss.length+' 名学生未上云或改名未对齐'+(leftover.length?('，'+leftover.length+' 名已删学生仍在云端'):'')+'，稍后自动重试'}))}catch(_){}
                     self._studentsDirty=true;self._scheduleStudentsReconcile();return false;
                 });
-            }).catch(function(){self._studentsDirty=true;self._scheduleStudentsReconcile();return false});
+            }).catch(function(){self._studentsDirty=true;self._studentsDirtyFlag(true);self._scheduleStudentsReconcile();return false});
         },
         // 名单对账：失败按 2s/4s 退避重试，仍失败交给 20 秒自愈
         _reconcileStudents:function(user,pwd,fid,attempt){
