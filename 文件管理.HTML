@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.26
+  存储测试网页版 · 文件管理器        当前版本 6.27
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,7 +8,8 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
-    6.26 (2026-11-16) 文件夹单击即进入：此前单击文件夹只记 selectedFolderId（界面无任何变化），必须再点「打开」按钮或双击才进——老板实测「点文件夹没反应」。改法：click 委托里 data-folder 分支直接 navigateFolder（勾选框 [data-check] 与删除 ✕ [data-del-folder] 除外，仍按原逻辑）。双击与「打开」按钮保留。
+    6.27 (2026-11-16) 修勾选报错：批量操作条在 6.23 改版时已移除，但 click 委托里还留着 `updateBatchBar()` 调用（函数不存在）→ 每次点勾选框都抛 ReferenceError。删掉该调用，勾选只切换自己的勾选态（CDP 实测 pageerror 归零）。
+6.26 (2026-11-16) 文件夹单击即进入：此前单击文件夹只记 selectedFolderId（界面无任何变化），必须再点「打开」按钮或双击才进——老板实测「点文件夹没反应」。改法：click 委托里 data-folder 分支直接 navigateFolder（勾选框 [data-check] 与删除 ✕ [data-del-folder] 除外，仍按原逻辑）。双击与「打开」按钮保留。
 6.25 (2026-11-16) 修「临时行 _TL 删不掉」：① 删除兜底——删云端文件时按正牌 ID 查不到行，再按 `<正牌ID>_TL` 查一次，查到就删临时行（以前直接走「云端本来就没这行」→ 静默跳过、行永久留在云端、界面留一条删不掉的 ☁️ 行）；删完连本地索引里的 _TL 残留条目一并清掉。② 转正看门——`syncOneFileTwoPhase` 与批量两阶段里，「收为临时」不再立刻 `clearNewFileFlag`，必须等「转正确认＝转正成功」才清 isNewFile；转正失败保留标记，下次同步重试，「有正牌行才算转正完成」。③ ☁️ 仅存云端行若 ID 以 `_TL` 结尾，行内标注橙色「临时行」并给 ✕ 删除按钮（走同一个删除兜底）。
     6.24 (2026-11-16) 老板指正回退+真折叠：① 撤掉 6.23 的「🏛系统/🎒学生/📚题库」三组卡片（组头+计数是新风格，老板不接受），恢复原列表风格；② 根目录真折叠——currentFolder==='' 时只渲染文件夹行（子文件夹/仅云端文件夹），任何文件行都不许出现在根目录；③ 点进文件夹才渲染「文件夹路径」==该文件夹ID 的文件行（场次记录仍按【终身号】聚合成一条 📒 流水账）；④ 老索引缓存缺「文件夹路径」字段（folder undefined）时自动强制重拉一次「读取索引」，用云端列补 folder，避免文件因归不进夹而消失。
     6.23 (2026-11-15) 新架构积分流水账展示：① 根目录按行「文件夹路径」列把文件归入 系统(FOLDER_SYS__)/学生(FOLDER_STU__)/题库(FOLDER_TK__) 三组分组展示（组头带计数，仍可点子文件夹进入）；② 学生文件夹里的「场次记录_<姓名>_【<终身号>】」行（一生多行=活格/死格接力）按【终身号】聚合成一个 📒 流水账文件展示（只认终身号，姓名仅供查看）；③ 仅存于云端的文件夹行照常可进入（挪出原「仅存于云端」区块，文件并入各组）。
@@ -95,7 +96,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.26</title>
+<title>文件管理 v6.27</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -137,7 +138,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.26</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.27</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -2208,7 +2209,8 @@ document.getElementById('fileList').addEventListener('click',function(e){
     else selectedBatchSet.add(id);
     const cb=chk.querySelector('.chkbox');
     if(cb)cb.classList.toggle('checked',selectedBatchSet.has(id));
-    updateBatchBar();
+    // 6.27：批量操作条已在 6.23 改版移除，这里原来还调 updateBatchBar()（函数已不存在）→ 每次勾选都抛
+    // ReferenceError，连带后面的逻辑中断。直接删掉这句，勾选只切自己的勾选态。
     return;
   }
   const star=e.target.closest('[data-star]');
