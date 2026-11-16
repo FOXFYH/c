@@ -235,7 +235,7 @@
                 btnIcon.textContent=icons[mode]||'🎮';
             }
             if(pType==='personal'){
-                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 选择练习学生（仅限1人）',smart:'👥 参与人员（智能抽查）',lottery:'👥 参与人员（抽签池）',pinyin:'👤 选择拼字学生（仅限1人）',reading:'👥 参与人员（先读文章再答题）',fill:'👤 选择答题学生（仅限1人）'};
+                var titles={farm:'👥 参与人员',challenge:'👥 参与人员',pk:'⚔️ PK参赛选手（请选择2-8名）',practice:'👤 单选练习学生（仅限1人）',smart:'👥 参与人员（智能抽查）',lottery:'👥 参与人员（抽签池）',pinyin:'👤 选择拼字学生（仅限1人）',reading:'👥 参与人员（先读文章再答题）',fill:'👤 选择答题学生（仅限1人）'};
                 if(studentTitleEl)studentTitleEl.textContent=titles[mode]||'👥 参与人员';
             }
         },
@@ -335,8 +335,8 @@
             var isSmart=mode==='smart';
             if(isLottery)pType='personal';
             if(isPractice){
-                if(selectedIds.length!==1){App.Toast.show('选择练习模式请选择1名学生','warning');return}
-                if(bankIds.length!==1){App.Toast.show('选择练习模式请选择1个题库','warning');return}
+                if(selectedIds.length!==1){App.Toast.show('单选练习模式请选择1名学生','warning');return}
+                if(bankIds.length!==1){App.Toast.show('单选练习模式请选择1个题库','warning');return}
                 var savedProgress=App.Storage.getExamProgress();
                 if(savedProgress&&savedProgress.mode==='practice'&&savedProgress._bankIds&&savedProgress._bankIds.length>0){
                     var savedBankId=savedProgress._bankIds[0];
@@ -1413,7 +1413,7 @@
                     this._saveProgress();
                     var body='<p style="text-align:center;font-size:1.1em;padding:12px 0">练习进度已保存！<br>已完成 <b style="color:var(--accent-1)">'+answered+'/'+total+'</b> 题<br><span style="color:var(--text-muted);font-size:0.9em">下次进入可继续完成剩余题目</span></p>';
                     var footer='<button class="btn-primary" onclick="App.Modal.close();App.Exam._exitToHome()">确定</button>';
-                    App.Modal.open('📝 选择练习已保存',body,footer);
+                    App.Modal.open('📝 单选练习已保存',body,footer);
                     return;
                 }
             }
@@ -1662,7 +1662,7 @@
                     var body='<p style="text-align:center;font-size:1.1em;padding:12px 0">答对 <b style="color:var(--success)">'+correct+'</b>/'+exam.questions.length+' 题<br>待结算积分：<b style="color:var(--accent-1)">'+totalPendingPts+'⭐</b>（暂不计入）<br><br>补考全对即可拿回 <b>'+totalPendingPts+'⭐</b><br><span style="color:var(--text-muted);font-size:0.9em">补考将重做错题并混入等量已答对题目</span></p>';
                     var footer='<button class="btn-secondary" onclick="App.Modal.close();App.Exam.showRoundLeaderboard(App.Exam._lastPracticeRecord)">查看详情</button><button class="btn-glow" onclick="App.Modal.close();App.Exam._startPracticeRetry()">🔄 立即补考</button>';
                     App.Exam._lastPracticeRecord=record;
-                    App.Modal.open('📝 选择练习未通过',body,footer);
+                    App.Modal.open('📝 单选练习未通过',body,footer);
                 }
                 return;
             }
