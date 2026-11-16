@@ -1369,6 +1369,17 @@ body {
     background: rgba(108, 92, 231, 0.4);
 }
 
+/* 2026-11-16（2.104）：题库卡「开始考试」主按钮，比其它维护按钮更醒目 */
+.bank-card .bc-actions .btn-exam {
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    color: #fff;
+    font-weight: 700;
+}
+
+.bank-card .bc-actions .btn-exam:hover {
+    background: linear-gradient(135deg, #7d6cf0, #b3adff);
+}
+
 .bank-card .bc-actions .btn-del {
     color: var(--danger);
 }
