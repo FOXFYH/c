@@ -259,7 +259,7 @@ if(_fpath.length){var _allp=cloudOnlyBanks.length;cloudOnlyBanks=cloudOnlyBanks.
         bankUsage:function(bankId){
             var bank=App.Storage.getBanks().find(function(b){return b.id===bankId});
             if(!bank){App.Toast.show('找不到该题库','warning');return}
-            var modes={farm:'🌾 打野',challenge:'🎯 挑战',pk:'⚔️ PK',practice:'📝 选择练习',smart:'🧠 智能抽查',pinyin:'拼 拼音练习',reading:'📖 阅读选择',fill:'✍️ 填空练习',lottery:'🎲 抽签'};
+            var modes={farm:'🌾 打野',challenge:'🎯 挑战',pk:'⚔️ PK',practice:'📝 单选练习',smart:'🧠 智能抽查',pinyin:'拼 拼音练习',reading:'📖 阅读选择',fill:'✍️ 填空练习',lottery:'🎲 抽签'};
             var map={},sessions=[];
             App.Storage.getRecords().forEach(function(r){
                 // 优先按稳定的题库ID关联（题库改名也不断链），老记录没有 bankIds 才退回按名字
