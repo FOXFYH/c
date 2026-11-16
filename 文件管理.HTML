@@ -1,6 +1,6 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
 <!--
-  存储测试网页版 · 文件管理器        当前版本 6.24
+  存储测试网页版 · 文件管理器        当前版本 6.25
   ★ 版本规则(改代码者必读): 每次修改 +0.01, 2.99 升 3.0。
     改完必须同步"三处版本号", 三处一致才算改完:
       ① 本备注的「当前版本」
@@ -8,6 +8,7 @@
       ③ 界面徽标(id=appVersionBadge)里的 v1.xx
     改完重新部署到 GitHub 仓库 FOXFYH/b (见 github助手 CLI)。
   版本沿革:
+    6.25 (2026-11-16) 修「临时行 _TL 删不掉」：① 删除兜底——删云端文件时按正牌 ID 查不到行，再按 `<正牌ID>_TL` 查一次，查到就删临时行（以前直接走「云端本来就没这行」→ 静默跳过、行永久留在云端、界面留一条删不掉的 ☁️ 行）；删完连本地索引里的 _TL 残留条目一并清掉。② 转正看门——`syncOneFileTwoPhase` 与批量两阶段里，「收为临时」不再立刻 `clearNewFileFlag`，必须等「转正确认＝转正成功」才清 isNewFile；转正失败保留标记，下次同步重试，「有正牌行才算转正完成」。③ ☁️ 仅存云端行若 ID 以 `_TL` 结尾，行内标注橙色「临时行」并给 ✕ 删除按钮（走同一个删除兜底）。
     6.24 (2026-11-16) 老板指正回退+真折叠：① 撤掉 6.23 的「🏛系统/🎒学生/📚题库」三组卡片（组头+计数是新风格，老板不接受），恢复原列表风格；② 根目录真折叠——currentFolder==='' 时只渲染文件夹行（子文件夹/仅云端文件夹），任何文件行都不许出现在根目录；③ 点进文件夹才渲染「文件夹路径」==该文件夹ID 的文件行（场次记录仍按【终身号】聚合成一条 📒 流水账）；④ 老索引缓存缺「文件夹路径」字段（folder undefined）时自动强制重拉一次「读取索引」，用云端列补 folder，避免文件因归不进夹而消失。
     6.23 (2026-11-15) 新架构积分流水账展示：① 根目录按行「文件夹路径」列把文件归入 系统(FOLDER_SYS__)/学生(FOLDER_STU__)/题库(FOLDER_TK__) 三组分组展示（组头带计数，仍可点子文件夹进入）；② 学生文件夹里的「场次记录_<姓名>_【<终身号>】」行（一生多行=活格/死格接力）按【终身号】聚合成一个 📒 流水账文件展示（只认终身号，姓名仅供查看）；③ 仅存于云端的文件夹行照常可进入（挪出原「仅存于云端」区块，文件并入各组）。
     6.22 (2026-11-09) 修「登录门禁一直重试（跑到第十几、二十几次）」：_callCloudAPICore 的 lastError / lastIsNetworkError 原本声明在 apiUrl 循环体内，循环结束后拼失败回执时越界 → 每次云端调用都直接抛 ReferenceError（lastIsNetworkError is not defined），门禁拿到的永远是 ok:false，无限重试。现把两个变量提到循环外声明，并移除旧的 window.lastError 兜底。
@@ -93,7 +94,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>文件管理 v6.24</title>
+<title>文件管理 v6.25</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:40px}
@@ -135,7 +136,7 @@ body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#fff;heig
 <body>
 <div id="mainUI">
 <div class="header">
-  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.24</span></h3>
+  <h3>📁 文件管理 <span id="appVersionBadge" class="app-ver" title="挑战答题 文件管理器 版本号">v6.25</span></h3>
   <div class="header-right">
     <span>路径:</span>
     <span id="folderPath" style="font-weight:bold;color:#b8860b">/</span>
@@ -2125,14 +2126,18 @@ function renderFileList(){
     const idHtml=`<span style="font-size:8px;color:#aaa;font-family:monospace" title="文件ID">${cf.id.substring(0,8)}</span> `;
     const cloudStarred=isStarred(cf.id);
     const starHtml=`<span data-star="${cf.id}" title="${cloudStarred?'已星标（内容常年落盘 localStorage）：点击取消':'未星标（内容存 IndexedDB）：点击设为星标'}" style="cursor:pointer;font-size:12px;margin-left:3px;color:${cloudStarred?'#f5b301':'#ccc'}">${cloudStarred?'★':'☆'}</span>`;
+    // 2.102：临时行（ID 以 _TL 结尾）= 转正没走完的残留行，明确标注并允许单独删除
+    const isTmp=/_TL$/.test(String(cf.id||''));
+    const tmpHtml=isTmp?`<span style="font-size:9px;color:#d35400;border:1px solid #f0b27a;border-radius:6px;padding:0 4px;margin-left:4px" title="临时行：上传转正未完成留下的残留行，删除即可清理">临时行</span> `:'';
+    const delHtml=isTmp?`<span class="file-del" data-del-cloud="${cf.id}" title="删除这行临时行">✕</span>`:'';
     return `<div class="file-item" data-id="${cf.id}" data-name="${encodeURIComponent(cf.name)}" style="opacity:0.7">
       <div class="file-check" data-check="cloudFile" data-id="${cf.id}"><div class="chkbox${selectedBatchSet.has(cf.id)?' checked':''}"><span class="chktick">✓</span></div></div>
       <div class="file-main">
-        <div class="file-name" title="${cf.name}">☁️ ${cf.name}</div>
+        <div class="file-name" title="${cf.name}">☁️ ${cf.name}${tmpHtml}</div>
         <div class="file-meta">${idHtml}${verInfo}${charHtml}<span>仅存于云端</span></div>
       </div>
       <span class="file-time">-</span>
-      <div class="file-acts">${starHtml}</div>
+      <div class="file-acts">${starHtml}${delHtml}</div>
     </div>`;
   };
   // 场次记录行（文件名规约：场次记录_<姓名>_【<终身号>】）聚合成一个文件展示；解析只认【终身号】
@@ -2211,6 +2216,9 @@ document.getElementById('fileList').addEventListener('click',function(e){
   if(del){e.stopPropagation();deleteFileById(del.getAttribute('data-del'));return}
   const delFolder=e.target.closest('[data-del-folder]');
   if(delFolder){e.stopPropagation();deleteFolder(delFolder.getAttribute('data-del-folder'));return}
+  // 2.102：云端临时行（_TL）单独删除
+  const delCloud=e.target.closest('[data-del-cloud]');
+  if(delCloud){e.stopPropagation();deleteCloudOnly(delCloud.getAttribute('data-del-cloud'));return}
   // 单击选中文件或文件夹（仅记录，供打开/改名等；高亮统一用最左复选框）
   const folderItem=e.target.closest('[data-folder]');
   if(folderItem){
@@ -3099,6 +3107,41 @@ async function deleteNamedFile(name){
   toast('已删除：'+name);
 }
 
+// 2.102：只删云端行（用于「仅存于云端」的残留临时行 _TL）。正牌 ID 查不到时兜底按 <ID>_TL 删。
+async function deleteCloudOnly(id){
+  if(!id)return;
+  if(!confirm('确定删除云端这一行吗？删除后本地也会清掉对应条目。'))return;
+  try{
+    let target=id;
+    let res=await findFileInCloudById(id);
+    if(!res.networkOk){toast('删除失败：网络异常','error');return}
+    if(!res.file){
+      if(String(id).endsWith('_TL')){
+        toast('云端已无此行','info');
+        cloudFileCache.delete(id);try{setFileIndex(getFileIndex().filter(x=>x.id!==id))}catch(e){}
+        renderFileList();return;
+      }
+      const tl=await findFileInCloudById(id+'_TL');
+      if(tl.networkOk&&tl.file)target=id+'_TL';
+      else{
+        toast('云端已无此行','info');
+        cloudFileCache.delete(id);try{setFileIndex(getFileIndex().filter(x=>x.id!==id))}catch(e){}
+        renderFileList();return;
+      }
+    }
+    const del=await callCloudAPI('删除行',{ID:target});
+    if(del.status!=='success'){toast('云端删除失败(ID:'+target+')：'+(del.tongzhi||del.message||'未知'),'error');return}
+    await cleanupCloudFragments(target,0);
+    cloudFileCache.delete(id);cloudFileCache.delete(target);
+    try{setFileIndex(getFileIndex().filter(x=>x.id!==id&&x.id!==target))}catch(e){}
+    setLastSyncTime(Date.now());
+    renderFileList();
+    toast('云端已删除(ID:'+target+')');
+  }catch(e){
+    toast('删除异常：'+((e&&e.message)||'未知'),'error');
+  }
+}
+
 async function deleteFileById(id,silent){
   if(!id)return;
   // 文件夹必须通过deleteFolder删除（递归删除子孙）
@@ -3823,23 +3866,26 @@ async function syncOneFileTwoPhase(f){
       setLastSyncTime(Date.now());
       return{status:'no_update',version:E};
     }
-    // 全新接收 / 收为临时：更新本地起点号，清空新文件标识
+    // 全新接收 / 收为临时：更新本地起点号
     if(判==='全新接收'||判==='收为临时'){
       const idx=getFileIndex();const ff=idx.find(x=>x.id===f.id);
       const newS=parseInt(result.终点号||result.起点号||E)||E;
-      if(ff){ff.s=newS;setFileIndex(idx)}clearNewFileFlag(f.id);
+      if(ff){ff.s=newS;setFileIndex(idx)}
       setLastSyncTime(Date.now());
       if(判==='全新接收'){
+        clearNewFileFlag(f.id);   // 2.102：云端正牌行已接收，才算转正完成
         toast('已接收云端：'+f.name);
         return{status:'success',version:newS};
       }
-      // 阶段2：转正确认（临时转正）
+      // 2.102 转正看门：收为临时＝云端此刻只有 <ID>_TL 临时行，绝不能在这里清 isNewFile。
+      // 以前这一步就清了标记，一旦转正确认失败，就变成「标记已清 + 云端只剩临时行」——删库按正牌 ID 找不到、静默删不掉。
       const confirmResult=await callCloudAPI('转正确认',{ID:f.id,起点号:String(newS)});
       if(confirmResult.status==='success'&&(!confirmResult.判定结果||confirmResult.判定结果==='转正成功')){
+        clearNewFileFlag(f.id);   // 转正成功（正牌行落地）才清标记
         toast('已同步提交：'+f.name);
         return{status:'success',version:newS};
       }
-      // 转正失败（临时失效/版本不符）→ 走冲突处置
+      // 转正失败（临时失效/版本不符）→ 保留 isNewFile 待下次同步重试，同时走冲突处置
       toast('文件['+f.name+']转正确认失败，进入冲突处置','warn');
       return await syncTwoPhaseConflict(f,E,S,uploadData,newS);
     }
@@ -4022,7 +4068,8 @@ async function batchSync(skipLock){
                 const snapE=parseInt(m.E||0)||0;
                 const curE=ff?(parseInt(ff.e||0)||0):0;
                 // 上传期间本地又改过（当前终点号已超过提交时的快照）→ 保留待上传状态，绝不清脏标记
-                if(ff&&curE<=snapE){ff.s=newS;setFileIndex(curIdx);clearNewFileFlag(r.ID);}
+                // 2.102：收为临时只更新起点号、不清 isNewFile；等转正确认成功后再清（见阶段2）
+                if(ff&&curE<=snapE){ff.s=newS;setFileIndex(curIdx);if(判==='全新接收')clearNewFileFlag(r.ID);}
                 setLastSyncTime(Date.now());
                 if(判==='全新接收'){uploaded++;}
                 else{promoteList.push({ID:r.ID,起点号:String(newS)});}
@@ -4041,6 +4088,12 @@ async function batchSync(skipLock){
             if(confirmResult.结果&&Array.isArray(confirmResult.结果)){
               for(const r of confirmResult.结果){
                 if(r.status==='success'&&(!r.判定结果||r.判定结果==='转正成功')){
+                  // 2.102：转正成功（云端正牌行落地）才清 isNewFile；上传期间本地又改过则保留待上传
+                  const _idx2=getFileIndex();const _f2=_idx2.find(x=>x.id===r.ID);
+                  const _m=measured.get(r.ID);
+                  const _snap=_m?(parseInt(_m.E||0)||0):0;
+                  const _cur=_f2?(parseInt(_f2.e||0)||0):0;
+                  if(_f2&&_cur<=_snap)clearNewFileFlag(r.ID);
                   uploaded++;
                 }else{
                   const m=measured.get(r.ID);
@@ -4770,11 +4823,21 @@ window.addEventListener('message',function(e){
             notifyParent('bankDeleteFailed',{fileId:fid,reason:'sync_disabled'});
             return;
           }
-          const cloudResult=await findFileInCloudById(fid);
+          let cloudResult=await findFileInCloudById(fid);
           if(!cloudResult.networkOk){
             toast('删除失败：网络异常，无法确认云端状态','error');
             notifyParent('bankDeleteFailed',{fileId:fid,reason:'network_error'});
             return;
+          }
+          // 2.102：转正没走完时云端只剩临时行 <正牌ID>_TL，按正牌 ID 查不到会误判「云端本来就没有」
+          // → 删不掉、还静默不报。这里兜底按临时行再查一次，查到就删临时行。
+          let targetFid=fid;
+          if(!cloudResult.file&&!String(fid).endsWith('_TL')){
+            const tlRes=await findFileInCloudById(fid+'_TL');
+            if(tlRes.networkOk&&tlRes.file){
+              cloudResult=tlRes;targetFid=fid+'_TL';
+              console.log('[删除] 正牌行不存在，按临时行删除:',targetFid);
+            }
           }
           if(!cloudResult.file){
             // 云端本来就没有这行：宿主会当作“目标已达成”清理本地残留，这里不再弹红色失败提示
@@ -4783,22 +4846,26 @@ window.addEventListener('message',function(e){
             return;
           }
           // 云端"删除行"只需ID参数，会自己遍历表格找匹配行删除
-          const delResult=await callCloudAPI('删除行',{ID:fid});
+          const delResult=await callCloudAPI('删除行',{ID:targetFid});
           if(delResult.status!=='success'){
             const reason=delResult.tongzhi||delResult.message||'cloud_delete_failed';
-            toast('云端删除失败(ID:'+fid+')：'+reason,'error');
+            toast('云端删除失败(ID:'+targetFid+')：'+reason,'error');
             notifyParent('bankDeleteFailed',{fileId:fid,reason:reason});
             return;
           }
-          await cleanupCloudFragments(fid,0);
+          await cleanupCloudFragments(targetFid,0);
+
           setLastSyncTime(Date.now());
           // 云端确认成功后，才清理本地索引与内容缓存
-          const localF=getFileIndex().find(x=>x.id===fid);
+          const localF=getFileIndex().find(x=>x.id===fid)||getFileIndex().find(x=>x.id===targetFid);
           const delName=localF?localF.name:(cloudResult.file['文件名']||'');
           deleteFileDataById(fid);
+          // 2.102：顺手把可能残留的临时行条目（本地索引/内容缓存）一并清掉
+          if(targetFid!==fid){try{deleteFileDataById(targetFid)}catch(e){}}
+          try{setFileIndex(getFileIndex().filter(x=>x.id!==fid&&x.id!==targetFid))}catch(e){}
           if(currentFileName===delName){currentFileName='';currentFileContent=''}
           renderFileList();
-          toast('云端已删除(ID:'+fid+')');
+          toast('云端已删除(ID:'+targetFid+')');
           notifyParent('bankDeleted',{fileId:fid,name:delName});
         }catch(err){
           const reason='exception:'+((err&&err.message)||'unknown');
