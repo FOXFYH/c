@@ -588,7 +588,7 @@
                 }
                 body+='<div style="font-weight:700;font-size:14px;margin:14px 0 8px">📅 逐场记录</div>';
                 history.forEach(function(h){
-                    var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':h.mode==='pinyin'?'拼 拼音练习':h.mode==='fill'?'✍️ 填空练习':h.mode==='reading'?'📖 阅读选择':h.mode==='practice'?'📝 选择练习':h.mode==='smart'?'🧠 智能抽查':h.mode==='group'?'👥 分组':'🎮 未知';
+                    var modeLabel=h.mode==='draw'?'🎲 多人挑战':h.mode==='assign'?'👤 单人挑战':h.mode==='pk'?'⚔️ PK':h.mode==='farm'?'🌾 打野':h.mode==='challenge'?'🎯 挑战':h.mode==='pinyin'?'拼 拼音练习':h.mode==='fill'?'✍️ 填空练习':h.mode==='reading'?'📖 阅读选择':h.mode==='practice'?'📝 单选练习':h.mode==='smart'?'🧠 智能抽查':h.mode==='group'?'👥 分组':'🎮 未知';
                     var dateStr=new Date(h.date).toLocaleString('zh-CN');
                     var bankStr=h.bankNames.join('、')||'未知题库';
                     body+='<div class="sh-session">';
@@ -658,7 +658,7 @@
                 +'<button class="btn-sm btn-secondary" onclick="App.Records.gotoPage('+(this._page+1)+')"'+(this._page>=pages?' disabled':'')+'>下一页</button>'
                 +'</div>';
             pageRecords.forEach(function(rec){
-                var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':rec.mode==='pinyin'?'拼 拼音练习':rec.mode==='fill'?'✍️ 填空练习':rec.mode==='reading'?'📖 阅读选择':rec.mode==='practice'?'📝 选择练习':rec.mode==='smart'?'🧠 智能抽查':rec.mode==='group'?'👥 分组':'🎮 未知';
+                var modeLabel=rec.mode==='draw'?'🎲 多人挑战':rec.mode==='assign'?'👤 单人挑战':rec.mode==='pk'?'⚔️ PK':rec.mode==='farm'?'🌾 打野':rec.mode==='challenge'?'🎯 挑战':rec.mode==='pinyin'?'拼 拼音练习':rec.mode==='fill'?'✍️ 填空练习':rec.mode==='reading'?'📖 阅读选择':rec.mode==='practice'?'📝 单选练习':rec.mode==='smart'?'🧠 智能抽查':rec.mode==='group'?'👥 分组':'🎮 未知';
                 var dateStr=new Date(rec.date).toLocaleString('zh-CN');
                 var srs=rec.studentResults||{};var sNames=Object.keys(srs).map(function(k){return srs[k].name});
                 var partLabel=rec.allParticipants?' 👥全员':'';
@@ -734,7 +734,7 @@
             var container=document.querySelector('.leaderboard-container h2.section-title');
             empty.classList.remove('show');
             var dateStr=new Date(rec.date).toLocaleString('zh-CN');
-            var modeLabel=rec.mode==='draw'?'多人挑战':rec.mode==='assign'?'单人挑战':rec.mode==='pk'?'PK':rec.mode==='farm'?'打野':rec.mode==='challenge'?'挑战':rec.mode==='pinyin'?'拼音练习':rec.mode==='fill'?'填空练习':rec.mode==='reading'?'阅读选择':rec.mode==='practice'?'选择练习':rec.mode==='smart'?'智能抽查':rec.mode==='group'?'分组':'未知';
+            var modeLabel=rec.mode==='draw'?'多人挑战':rec.mode==='assign'?'单人挑战':rec.mode==='pk'?'PK':rec.mode==='farm'?'打野':rec.mode==='challenge'?'挑战':rec.mode==='pinyin'?'拼音练习':rec.mode==='fill'?'填空练习':rec.mode==='reading'?'阅读选择':rec.mode==='practice'?'单选练习':rec.mode==='smart'?'智能抽查':rec.mode==='group'?'分组':'未知';
             if(rec.mode==='group'||rec.participationType==='group'){
                 if(container)container.textContent='🏆 历史积分榜 - '+dateStr+' '+modeLabel;
                 App.Exam._renderGroupRanking(rec);
@@ -808,7 +808,7 @@
 
     // ========== 学生个人考试历史（按考试类型切割总流水账） ==========
     App.History = {
-        META:{farm:{n:'🌾 打野'},challenge:{n:'🎯 挑战'},pk:{n:'⚔️ PK'},practice:{n:'📝 选择练习'},smart:{n:'🧠 智能抽查'},pinyin:{n:'拼 拼音练习'},reading:{n:'📖 阅读选择'},fill:{n:'✍️ 填空练习'},lottery:{n:'🎲 抽签'}},
+        META:{farm:{n:'🌾 打野'},challenge:{n:'🎯 挑战'},pk:{n:'⚔️ PK'},practice:{n:'📝 单选练习'},smart:{n:'🧠 智能抽查'},pinyin:{n:'拼 拼音练习'},reading:{n:'📖 阅读选择'},fill:{n:'✍️ 填空练习'},lottery:{n:'🎲 抽签'}},
         _summaryHTML:function(sid){
             var st=App.getStudentStats(sid);
             return '<div class="history-summary-row"><span>总积分 <b style="color:var(--gold)">'+st.totalPoints+'⭐</b></span><span>正确率 <b>'+st.accuracy+'%</b></span><span>场次 <b>'+st.sessions+'</b></span><span>答对 <b>'+st.totalCorrect+'/'+st.totalCount+'</b></span></div>';
@@ -2807,6 +2807,7 @@
             if(!App.Login||!App.Login.isLoggedIn())return Promise.resolve(false);
             var locker=this._lockId();
             var user=App.Login._username,pwd=App.Login._password;
+            this._forcedUnlockTried=false;
             var deadline=Date.now()+(maxWait||15000);
             var unlock=function(){
                 self._activeLockId='';
@@ -2829,6 +2830,17 @@
                         var wait=800;
                         try{var rem=parseInt(r&&r.剩余秒,10)||0;if(rem>0)wait=Math.min(1500,Math.max(600,rem*250))}catch(e){}
                         return new Promise(function(res){setTimeout(res,wait)}).then(attempt);
+                    }
+                    // 2.108 自愈：对方登记名长时间占锁（对方页面卡死仍在续期）→ 按对方登记名强制解锁一次，再给一轮机会
+                    if(!self._forcedUnlockTried){
+                        self._forcedUnlockTried=true;
+                        var _owner=(r&&r.锁登记处)||'';
+                        if(_owner){
+                            return self._cloudCall({表格名:'抽奖考试',操作:'解锁',用户名:user,密码:pwd,锁登记处:_owner}).catch(function(){}).then(function(){
+                                deadline=Date.now()+8000;
+                                return attempt();
+                            });
+                        }
                     }
                     self._trace('lock_busy',0);
                     return false;
