@@ -1,14 +1,22 @@
-/* 填空题模式（手写作答 · 按需加载）v2.113
+/* 填空题模式（手写作答 · 按需加载）v2.114
    老板 2026-11-18 令：按方格操作。
    - 答案几个字 = 题干空位处几个正方形方格，一个字一格，不再一空一块手写板。
    - 点哪个方格就选中哪个，下面出现唯一的手写输入框，只写这一格的字。
    - 写完自动识别，点候选字填进当前格，自动跳到下一个空格；写错可撤销/清空，随时回改已写的格。
    - 全部方格写完才能提交；判分按「一个空＝一个答案」整词比对，逐格标对错。
+   v2.114 识别大宽容（老板令「容错，笔画笔顺错了样子像就要认出」）：
+   - LOOSENESS 0.15→0.55：笔顺/连笔/笔画数出入也能入围候选。
+   - 引擎取前 30 名、展示 14 个；另加「标准答案保底」rescueChar()——
+     正确字在引擎前 30 内就保证出现在可见候选；完全不像不兜底。
    复用 HanziLookupJS + mmah.json；答案区禁键盘/粘贴/语音。 */
 (function(){
     'use strict';
     var App=window.App=window.App||{};
     var SIZE=256, SCALE=2, DELAY=380, CANDS=14;
+    // 识别容错（2.114）：LOOSENESS 越大越宽容——0.15 是库默认（很严，笔顺/笔画数
+    // 稍有出入就出局）；0.55 让连笔、多一笔少一笔、笔序不对的写法都能入围候选。
+    // REQ 是向引擎要的总候选数（比展示数多），用于「标准答案保底」 rescueChar()。
+    var LOOSENESS=0.55, REQ=30;
     var eng={matcher:null,status:'idle',promise:null,data:null};
     var st=null;      // 当前题目状态
     var pad=null;     // 唯一手写板状态
@@ -30,7 +38,8 @@
                     data.substrokes=HanziLookup.decodeCompact(data.substrokes);
                     HanziLookup.data.mmah=data;
                     eng.data=data;
-                    eng.matcher=new HanziLookup.Matcher('mmah',HanziLookup.DEFAULT_LOOSENESS);
+                    // 2.114 起用放宽的 LOOSENESS（库默认 0.15 太严），笔顺/笔画出入也能入围
+        eng.matcher=new HanziLookup.Matcher('mmah',LOOSENESS);
                     eng.status='ready';
                     updateEngineText('手写引擎已就绪（'+data.chars.length+' 字）');
                     // 加载期间已经写了字的，补做一次识别
@@ -366,11 +375,34 @@
             var matches=[];
             try{
                 var analyzed=new HanziLookup.AnalyzedCharacter(snapshot);
-                eng.matcher.match(analyzed,CANDS,function(list){matches=list||[]});
+                eng.matcher.match(analyzed,REQ,function(list){matches=list||[]});
             }catch(e){console.error('[fill] recognize failed',e)}
             if(!pad||!pad.strokes.length)return;
+            rescueChar(matches,curIdx);
             renderCands(matches);
         },0);
+    }
+
+    // 这一格应写的字（groups[gi].ans 的第 ci 个字）
+    function expectedChar(idx){
+        if(!st||isNaN(idx)||idx<0||idx>=st.cells.length)return '';
+        var c=st.cells[idx],g=st.groups[c.gi];
+        return (g&&g.ans)?(g.ans.charAt(c.ci)||''):'';
+    }
+
+    // 标准答案保底（2.114）：学生写得「样子像」但引擎排名靠后（甚至笔顺错导致
+    // 掉出前 14）时，把正确字提到可见候选末尾，保证点得到。字形完全不像
+    // （不在引擎前 REQ 名内）则不兜底——不是乱画也给答案。
+    function rescueChar(matches,idx){
+        if(!matches||!matches.length)return;
+        var exp=expectedChar(idx);
+        if(!exp)return;
+        var pos=-1;
+        for(var i=0;i<matches.length;i++){if(matches[i]&&matches[i].character===exp){pos=i;break}}
+        if(pos<CANDS)return; // 本来就可见
+        var m=matches.splice(pos,1)[0];
+        var at=Math.min(CANDS-1,matches.length);
+        matches.splice(at,0,m);
     }
 
     function renderCands(list,msg){
@@ -379,6 +411,7 @@
         // 只留汉字：引擎会带出 丶丨丿 这类笔画/部首，学生误点就填错格
         if(list&&list.length){
             list=list.filter(function(m){return m&&m.character&&/^[\u3400-\u4dbf\u4e00-\u9fff]$/.test(m.character)});
+            list=list.slice(0,CANDS); // REQ 名里只展示前 CANDS 个
         }
         if(!list||!list.length){
             box.innerHTML='<span class="fill-cand-empty">'+(msg||'写完一笔自动识别；没有正确字就点“撤销”重写')+'</span>';
