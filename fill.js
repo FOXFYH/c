@@ -1,19 +1,21 @@
-/* 填空题模式（手写作答 · 按需加载）v2.035
-   复用 HanziLookupJS + mmah.json；答案区全是只读 div，禁键盘/粘贴/语音。
-   每题可多个空，每个空一块手写板；写完自动识别，点候选字上屏；全部填完才能提交。
-   v2.035（老板 2026-11-16 令）：一个空可以是多字词。仍只给一块手写板，每点一个候选字就
-   累积到该空，画布清空接着写下一字，写满答案字数自动完成（写错可「撤销一笔」退掉最后上屏的字）。
-   例：答案「空间」＝第 1 字写「空」→ 第 2 字写「间」，拼成「空间」才判对；
-   旧版每空只存一个字，多字答案永远写不出、永远判错。 */
+/* 填空题模式（手写作答 · 按需加载）v2.110
+   老板 2026-11-18 令：按方格操作。
+   - 答案几个字 = 题干空位处几个正方形方格，一个字一格，不再一空一块手写板。
+   - 点哪个方格就选中哪个，下面出现唯一的手写输入框，只写这一格的字。
+   - 写完自动识别，点候选字填进当前格，自动跳到下一个空格；写错可撤销/清空，随时回改已写的格。
+   - 全部方格写完才能提交；判分按「一个空＝一个答案」整词比对，逐格标对错。
+   复用 HanziLookupJS + mmah.json；答案区禁键盘/粘贴/语音。 */
 (function(){
     'use strict';
     var App=window.App=window.App||{};
     var SIZE=256, SCALE=2, DELAY=380, CANDS=14;
     var eng={matcher:null,status:'idle',promise:null,data:null};
-    var st=null;
+    var st=null;      // 当前题目状态
+    var pad=null;     // 唯一手写板状态
 
     function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
+    // ---------------------------------------------------------------- 引擎
     function loadEngine(cb){
         if(eng.matcher){cb&&cb();return}
         if(eng.promise){eng.promise.then(function(){cb&&cb()});return}
@@ -31,10 +33,8 @@
                     eng.matcher=new HanziLookup.Matcher('mmah',HanziLookup.DEFAULT_LOOSENESS);
                     eng.status='ready';
                     updateEngineText('手写引擎已就绪（'+data.chars.length+' 字）');
-                    // 加载期间已经写了的，补做一次识别
-                    if(st&&!st.done){
-                        st.blanks.forEach(function(b,i){if(b.strokes.length&&!b.picked)recognize(i)});
-                    }
+                    // 加载期间已经写了字的，补做一次识别
+                    if(pad&&pad.strokes.length&&st&&!st.done)recognize();
                     resolve();
                     cb&&cb();
                 }).catch(function(e){
@@ -59,66 +59,178 @@
         if(box)box.classList.toggle('engine-error',eng.status==='error');
     }
 
+    // ---------------------------------------------------------------- 渲染
     function renderQuestion(exam,q){
         cancel();
+        var answers=(q.answers||[]).map(function(x){return String(x==null?'':x)});
+        if(!answers.length)answers=[''];
         var text=String(q.text||'');
-        var answers=(q.answers||[]).slice();
         var parts=text.split(/_{2,}/);
-        var n=Math.max(answers.length,parts.length-1);
-        if(!n)n=1;
+        var gaps=parts.length-1;
+
+        st={exam:exam,q:q,answers:answers,groups:[],cells:[],active:-1,done:false};
+        // 一个空 = 一个答案；答案几个字就几个方格
+        answers.forEach(function(ans,gi){
+            var g={gi:gi,ans:ans,need:Math.max(1,ans.length),cells:[],got:'',ok:false};
+            st.groups.push(g);
+        });
+
         var html='';
         for(var i=0;i<parts.length;i++){
             html+=esc(parts[i]);
-            if(i<parts.length-1)html+='<span class="fill-blank" data-i="'+i+'">?</span>';
+            if(i<parts.length-1){
+                if(i<st.groups.length)html+=cellsHTML(i);
+                else html+='<span class="fill-gap">____</span>';
+            }
         }
-        document.getElementById('question-text').innerHTML='<span class="fill-q">'+html+'</span>';
+        // 答案比题干空位多（老题库）：剩下的空接在题尾，不丢题
+        for(var g=Math.max(0,gaps);g<st.groups.length;g++){
+            html+=(html?'　':'')+cellsHTML(g);
+        }
+
+        var qt=document.getElementById('question-text');
+        qt.innerHTML='<span class="fill-q">'+html+'</span>';
+        qt.onclick=function(e){
+            if(!st||st.done)return;
+            var el=e.target&&e.target.closest?e.target.closest('.fill-cell'):null;
+            if(!el)return;
+            selectCell(parseInt(el.getAttribute('data-cell'),10));
+        };
         document.getElementById('exam-progress-text').textContent='第 '+(exam.currentIndex+1)+'/'+exam.questions.length+' 题 · 填空手写';
 
         var panel=document.getElementById('question-options');
-        /* 2.096：引擎状态条移到最底（老板 2026-11-15 令：这行不重要，别占顶部紧张位置；
-           顺序改为 填空板 → 提交按钮 → 引擎状态条，状态条比确认提交还靠下） */
-        var body='<div class="fill-panel" id="fill-panel"><div class="fill-blanks" id="fill-blanks"></div><button type="button" class="fill-submit" id="fill-submit" disabled>全部填完才能提交</button><div class="fill-engine" id="fill-engine">手写引擎准备中…</div></div>';
-        panel.innerHTML=body;
+        panel.innerHTML=
+            '<div class="fill-panel" id="fill-panel">'+
+                '<div class="fill-target" id="fill-target">点上面的方格，选中要写的那个字</div>'+
+                '<div class="fill-pad-wrap hidden" id="fill-pad-wrap">'+
+                    '<canvas id="fill-canvas" width="'+(SIZE*SCALE)+'" height="'+(SIZE*SCALE)+'"></canvas>'+
+                    '<div class="fill-tip" id="fill-tip">在这里写这一个字</div>'+
+                '</div>'+
+                '<div class="fill-tools hidden" id="fill-tools">'+
+                    '<button type="button" data-act="undo">撤销</button>'+
+                    '<button type="button" data-act="clear">清空此格</button>'+
+                    '<button type="button" data-act="reset">整题重写</button>'+
+                '</div>'+
+                '<div class="fill-cands" id="fill-cands"><span class="fill-cand-empty">选中方格后，在这里手写</span></div>'+
+            '</div>'+
+            '<button type="button" class="fill-submit" id="fill-submit" disabled>还有 '+st.cells.length+' 个字没写</button>'+
+            '<div class="fill-engine" id="fill-engine">手写引擎准备中…</div>';
         panel.setAttribute('aria-readonly','true');
 
-        st={exam:exam,q:q,answers:answers,blanks:[],done:false};
+        st.cells.forEach(function(c,i){
+            c.el=qt.querySelector('.fill-cell[data-cell="'+i+'"]');
+        });
+        var canvas=document.getElementById('fill-canvas');
+        var ctx=canvas.getContext('2d');
+        ctx.setTransform(SCALE,0,0,SCALE,0,0);
+        ctx.lineCap='round';ctx.lineJoin='round';
+        pad={canvas:canvas,ctx:ctx,strokes:[],cur:null,drawing:false,timer:null};
+        bindPad();
+        bindTools();
 
-        var wrap=document.getElementById('fill-blanks');
-        for(var k=0;k<n;k++){
-            var item=document.createElement('div');
-            item.className='fill-item';item.dataset.i=String(k);
-            var need=(answers[k]!=null&&String(answers[k]).length)?String(answers[k]).length:1;
-            item.innerHTML='<div class="fill-item-head">第 '+(k+1)+' 空 <span class="fill-picked">（未写 · '+need+' 字）</span></div>'+
-                '<div class="fill-pad-wrap"><canvas width="'+(SIZE*SCALE)+'" height="'+(SIZE*SCALE)+'"></canvas><div class="fill-tip">在此手写</div></div>'+
-                '<div class="fill-tools"><button type="button" data-act="undo">撤销一笔</button><button type="button" data-act="clear">清空</button><button type="button" data-act="redo">重写</button></div>'+
-                '<div class="fill-cands" aria-label="候选字"></div>';
-            wrap.appendChild(item);
-            var canvas=item.querySelector('canvas');
-            var ctx=canvas.getContext('2d');
-            ctx.setTransform(SCALE,0,0,SCALE,0,0);
-            ctx.lineCap='round';ctx.lineJoin='round';
-            var b={strokes:[],cur:null,drawing:false,timer:null,cands:[],picked:'',word:'',need:need,canvas:canvas,ctx:ctx,item:item};
-            st.blanks.push(b);
-            bindPad(k);
-            bindTools(k);
-        }
         document.getElementById('fill-submit').onclick=function(){submit()};
         bindAntiCheat();
         loadEngine();
         var nextBtn=document.getElementById('btn-next-question');if(nextBtn)nextBtn.style.display='none';
         var undo=document.getElementById('btn-undo-answer');if(undo)undo.style.display='none';
         var absent=document.getElementById('btn-absent');if(absent)absent.style.display='none';
+        updateSubmit();
         App.Exam.startTimer(q.text);
     }
 
-    function pos(b,e){
-        var r=b.canvas.getBoundingClientRect();
+    function cellsHTML(gi){
+        var g=st.groups[gi];
+        var s='<span class="fill-group" data-g="'+gi+'">';
+        for(var k=0;k<g.need;k++){
+            var idx=st.cells.length;
+            g.cells.push(idx);
+            st.cells.push({gi:gi,ci:k,ch:'',el:null});
+            s+='<span class="fill-cell" role="button" tabindex="0" data-cell="'+idx+'"></span>';
+        }
+        s+='</span>';
+        return s;
+    }
+
+    // ---------------------------------------------------------------- 选中 / 改写
+    function selectCell(idx){
+        if(!st||st.done||isNaN(idx)||idx<0||idx>=st.cells.length)return;
+        st.active=idx;
+        clearPad();
+        refreshCells();
+        document.getElementById('fill-pad-wrap').classList.remove('hidden');
+        document.getElementById('fill-tools').classList.remove('hidden');
+        updateTarget();
+        renderCands([]);
+    }
+
+    function updateTarget(){
+        var el=document.getElementById('fill-target');
+        if(!el)return;
+        if(st.active<0){el.textContent=st.done?'本题已提交':'都写完了，点下面提交';return}
+        var c=st.cells[st.active],g=st.groups[c.gi];
+        el.innerHTML='正在写：第 '+(g.gi+1)+' 空 · 第 '+(c.ci+1)+' 字 / 共 '+g.need+' 字'+
+            (c.ch?'　<span class="fill-target-done">已写「'+esc(c.ch)+'」，可重写或清空</span>':'');
+        var tip=document.getElementById('fill-tip');
+        if(tip){
+            tip.textContent=c.ch?'已写「'+c.ch+'」，再写就是改这个字':'在这里写这一个字';
+            tip.style.display='';
+        }
+    }
+
+    function refreshCells(){
+        if(!st)return;
+        st.cells.forEach(function(c,i){
+            var el=c.el||document.querySelector('.fill-cell[data-cell="'+i+'"]');
+            c.el=el;
+            if(!el)return;
+            el.textContent=c.ch||'';
+            el.classList.toggle('filled',!!c.ch);
+            el.classList.toggle('active',i===st.active&&!st.done);
+            el.classList.remove('ok','bad');
+            if(st.done){
+                var right=c.ch&&c.ch===st.groups[c.gi].ans.charAt(c.ci);
+                el.classList.add(right?'ok':'bad');
+            }
+        });
+    }
+
+    function updateSubmit(){
+        if(!st)return;
+        var empty=st.cells.filter(function(c){return !c.ch}).length;
+        var sb=document.getElementById('fill-submit');
+        if(sb){
+            sb.disabled=!!st.done||empty>0;
+            sb.textContent=st.done?'本题已提交':(empty?('还有 '+empty+' 个字没写'):'提交本题');
+        }
+    }
+
+    function findNextEmpty(from){
+        for(var i=from;i<st.cells.length;i++)if(!st.cells[i].ch)return i;
+        for(var j=0;j<from&&j<st.cells.length;j++)if(!st.cells[j].ch)return j;
+        return -1;
+    }
+
+    function findPrevFilled(from){
+        for(var i=from;i>=0;i--)if(st.cells[i].ch)return i;
+        return -1;
+    }
+
+    function hidePad(){
+        var w=document.getElementById('fill-pad-wrap');if(w)w.classList.add('hidden');
+        var t=document.getElementById('fill-tools');if(t)t.classList.add('hidden');
+        var c=document.getElementById('fill-cands');
+        if(c)c.innerHTML='<span class="fill-cand-empty">选中方格后，在这里手写</span>';
+    }
+
+    // ---------------------------------------------------------------- 手写板（全局唯一）
+    function pos(e){
+        var r=pad.canvas.getBoundingClientRect();
         return [(e.clientX-r.left)/r.width*SIZE,(e.clientY-r.top)/r.height*SIZE];
     }
 
-    function drawStroke(b,pts){
+    function drawStroke(pts){
+        var ctx=pad.ctx;
         if(!pts||!pts.length)return;
-        var ctx=b.ctx;
         ctx.strokeStyle='#161412';ctx.fillStyle='#161412';ctx.lineWidth=6;
         if(pts.length===1){ctx.beginPath();ctx.arc(pts[0][0],pts[0][1],3,0,Math.PI*2);ctx.fill();return}
         ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
@@ -129,206 +241,217 @@
         ctx.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]);ctx.stroke();
     }
 
-    function redraw(b){
-        b.ctx.clearRect(0,0,SIZE,SIZE);
-        for(var i=0;i<b.strokes.length;i++)drawStroke(b,b.strokes[i]);
-        if(b.cur)drawStroke(b,b.cur);
+    function redraw(){
+        if(!pad)return;
+        pad.ctx.clearRect(0,0,SIZE,SIZE);
+        for(var i=0;i<pad.strokes.length;i++)drawStroke(pad.strokes[i]);
+        if(pad.cur)drawStroke(pad.cur);
     }
 
-    function bindPad(i){
-        var b=st.blanks[i];
-        var c=b.canvas;
+    function bindPad(){
+        var c=pad.canvas;
         c.addEventListener('pointerdown',function(e){
-            if(st.done)return;
+            if(!st||st.done||st.active<0)return;
             if(e.pointerType==='mouse'&&e.button!==0)return;
             e.preventDefault();
-            b.drawing=true;b.item.classList.add('drawing');
-            var tip=b.item.querySelector('.fill-tip');if(tip)tip.style.display='none';
+            pad.drawing=true;
+            var tip=document.getElementById('fill-tip');if(tip)tip.style.display='none';
             try{c.setPointerCapture(e.pointerId)}catch(err){}
-            b.cur=[pos(b,e)];redraw(b);
+            pad.cur=[pos(e)];redraw();
         });
         c.addEventListener('pointermove',function(e){
-            if(!b.drawing||!b.cur)return;
+            if(!pad.drawing||!pad.cur)return;
             e.preventDefault();
             var evs=(typeof e.getCoalescedEvents==='function')?e.getCoalescedEvents():[e];
             if(!evs.length)evs=[e];
             for(var k=0;k<evs.length;k++){
-                var p=pos(b,evs[k]),last=b.cur[b.cur.length-1];
+                var p=pos(evs[k]),last=pad.cur[pad.cur.length-1];
                 if(Math.abs(p[0]-last[0])+Math.abs(p[1]-last[1])<1.2)continue;
-                b.cur.push(p);
+                pad.cur.push(p);
             }
-            redraw(b);
+            redraw();
         });
         var end=function(e){
-            if(!b.drawing)return;
+            if(!pad||!pad.drawing)return;
             e.preventDefault();
-            b.drawing=false;b.item.classList.remove('drawing');
-            if(b.cur&&b.cur.length)b.strokes.push(b.cur);
-            b.cur=null;redraw(b);
-            schedule(i);
+            pad.drawing=false;
+            if(pad.cur&&pad.cur.length)pad.strokes.push(pad.cur);
+            pad.cur=null;redraw();
+            schedule();
         };
         c.addEventListener('pointerup',end);
         c.addEventListener('pointercancel',end);
-        window.addEventListener('pointerup',function(e){if(b.drawing&&e.target!==c)end(e)});
+        window.addEventListener('pointerup',function(e){if(pad&&pad.drawing&&e.target!==c)end(e)});
         c.addEventListener('touchstart',function(e){e.preventDefault()},{passive:false});
         c.addEventListener('touchmove',function(e){e.preventDefault()},{passive:false});
     }
 
-    function bindTools(i){
-        var b=st.blanks[i];
-        b.item.querySelectorAll('.fill-tools button').forEach(function(btn){
+    function bindTools(){
+        document.querySelectorAll('#fill-tools button').forEach(function(btn){
             btn.onclick=function(){
-                if(st.done)return;
-                var act=btn.dataset.act;
-                if(act==='undo'){
-                    // 有未上屏的笔画就撤笔画；没有就退掉最后上屏的那一个字
-                    if(b.strokes.length){b.strokes.pop();redraw(b);schedule(i);return}
-                    if((b.word||'').length){b.word=b.word.slice(0,-1);b.picked='';updatePicked(i);renderCands(i,[]);updateSubmitBtn()}
-                    return
-                }
-                if(act==='clear'){clearPad(i);return}
-                if(act==='redo'){resetBlank(i)}
+                if(!st||st.done)return;
+                var act=btn.getAttribute('data-act');
+                if(act==='undo')undo();
+                else if(act==='clear')clearCell();
+                else if(act==='reset')resetAll();
             };
         });
     }
 
-    /* 清掉当前这一字的笔画与候选（已经上屏的字保留），接着写下一字 */
-    function clearPad(i){
-        var b=st.blanks[i];
-        clearTimeout(b.timer);b.timer=null;
-        b.strokes=[];b.cur=null;b.drawing=false;
-        redraw(b);b.cands=[];renderCands(i,[]);
-        var tip=b.item.querySelector('.fill-tip');if(tip)tip.style.display='';
+    function clearPad(){
+        if(!pad)return;
+        clearTimeout(pad.timer);pad.timer=null;
+        pad.strokes=[];pad.cur=null;pad.drawing=false;
+        redraw();
+        renderCands([]);
+        var tip=document.getElementById('fill-tip');if(tip)tip.style.display='';
     }
 
-    /* 整空重写：连已上屏的字一起清掉 */
-    function resetBlank(i){
-        var b=st.blanks[i];
-        clearPad(i);
-        b.word='';b.picked='';
-        updatePicked(i);updateSubmitBtn();
+    function clearCell(){
+        if(!st||st.done||st.active<0)return;
+        st.cells[st.active].ch='';
+        clearPad();
+        refreshCells();updateSubmit();updateTarget();
     }
 
-    function schedule(i){
-        var b=st.blanks[i];
-        clearTimeout(b.timer);
-        var total=b.strokes.reduce(function(a,s){return a+s.length},0);
+    function resetAll(){
+        if(!st||st.done)return;
+        st.cells.forEach(function(c){c.ch=''});
+        st.active=-1;
+        clearPad();refreshCells();updateSubmit();hidePad();
+        var el=document.getElementById('fill-target');if(el)el.textContent='点上面的方格，选中要写的那个字';
+        selectCell(0);
+    }
+
+    function undo(){
+        if(!st||st.done)return;
+        // 1) 板上还有笔画：撤掉最后一笔
+        if(pad&&pad.strokes.length){
+            pad.strokes.pop();redraw();schedule();return
+        }
+        // 2) 当前格已经写了字：清掉它（反悔）
+        if(st.active>=0&&st.cells[st.active].ch){
+            st.cells[st.active].ch='';
+            refreshCells();updateSubmit();updateTarget();return
+        }
+        // 3) 当前格是空的：退到上一个已写的格并清掉，方便连续反悔
+        var prev=findPrevFilled(st?st.active-1:-1);
+        if(prev>=0){
+            st.cells[prev].ch='';
+            refreshCells();updateSubmit();
+            selectCell(prev);
+        }
+    }
+
+    function schedule(){
+        if(!pad)return;
+        clearTimeout(pad.timer);
+        var total=pad.strokes.reduce(function(a,s){return a+s.length},0);
         if(total<2)return;
-        b.timer=setTimeout(function(){recognize(i)},DELAY);
+        pad.timer=setTimeout(function(){recognize()},DELAY);
     }
 
-    function recognize(i){
-        var b=st.blanks[i];
-        if(st.done||!b.strokes.length)return;
-        if(!eng.matcher){renderCands(i,[],'引擎加载中…');return}
-        var snapshot=b.strokes.map(function(s){return s.map(function(p){return [p[0],p[1]]})});
+    function recognize(){
+        if(!st||st.done||!pad||!pad.strokes.length)return;
+        if(!eng.matcher){renderCands([],'引擎加载中…');return}
+        var snapshot=pad.strokes.map(function(s){return s.map(function(p){return [p[0],p[1]]})});
+        var curIdx=st.active;
         setTimeout(function(){
-            if(st.done)return;
+            if(!st||st.done||st.active!==curIdx)return;
             var matches=[];
             try{
                 var analyzed=new HanziLookup.AnalyzedCharacter(snapshot);
                 eng.matcher.match(analyzed,CANDS,function(list){matches=list||[]});
             }catch(e){console.error('[fill] recognize failed',e)}
-            if(!b.strokes.length)return;
-            b.cands=matches;
-            renderCands(i,matches);
+            if(!pad||!pad.strokes.length)return;
+            renderCands(matches);
         },0);
     }
 
-    function renderCands(i,list,msg){
-        var b=st.blanks[i];
-        var box=b.item.querySelector('.fill-cands');
+    function renderCands(list,msg){
+        var box=document.getElementById('fill-cands');
         if(!box)return;
         if(!list||!list.length){
-            box.innerHTML='<span class="fill-cand-empty">'+(msg||'写完一笔自动识别；没有正确字就点“重写”')+'</span>';
+            box.innerHTML='<span class="fill-cand-empty">'+(msg||'写完一笔自动识别；没有正确字就点“撤销”重写')+'</span>';
             return;
         }
         var html='';
         list.forEach(function(m){
             html+='<button type="button" class="fill-cand" data-ch="'+esc(m.character)+'">'+esc(m.character)+'</button>';
         });
-        html+='<button type="button" class="fill-cand fill-cand-none" data-act="none">都不是/重写</button>';
+        html+='<button type="button" class="fill-cand fill-cand-none" data-act="none">都不是</button>';
         box.innerHTML=html;
         box.querySelectorAll('button').forEach(function(btn){
             btn.onclick=function(){
-                if(st.done)return;
-                if(btn.dataset.act==='none'){clearPad(i);return}
-                pick(i,btn.dataset.ch);
+                if(!st||st.done)return;
+                if(btn.getAttribute('data-act')==='none'){clearPad();return}
+                pick(btn.getAttribute('data-ch'));
             };
         });
     }
 
-    function pick(i,ch){
-        var b=st.blanks[i];
-        var need=b.need||1;
-        b.word=(b.word||'')+ch;              // 逐字累积，绝不覆盖前面的字
-        if(b.word.length>=need)b.picked=b.word;
-        clearPad(i);
-        updatePicked(i);
-        updateSubmitBtn();
-        if(b.picked){
-            // 本空写满，自动跳到下一个还没写完的空
-            for(var k=0;k<st.blanks.length;k++){
-                var idx=(i+1+k)%st.blanks.length;
-                if(!st.blanks[idx].picked){
-                    var it=st.blanks[idx].item;
-                    if(it&&it.scrollIntoView)try{it.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
-                    break;
-                }
-            }
+    function pick(ch){
+        if(!st||st.done||st.active<0)return;
+        var idx=st.active;
+        st.cells[idx].ch=ch;
+        clearPad();
+        refreshCells();
+        updateSubmit();
+        var next=findNextEmpty(idx+1);
+        if(next>=0){
+            selectCell(next);
         }else{
-            // 还没写满，停在本空接着写下一字
-            if(b.item.scrollIntoView)try{b.item.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
+            st.active=-1;
+            hidePad();refreshCells();updateTarget();
         }
     }
 
-    function updateSubmitBtn(){
-        var all=st.blanks.every(function(x){return !!x.picked});
-        var sb=document.getElementById('fill-submit');
-        if(sb){sb.disabled=!all;sb.textContent=all?'提交本题':'还差 '+(st.blanks.filter(function(x){return !x.picked}).length)+' 个空'}
+    // ---------------------------------------------------------------- 判分
+    function grade(){
+        var right=0;
+        st.groups.forEach(function(g){
+            g.got=g.cells.map(function(i){return st.cells[i].ch}).join('');
+            g.ok=(g.got===g.ans);
+            if(g.ok)right++;
+        });
+        return right;
     }
 
-    function updatePicked(i){
-        var b=st.blanks[i];
-        var need=b.need||1,got=b.word||'';
-        var head=b.item.querySelector('.fill-picked');
-        if(head)head.textContent=b.picked?
-            ('已写完「'+b.picked+'」（共 '+need+' 字）'):
-            (got?
-            ('已写「'+got+'」 · 再写第 '+(got.length+1)+' 字（共 '+need+' 字）'):
-            ('（未写 · '+need+' 字）'));
-        var blank=document.querySelector('.fill-blank[data-i="'+i+'"]');
-        if(blank){
-            blank.textContent=b.picked||(got+new Array(Math.max(0,need-got.length)+1).join('_'));
-            blank.classList.toggle('filled',!!got);
-        }
+    function appendAnswerLine(){
+        var wrong=st.groups.filter(function(g){return !g.ok});
+        if(!wrong.length)return;
+        var qt=document.getElementById('question-text');
+        var line=document.createElement('div');
+        line.className='fill-answer-line';
+        line.innerHTML=wrong.map(function(g){
+            return '第 '+(g.gi+1)+' 空正确：<b>'+esc(g.ans)+'</b>';
+        }).join('　');
+        qt.appendChild(line);
     }
 
     function submit(){
         if(!st||st.done)return;
-        var all=st.blanks.every(function(b){return !!b.picked});
-        if(!all){App.Toast.show('还有空没填完','warning');return}
+        var empty=st.cells.filter(function(c){return !c.ch}).length;
+        if(empty){App.Toast.show('还有 '+empty+' 个字没写','warning');return}
         st.done=true;
         st.exam.answered=true;
         if(App.Exam.timerInterval){clearInterval(App.Exam.timerInterval);App.Exam.timerInterval=null}
         var q=st.q,exam=st.exam,sid=exam.currentStudent.id;
-        var right=0;
-        st.blanks.forEach(function(b,i){
-            var ok=b.picked===st.answers[i];
-            if(ok)right++;
-            b.item.classList.add(ok?'ok':'bad');
-            var head=b.item.querySelector('.fill-item-head');
-            if(head)head.innerHTML='第 '+(i+1)+' 空 <span class="fill-picked '+(ok?'ok':'bad')+'">写的：'+esc(b.picked)+' '+(ok?'✓':'✗')+'</span>'+(ok?'':' <span class="fill-answer">正确：'+esc(st.answers[i])+'</span>');
-        });
+        var right=grade();
+        refreshCells();
+        appendAnswerLine();
+        hidePad();
+        updateSubmit();
+        updateTarget();
         var total=q.points||10;
-        var earned=Math.round(total*right/st.blanks.length);
-        var full=right===st.blanks.length;
+        var earned=Math.round(total*right/st.groups.length);
         if(earned>0){
             exam.totalEarned+=earned;
             exam.playerScores[sid]=(exam.playerScores[sid]||0)+earned;
         }
-        exam.results.push({studentId:sid,questionId:q.id,correct:full,pointsEarned:earned,selectedOption:st.blanks.map(function(b){return b.picked}).join('|')});
-        if(full){
+        exam.results.push({studentId:sid,questionId:q.id,correct:right===st.groups.length,pointsEarned:earned,
+            selectedOption:st.groups.map(function(g){return g.got}).join('|')});
+        if(right===st.groups.length){
             App.Effects.playCorrect();App.Effects.spawnConfetti(window.innerWidth/2,window.innerHeight/2,40);
             App.Effects.showScorePopup(earned,true);
         }else{
@@ -352,11 +475,10 @@
         st.done=true;
         st.exam.answered=true;
         if(App.Exam.timerInterval){clearInterval(App.Exam.timerInterval);App.Exam.timerInterval=null}
-        st.blanks.forEach(function(b,i){
-            b.item.classList.add(b.picked&&b.picked===st.answers[i]?'ok':'bad');
-            var head=b.item.querySelector('.fill-item-head');
-            if(head)head.innerHTML='第 '+(i+1)+' 空 <span class="fill-answer">正确：'+esc(st.answers[i])+'</span>';
-        });
+        grade();
+        refreshCells();
+        appendAnswerLine();
+        hidePad();
         var exam=st.exam,sid=exam.currentStudent.id;
         exam.results.push({studentId:sid,questionId:st.q.id,correct:false,pointsEarned:0,selectedOption:'超时'});
         var sb=document.getElementById('fill-submit');if(sb){sb.disabled=true;sb.textContent='超时未提交'}
@@ -368,7 +490,7 @@
         var ab=document.getElementById('btn-absent');if(ab)ab.style.display='none';
     }
 
-    // ===== 防作弊：禁右键/拖拽/粘贴/剪切/选择/输入法 =====
+    // ---------------------------------------------------------------- 防作弊：禁右键/拖拽/粘贴/剪切/选择/输入法
     var AC=null;
     function block(e){e.preventDefault();return false}
     function bindAntiCheat(){
@@ -387,11 +509,11 @@
     }
 
     function cancel(){
-        if(!st)return;
-        st.blanks.forEach(function(b){clearTimeout(b.timer)});
-        if(st.exam&&st.exam.answered){/* 已判分，保留画面 */}
-        st=null;
+        if(pad)clearTimeout(pad.timer);
+        st=null;pad=null;
         unbindAC();
+        var qt=document.getElementById('question-text');
+        if(qt)qt.onclick=null;
     }
 
     App.Fill={renderQuestion:renderQuestion,submit:submit,timeUp:timeUp,cancel:cancel,engine:eng};
