@@ -1,18 +1,21 @@
-/* 填空题模式（手写作答 · 按需加载）v2.118
+/* 填空题模式（手写作答 · 按需加载）v2.119
    老板 2026-11-18 令：按方格操作。
    - 答案几个字 = 题干空位处几个正方形方格，一个字一格，不再一空一块手写板。
    - 点哪个方格就选中哪个，下面出现唯一的手写输入框，只写这一格的字。
    - 写完自动识别，点候选字填进当前格，自动跳到下一个空格；写错可撤销/清空，随时回改已写的格。
    - 全部方格写完才能提交；判分按「一个空＝一个答案」整词比对，逐格标对错。
-   v2.118 识别真算法升级（老板令「改革算法提高识别率，不许用已知答案投机取巧」）：
-   - 2.117「答案置顶」已拆除——识别完全不碰答案，expectedChar 只用于判分。
-   - lib 修真 bug＋两处真算法改进：①方向比对缺 360° 环绕（0° 与 358° 被当反方向）；
-     ②方向相似度加反向容差（同一笔画反着写形状相同，给 0.9 倍部分分）；
-     ③移除转角惩罚（输入段中心对模板转角点语义错位，实测是纯噪声）。
-   - fill.js 自建「转角感知」分析器（库只按弧长切分不看转角）：原生/转角/反向
-     三表示各跑引擎、按字取最高分合并。
-   - 字频先验：常用 3500 字加分（data/common3500.js，通用规范汉字表一级字表），
-     口/囗、十/丄、人/入 这类同形对靠常用度分胜负——输入法通行做法。
+   v2.119 主引擎换神经网络版（老板令「上 GitHub 找免费更高级的实现」）：
+   - 采用 @zh-keyboard/recognizer（Apache-2.0 开源，tfjs CNN 模型，训练自真实
+     手写数据，GB2312 一级 3755 字，官方支持连笔/简写）。文件：
+     lib/zhk_recognizer.bundle.js（esbuild 单文件，337KB）+
+     data/zhk/{model.json,group1-shard1of1.bin,dict.txt}（约 1.26MB）。
+   - 实测（临时测试\zhk评估\zhk_eval.py，合成笔迹 10 用例）：标准口/三/一/入/
+     十/木 全第 1（老引擎「十」进不了前十），连笔口第 2（输给同形「四」），
+     人第 2（八/人本就难分），王第 4；乱画 X 不给答案；纯 CPU 每字 250~360ms。
+   - ZHK 为主引擎（异步 recognize）；老引擎（HanziLookup 修补版，2.118 的
+     三表示合并+字频先验）整体保留作兜底——ZHK 加载失败时自动走老链路。
+   v2.118 老引擎真算法升级（保留）：lib 修方向环绕 bug＋反向容差＋去转角惩罚；
+     自建转角感知分析器；常用 3500 字字频先验（data/common3500.js）。
    v2.114 容错底盘：LOOSENESS 0.15→0.55；REQ=130 窗口；进题自动选中第一格。
    复用 HanziLookupJS + mmah.json；答案区禁键盘/粘贴/语音。 */
 (function(){
@@ -24,17 +27,59 @@
     // REQ 是向引擎要的总候选数窗口（2.118 起三表示合并后按分排序再截取）。
     var LOOSENESS=0.55, REQ=130, FREQ_BOOST=1.0;
     var eng={matcher:null,status:'idle',promise:null,data:null};
+    // v2.119 主引擎（ZHK 神经网络版）状态；r=recognizer 实例
+    var zhk={r:null,status:'idle',promise:null};
     var st=null;      // 当前题目状态
     var pad=null;     // 唯一手写板状态
 
     function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
     // ---------------------------------------------------------------- 引擎
+    // v2.119：先加载 ZHK 神经网络主引擎；失败再走老引擎兜底
+    function loadZHK(){
+        if(zhk.r)return Promise.resolve(true);
+        if(zhk.promise)return zhk.promise;
+        zhk.status='loading';
+        zhk.promise=new Promise(function(resolve){
+            function boot(){
+                if(typeof ZhkLib==='undefined'){zhk.promise=null;resolve(false);return}
+                try{
+                    var r=new ZhkLib.ZhkRecognizer({modelPath:'data/zhk/model.json',dictPath:'data/zhk/dict.txt',backend:'cpu'});
+                    r.initialize().then(function(ok){
+                        if(ok){zhk.r=r;zhk.status='ready';resolve(true)}
+                        else{zhk.promise=null;resolve(false)}
+                    }).catch(function(){zhk.promise=null;resolve(false)});
+                }catch(e){zhk.promise=null;resolve(false)}
+            }
+            if(typeof ZhkLib!=='undefined'){boot();return}
+            var s=document.createElement('script');
+            s.src='lib/zhk_recognizer.bundle.js?v=2.119';
+            s.onload=boot;
+            s.onerror=function(){zhk.promise=null;resolve(false)};
+            document.head.appendChild(s);
+        });
+        return zhk.promise;
+    }
     function loadEngine(cb){
+        if(zhk.r||eng.matcher){cb&&cb();return}
+        if(zhk.status==='loading'&&zhk.promise){zhk.promise.then(function(ok){ok?(cb&&cb()):loadOld(cb)});return}
+        updateEngineText('手写引擎加载中…');
+        loadZHK().then(function(ok){
+            if(ok){onZHKReady();cb&&cb()}
+            else loadOld(cb);
+        });
+    }
+    function onZHKReady(){
+        updateEngineText('手写引擎已就绪（AI 模型 · 3755 字）');
+        // 加载期间已经写了字的，补做一次识别
+        if(pad&&pad.strokes.length&&st&&!st.done)recognize();
+    }
+    // 老引擎兜底（ZHK 加载失败才走）：HanziLookup 修补版 + mmah.json
+    function loadOld(cb){
         if(eng.matcher){cb&&cb();return}
         if(eng.promise){eng.promise.then(function(){cb&&cb()});return}
         eng.status='loading';
-        updateEngineText('手写引擎加载中…');
+        updateEngineText('AI 模型加载失败，切换基础引擎…');
         eng.promise=new Promise(function(resolve){
             var run=function(){
                 if(typeof HanziLookup==='undefined'){eng.status='error';updateEngineText('手写引擎加载失败');resolve();return}
@@ -45,9 +90,9 @@
                     HanziLookup.data.mmah=data;
                     eng.data=data;
                     // 2.114 起用放宽的 LOOSENESS（库默认 0.15 太严），笔顺/笔画出入也能入围
-        eng.matcher=new HanziLookup.Matcher('mmah',LOOSENESS);
+                    eng.matcher=new HanziLookup.Matcher('mmah',LOOSENESS);
                     eng.status='ready';
-                    updateEngineText('手写引擎已就绪（'+data.chars.length+' 字）');
+                    updateEngineText('手写引擎已就绪（基础版 '+data.chars.length+' 字）');
                     // 加载期间已经写了字的，补做一次识别
                     if(pad&&pad.strokes.length&&st&&!st.done)recognize();
                     resolve();
@@ -154,7 +199,8 @@
         document.getElementById('fill-submit').onclick=function(){submit()};
         bindAntiCheat();
         loadEngine();
-        if(eng.matcher)updateEngineText('手写引擎已就绪（'+eng.data.chars.length+' 字）');
+        if(zhk.r)updateEngineText('手写引擎已就绪（AI 模型 · 3755 字）');
+        else if(eng.matcher)updateEngineText('手写引擎已就绪（基础版 '+eng.data.chars.length+' 字）');
         else if(eng.status==='error')updateEngineText('手写引擎加载失败');
         var nextBtn=document.getElementById('btn-next-question');if(nextBtn)nextBtn.style.display='none';
         var undo=document.getElementById('btn-undo-answer');if(undo)undo.style.display='none';
@@ -381,9 +427,27 @@
 
     function recognize(){
         if(!st||st.done||!pad||!pad.strokes.length)return;
-        if(!eng.matcher){renderCands([],'引擎加载中…');return}
-        var snapshot=pad.strokes.map(function(s){return s.map(function(p){return [p[0],p[1]]})});
         var curIdx=st.active;
+        var snapshot=pad.strokes.map(function(s){return s.map(function(p){return [p[0],p[1]]})});
+        // v2.119 主路径：ZHK 神经网络引擎（异步，结果已按置信度排好序）
+        if(zhk.r){
+            var sd=[];
+            snapshot.forEach(function(s){
+                for(var i=0;i<s.length;i++)
+                    sd.push(Math.round(s[i][0]),Math.round(s[i][1]),i===s.length-1?1:0);
+            });
+            zhk.r.recognize(sd).then(function(res){
+                if(!st||st.done||st.active!==curIdx)return;
+                if(!pad||!pad.strokes.length)return;
+                renderCands((res||[]).map(function(ch){return {character:ch,score:1}}));
+            }).catch(function(e){
+                console.error('[fill] zhk recognize failed',e);
+                if(!st||st.done||st.active!==curIdx)return;
+                renderCands([],'识别出错，再写一笔试试');
+            });
+            return;
+        }
+        if(!eng.matcher){renderCands([],'引擎加载中…');return}
         setTimeout(function(){
             if(!st||st.done||st.active!==curIdx)return;
             var matches=[];
