@@ -129,6 +129,8 @@
         st.cells.forEach(function(c,i){
             c.el=qt.querySelector('.fill-cell[data-cell="'+i+'"]');
         });
+        // 进题自动选中第一格：手写板直接能用，省学生一次点击
+        if(st.cells.length)selectCell(0);
         var canvas=document.getElementById('fill-canvas');
         var ctx=canvas.getContext('2d');
         ctx.setTransform(SCALE,0,0,SCALE,0,0);
