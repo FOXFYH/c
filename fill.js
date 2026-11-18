@@ -1,4 +1,4 @@
-/* 填空题模式（手写作答 · 按需加载）v2.111
+/* 填空题模式（手写作答 · 按需加载）v2.112
    老板 2026-11-18 令：按方格操作。
    - 答案几个字 = 题干空位处几个正方形方格，一个字一格，不再一空一块手写板。
    - 点哪个方格就选中哪个，下面出现唯一的手写输入框，只写这一格的字。
@@ -168,7 +168,7 @@
     function updateTarget(){
         var el=document.getElementById('fill-target');
         if(!el)return;
-        if(st.active<0){el.textContent=st.done?'本题已提交':'都写完了，点下面提交';return}
+        if(st.active<0){el.textContent=st.done?'本题已提交':'都写完了，点下面提交（点方格可回改）';return}
         var c=st.cells[st.active],g=st.groups[c.gi];
         el.innerHTML='正在写：第 '+(g.gi+1)+' 空 · 第 '+(c.ci+1)+' 字 / 共 '+g.need+' 字'+
             (c.ch?'　<span class="fill-target-done">已写「'+esc(c.ch)+'」，可重写或清空</span>':'');
@@ -405,7 +405,11 @@
             selectCell(next);
         }else{
             st.active=-1;
-            hidePad();refreshCells();updateTarget();
+            // 写满后不藏工具条：留「撤销」给学生反悔，点方格也能回改
+            var w=document.getElementById('fill-pad-wrap');if(w)w.classList.add('hidden');
+            var c=document.getElementById('fill-cands');
+            if(c)c.innerHTML='<span class="fill-cand-empty">都写完了，可点方格回改，或点“撤销”退掉最后一个字</span>';
+            refreshCells();updateTarget();
         }
     }
 
