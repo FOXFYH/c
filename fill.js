@@ -1,15 +1,19 @@
-/* 填空题模式（手写作答 · 按需加载）v2.117
+/* 填空题模式（手写作答 · 按需加载）v2.118
    老板 2026-11-18 令：按方格操作。
    - 答案几个字 = 题干空位处几个正方形方格，一个字一格，不再一空一块手写板。
    - 点哪个方格就选中哪个，下面出现唯一的手写输入框，只写这一格的字。
    - 写完自动识别，点候选字填进当前格，自动跳到下一个空格；写错可撤销/清空，随时回改已写的格。
    - 全部方格写完才能提交；判分按「一个空＝一个答案」整词比对，逐格标对错。
-   v2.117 精度升级（老板令「别堆可选项，正确字直接排第一」）：
-   - 答案置顶：答案字只要进引擎前 130 名就提到候选第 1 位（连笔「口」排 97 → 第 1）；
-     展示数 14→10 收窄，不再吓人。乱画仍进不了 130 名窗口，不白给答案。
-   v2.114 识别大宽容（老板令「容错，笔画笔顺错了样子像就要认出」）：
-   - LOOSENESS 0.15→0.55：笔顺/连笔/笔画数出入也能入围候选。
-   - 引擎取前 130 名。笔顺顺序引擎本就免疫。进题自动选中第一格。
+   v2.118 识别真算法升级（老板令「改革算法提高识别率，不许用已知答案投机取巧」）：
+   - 2.117「答案置顶」已拆除——识别完全不碰答案，expectedChar 只用于判分。
+   - lib 修真 bug＋两处真算法改进：①方向比对缺 360° 环绕（0° 与 358° 被当反方向）；
+     ②方向相似度加反向容差（同一笔画反着写形状相同，给 0.9 倍部分分）；
+     ③移除转角惩罚（输入段中心对模板转角点语义错位，实测是纯噪声）。
+   - fill.js 自建「转角感知」分析器（库只按弧长切分不看转角）：原生/转角/反向
+     三表示各跑引擎、按字取最高分合并。
+   - 字频先验：常用 3500 字加分（data/common3500.js，通用规范汉字表一级字表），
+     口/囗、十/丄、人/入 这类同形对靠常用度分胜负——输入法通行做法。
+   v2.114 容错底盘：LOOSENESS 0.15→0.55；REQ=130 窗口；进题自动选中第一格。
    复用 HanziLookupJS + mmah.json；答案区禁键盘/粘贴/语音。 */
 (function(){
     'use strict';
@@ -17,9 +21,8 @@
     var SIZE=256, SCALE=2, DELAY=380, CANDS=10;
     // 识别容错（2.114）：LOOSENESS 越大越宽容——0.15 是库默认（很严，笔顺/笔画数
     // 稍有出入就出局）；0.55 让连笔、多一笔少一笔、笔序不对的写法都能入围候选。
-    // REQ 是向引擎要的总候选数窗口（比展示数大），答案字进窗口就置顶（rescueChar()，
-    // 2.117 起「置顶」代替旧「队尾兜底」）；展示只取前 CANDS 个，选项收窄不吓人。
-    var LOOSENESS=0.55, REQ=130;
+    // REQ 是向引擎要的总候选数窗口（2.118 起三表示合并后按分排序再截取）。
+    var LOOSENESS=0.55, REQ=130, FREQ_BOOST=1.0;
     var eng={matcher:null,status:'idle',promise:null,data:null};
     var st=null;      // 当前题目状态
     var pad=null;     // 唯一手写板状态
@@ -58,7 +61,13 @@
             if(typeof HanziLookup!=='undefined'){run();return}
             var s=document.createElement('script');
             s.src='lib/hanzilookup.min.js';
-            s.onload=run;
+            s.onload=function(){
+                // 2.118 加载常用字表（字频先验用），失败不阻塞引擎（先验自动降级为 0）
+                var c=document.createElement('script');
+                c.src='data/common3500.js';
+                c.onload=run;c.onerror=run;
+                document.head.appendChild(c);
+            };
             s.onerror=function(){eng.status='error';updateEngineText('手写引擎脚本加载失败');resolve()};
             document.head.appendChild(s);
         });
@@ -378,37 +387,134 @@
         setTimeout(function(){
             if(!st||st.done||st.active!==curIdx)return;
             var matches=[];
-            try{
-                var analyzed=new HanziLookup.AnalyzedCharacter(snapshot);
-                eng.matcher.match(analyzed,REQ,function(list){matches=list||[]});
-            }catch(e){console.error('[fill] recognize failed',e)}
+            try{matches=matchAll(snapshot)}
+            catch(e){console.error('[fill] recognize failed',e)}
             if(!pad||!pad.strokes.length)return;
-            rescueChar(matches,curIdx);
             renderCands(matches);
         },0);
     }
 
-    // 这一格应写的字（groups[gi].ans 的第 ci 个字）
+    // ---------------- 多表示匹配（2.118 真算法升级，不碰答案）----------------
+    // 病根（探针实测两处引擎真缺陷）：
+    // ① 库的 AnalyzedCharacter 只按「弧长/直线比」找切分点、不看转角——连笔字
+    //    笔画不匀时被切成斜弦，方向全歪（连笔「口」因此排 97 名）；
+    // ② 引擎方向比对缺 360° 环绕：0° 与 358° 只差 2° 却被当反方向（模板自身
+    //    就把「横」有的存 255 有的存 4，同方向互打低分）——已在 lib 修一行。
+    // 改法：自建「转角感知」分析器（弧长切分点之外补转角切分点），再加
+    // 「笔画反向」变体；原生 / 转角 / 反向三个表示各跑一遍引擎，按字取最高分
+    // 合并排序——识别能力本身提升，谁都不偏袒。
+    function matchAll(snapshot){
+        var best={};
+        function feed(list){
+            (list||[]).forEach(function(m){
+                if(!m||!m.character)return;
+                var c=best[m.character];
+                if(!c||m.score>c.score)best[m.character]=m;
+            });
+        }
+        eng.matcher.match(new HanziLookup.AnalyzedCharacter(snapshot),REQ,feed);
+        eng.matcher.match(buildAnalyzed(snapshot,false),REQ,feed);
+        eng.matcher.match(buildAnalyzed(snapshot,true),REQ,feed);
+        var list=Object.keys(best).map(function(k){return best[k]});
+        // 字频先验（2.118）：常用字加分、生僻字靠后——输入法通行做法。
+        // 口/囗、十/丄、人/入 这类同形难分对，靠常用度分胜负（三级字表 3500 字）。
+        var common=window.HANZI_COMMON3500||'';
+        if(common)list.forEach(function(m){ if(common.indexOf(m.character)>=0)m.score+=FREQ_BOOST; });
+        list.sort(function(a,b){return b.score-a.score});
+        return list;
+    }
+
+    function pDist(a,b){var dx=a[0]-b[0],dy=a[1]-b[1];return Math.sqrt(dx*dx+dy*dy)}
+    // 与库同款：取「反向向量」的量化方向（0..255），保证和模板同一口径
+    // ★库源码 o(r,t) 里向量是 r-t（起点-终点＝反向），这里必须一致，差 180° 全盘皆输
+    function dirOf(a,b){
+        var ang=Math.PI-Math.atan2(a[1]-b[1],a[0]-b[0]);
+        var v=Math.round(256*ang/Math.PI/2);if(v>=256)v=0;return v;
+    }
+    // 库同款弧长切分点（v=12.5, f=1.1, s=1.09），逐字复刻防口径漂移
+    function arcPivots(pts){
+        var keep=new Array(pts.length);
+        for(var i=0;i<pts.length;i++)keep[i]=false;
+        var o=0,u=0,e=1;keep[0]=true;
+        var h=pDist(pts[u],pts[e]),acc=h;
+        for(var a=2;a<pts.length;++a){
+            var l=pDist(pts[e],pts[a]);
+            h+=l;acc+=l;
+            var E2=pDist(pts[o],pts[a]),c2=pDist(pts[u],pts[a]);
+            if(h>1.1*E2||acc>1.09*c2){
+                if(keep[o]&&pDist(pts[o],pts[e])<12.5)keep[o]=false;
+                keep[e]=true;acc=l;u=e;
+            }
+            h=l;o=e;e=a;
+        }
+        keep[e]=true;
+        if(keep[o]&&pDist(pts[o],pts[e])<12.5&&o!==0)keep[o]=false;
+        var piv=[];for(var i=0;i<keep.length;i++)if(keep[i])piv.push(i);
+        return piv;
+    }
+    // 转角切分点（2.118 新增）：滑窗弧长 W 内两弦夹角 ≥ 约 68° 判为转角
+    function cornerPivots(pts,arcs){
+        var n=pts.length,total=0,accArr=[0];
+        for(var i=1;i<n;i++){total+=pDist(pts[i-1],pts[i]);accArr.push(total)}
+        var out=[];
+        if(total<40)return out;
+        var W=Math.min(18,total/4);
+        var s=0;
+        for(var i=1;i<n-1;i++){
+            if(accArr[i]-accArr[s]<W||total-accArr[i]<W)continue;
+            var j=i+1;while(j<n-1&&accArr[j]-accArr[i]<W)j++;
+            var d1=dirOf(pts[s],pts[i]),d2=dirOf(pts[i],pts[j]);
+            var dr=Math.abs(d1-d2);if(dr>128)dr=256-dr;
+            if(dr>=48){
+                var dup=arcs.some(function(p){return Math.abs(p-i)<=2})||
+                        out.some(function(p){return Math.abs(p-i)<=2});
+                if(!dup)out.push(i);
+                s=i;
+            }
+        }
+        return out;
+    }
+    function makeSub(a,b,w,h2,E,M){
+        var big=(w>h2?w*w:h2*h2),e=Math.sqrt(big+big);
+        var d=pDist(a,b)/e;if(d>1)d=1;if(!(d>0))d=0;
+        var mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,nx,ny;
+        if(w>h2){nx=(mx-E)/w;ny=(my-M+(w-h2)/2)/w}
+        else{nx=(mx-E+(h2-w)/2)/h2;ny=(my-M)/h2}
+        nx=isNaN(nx)?0:(nx<0?0:(nx>1?1:nx));
+        ny=isNaN(ny)?0:(ny<0?0:(ny>1?1:ny));
+        return {direction:dirOf(a,b),length:Math.round(255*d),
+                centerX:Math.round(15*nx),centerY:Math.round(15*ny)};
+    }
+    // 自建分析器：弧长切分＋转角切分；reverse=笔画反向变体
+    function buildAnalyzed(strokes,reverse){
+        var E=Infinity,c=-Infinity,M=Infinity,l=-Infinity;
+        strokes.forEach(function(pts){pts.forEach(function(p){
+            if(p[0]<E)E=p[0];if(p[0]>c)c=p[0];
+            if(p[1]<M)M=p[1];if(p[1]>l)l=p[1];
+        })});
+        var w=Math.max(c-E,1),h2=Math.max(l-M,1);
+        var analyzedStrokes=[],N=0;
+        strokes.forEach(function(pts0){
+            var pts=reverse?pts0.slice().reverse():pts0;
+            if(pts.length<2)return;
+            var arcs=arcPivots(pts);
+            var corns=cornerPivots(pts,arcs);
+            var piv=arcs.concat(corns).sort(function(a,b){return a-b});
+            if(piv.length<2)return;
+            var subs=[];
+            for(var k=0;k<piv.length-1;k++){
+                subs.push(makeSub(pts[piv[k]],pts[piv[k+1]],w,h2,E,M));
+            }
+            if(subs.length){analyzedStrokes.push({subStrokes:subs});N+=subs.length}
+        });
+        return {analyzedStrokes:analyzedStrokes,subStrokeCount:N};
+    }
+
+    // 这一格应写的字（groups[gi].ans 的第 ci 个字）——仅用于判分，识别不碰它
     function expectedChar(idx){
         if(!st||isNaN(idx)||idx<0||idx>=st.cells.length)return '';
         var c=st.cells[idx],g=st.groups[c.gi];
         return (g&&g.ans)?(g.ans.charAt(c.ci)||''):'';
-    }
-
-    // 答案置顶（2.117，老板令「要精度，正确字直接排第一」）：考试里答案是已知的，
-    // 学生落笔就是在写答案字——所以引擎结果里只要答案字排进了 REQ 名内（连笔「口」
-    // 实测排 97 也能进），就直接提到候选第 1 位，不再挂队尾当兜底。乱画排 200 名外
-    // 进不了 REQ 窗口，不会白给答案。笔顺顺序引擎本就免疫（倒序写「三」仍第 1）。
-    function rescueChar(matches,idx){
-        if(!matches||!matches.length)return;
-        var exp=expectedChar(idx);
-        if(!exp)return;
-        for(var i=0;i<matches.length;i++){
-            if(matches[i]&&matches[i].character===exp){
-                if(i>0){var m=matches.splice(i,1)[0];matches.unshift(m)}
-                break;
-            }
-        }
     }
 
     function renderCands(list,msg){
@@ -424,11 +530,8 @@
             return;
         }
         var html='';
-        var exp=expectedChar(st?st.active:NaN);
-        list.forEach(function(m,i){
-            // 答案置顶后给第 1 位的答案字加高亮，学生一眼认出「就是它」
-            var cls='fill-cand'+(i===0&&exp&&m.character===exp?' fill-cand-ans':'');
-            html+='<button type="button" class="'+cls+'" data-ch="'+esc(m.character)+'">'+esc(m.character)+'</button>';
+        list.forEach(function(m){
+            html+='<button type="button" class="fill-cand" data-ch="'+esc(m.character)+'">'+esc(m.character)+'</button>';
         });
         html+='<button type="button" class="fill-cand fill-cand-none" data-act="none">都不是</button>';
         box.innerHTML=html;
