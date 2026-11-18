@@ -1,4 +1,4 @@
-/* 填空题模式（手写作答 · 按需加载）v2.112
+/* 填空题模式（手写作答 · 按需加载）v2.113
    老板 2026-11-18 令：按方格操作。
    - 答案几个字 = 题干空位处几个正方形方格，一个字一格，不再一空一块手写板。
    - 点哪个方格就选中哪个，下面出现唯一的手写输入框，只写这一格的字。
@@ -161,6 +161,8 @@
         refreshCells();
         document.getElementById('fill-pad-wrap').classList.remove('hidden');
         document.getElementById('fill-tools').classList.remove('hidden');
+        var pw=document.getElementById('fill-pad-wrap');
+        if(pw&&pw.scrollIntoView)try{pw.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
         updateTarget();
         renderCands([]);
     }
@@ -374,6 +376,10 @@
     function renderCands(list,msg){
         var box=document.getElementById('fill-cands');
         if(!box)return;
+        // 只留汉字：引擎会带出 丶丨丿 这类笔画/部首，学生误点就填错格
+        if(list&&list.length){
+            list=list.filter(function(m){return m&&m.character&&/^[\u3400-\u4dbf\u4e00-\u9fff]$/.test(m.character)});
+        }
         if(!list||!list.length){
             box.innerHTML='<span class="fill-cand-empty">'+(msg||'写完一笔自动识别；没有正确字就点“撤销”重写')+'</span>';
             return;
