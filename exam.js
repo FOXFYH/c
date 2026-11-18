@@ -1429,6 +1429,10 @@
             document.getElementById('exam-playing').classList.add('hidden');
             document.getElementById('exam-play-sidebar').classList.add('hidden');
             document.getElementById('exam-drawing').classList.add('hidden');
+            // 2.109 退出必须摘干净：顶栏考试按钮隐藏 + 主页模式选择区恢复（否则顶栏还挂着「结束」、主页一片黑）
+            var navMode=document.getElementById('nav-exam-mode');if(navMode)navMode.classList.add('hidden');
+            var navEnd=document.getElementById('nav-exam-end');if(navEnd)navEnd.classList.add('hidden');
+            var ms=document.getElementById('exam-mode-select');if(ms)ms.classList.remove('hidden');
             var hc=document.querySelector('.home-container');if(hc)hc.classList.remove('in-exam');
             this.currentExam=null;
         },
