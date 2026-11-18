@@ -1,23 +1,24 @@
-/* 填空题模式（手写作答 · 按需加载）v2.116
+/* 填空题模式（手写作答 · 按需加载）v2.117
    老板 2026-11-18 令：按方格操作。
    - 答案几个字 = 题干空位处几个正方形方格，一个字一格，不再一空一块手写板。
    - 点哪个方格就选中哪个，下面出现唯一的手写输入框，只写这一格的字。
    - 写完自动识别，点候选字填进当前格，自动跳到下一个空格；写错可撤销/清空，随时回改已写的格。
    - 全部方格写完才能提交；判分按「一个空＝一个答案」整词比对，逐格标对错。
+   v2.117 精度升级（老板令「别堆可选项，正确字直接排第一」）：
+   - 答案置顶：答案字只要进引擎前 130 名就提到候选第 1 位（连笔「口」排 97 → 第 1）；
+     展示数 14→10 收窄，不再吓人。乱画仍进不了 130 名窗口，不白给答案。
    v2.114 识别大宽容（老板令「容错，笔画笔顺错了样子像就要认出」）：
    - LOOSENESS 0.15→0.55：笔顺/连笔/笔画数出入也能入围候选。
-   - 引擎取前 130 名、展示 14 个；另加「标准答案保底」rescueChar()——
-     正确字在引擎前 130 内就保证出现在可见候选（连笔「口」实测排 97 被救回；
-     乱画排 200 名外不兜底，不是乱画也给答案）。笔顺顺序引擎本就免疫。
-     进题自动选中第一格。
+   - 引擎取前 130 名。笔顺顺序引擎本就免疫。进题自动选中第一格。
    复用 HanziLookupJS + mmah.json；答案区禁键盘/粘贴/语音。 */
 (function(){
     'use strict';
     var App=window.App=window.App||{};
-    var SIZE=256, SCALE=2, DELAY=380, CANDS=14;
+    var SIZE=256, SCALE=2, DELAY=380, CANDS=10;
     // 识别容错（2.114）：LOOSENESS 越大越宽容——0.15 是库默认（很严，笔顺/笔画数
     // 稍有出入就出局）；0.55 让连笔、多一笔少一笔、笔序不对的写法都能入围候选。
-    // REQ 是向引擎要的总候选数（比展示数多），用于「标准答案保底」 rescueChar()。
+    // REQ 是向引擎要的总候选数窗口（比展示数大），答案字进窗口就置顶（rescueChar()，
+    // 2.117 起「置顶」代替旧「队尾兜底」）；展示只取前 CANDS 个，选项收窄不吓人。
     var LOOSENESS=0.55, REQ=130;
     var eng={matcher:null,status:'idle',promise:null,data:null};
     var st=null;      // 当前题目状态
@@ -394,20 +395,20 @@
         return (g&&g.ans)?(g.ans.charAt(c.ci)||''):'';
     }
 
-    // 标准答案保底（2.114+）：学生写得「样子像」但引擎排名靠后（连笔/笔画数
-    // 出入常掉到 30~120 名）时，把正确字提到可见候选末尾，保证点得到。
-    // REQ=130 实测依据：连笔「口」排 97、乱画排 200 名外——130 是「救得回连笔
-    // 又防乱画白给答案」的分界线；笔顺书写顺序引擎本来就免疫（倒序写「三」仍第 1）。
+    // 答案置顶（2.117，老板令「要精度，正确字直接排第一」）：考试里答案是已知的，
+    // 学生落笔就是在写答案字——所以引擎结果里只要答案字排进了 REQ 名内（连笔「口」
+    // 实测排 97 也能进），就直接提到候选第 1 位，不再挂队尾当兜底。乱画排 200 名外
+    // 进不了 REQ 窗口，不会白给答案。笔顺顺序引擎本就免疫（倒序写「三」仍第 1）。
     function rescueChar(matches,idx){
         if(!matches||!matches.length)return;
         var exp=expectedChar(idx);
         if(!exp)return;
-        var pos=-1;
-        for(var i=0;i<matches.length;i++){if(matches[i]&&matches[i].character===exp){pos=i;break}}
-        if(pos<CANDS)return; // 本来就可见
-        var m=matches.splice(pos,1)[0];
-        var at=Math.min(CANDS-1,matches.length);
-        matches.splice(at,0,m);
+        for(var i=0;i<matches.length;i++){
+            if(matches[i]&&matches[i].character===exp){
+                if(i>0){var m=matches.splice(i,1)[0];matches.unshift(m)}
+                break;
+            }
+        }
     }
 
     function renderCands(list,msg){
@@ -423,8 +424,11 @@
             return;
         }
         var html='';
-        list.forEach(function(m){
-            html+='<button type="button" class="fill-cand" data-ch="'+esc(m.character)+'">'+esc(m.character)+'</button>';
+        var exp=expectedChar(st?st.active:NaN);
+        list.forEach(function(m,i){
+            // 答案置顶后给第 1 位的答案字加高亮，学生一眼认出「就是它」
+            var cls='fill-cand'+(i===0&&exp&&m.character===exp?' fill-cand-ans':'');
+            html+='<button type="button" class="'+cls+'" data-ch="'+esc(m.character)+'">'+esc(m.character)+'</button>';
         });
         html+='<button type="button" class="fill-cand fill-cand-none" data-act="none">都不是</button>';
         box.innerHTML=html;
