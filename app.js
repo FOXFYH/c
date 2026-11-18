@@ -3779,5 +3779,18 @@
 
     document.addEventListener('DOMContentLoaded',function(){
         App.init();
+        // 2.120 手写引擎闲时预装（老板令「网站该忙的都忙完以后过一段时间自动帮它安」）：
+        // 登录静置 3 分钟且页面可见时，后台拉起 fill 模块并预装 AI 手写引擎，
+        // 学生进填空题即开即用；浏览器缓存过一次，之后几秒就绪。页面在后台就再等。
+        (function(){
+            var IDLE_MS=3*60*1000;
+            function tryPreload(){
+                if(document.visibilityState!=='visible'){setTimeout(tryPreload,60000);return}
+                App.Modules.load('fill',function(){
+                    if(App.Fill&&App.Fill.preload){try{App.Fill.preload()}catch(e){}}
+                });
+            }
+            setTimeout(tryPreload,IDLE_MS);
+        })();
     });
 })();
