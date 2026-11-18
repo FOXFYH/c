@@ -44,12 +44,15 @@
             function boot(){
                 if(typeof ZhkLib==='undefined'){zhk.promise=null;resolve(false);return}
                 try{
+                    console.log('[zhk-timing] bundle 就绪', Math.round(performance.now()));
                     var r=new ZhkLib.ZhkRecognizer({modelPath:'data/zhk/model.json',dictPath:'data/zhk/dict.txt',backend:'cpu'});
+                    var __t0=performance.now();
                     r.initialize().then(function(ok){
+                        console.log('[zhk-timing] initialize', Math.round(performance.now()-__t0)+'ms ok='+ok);
                         if(ok){zhk.r=r;zhk.status='ready';resolve(true)}
                         else{zhk.promise=null;resolve(false)}
-                    }).catch(function(){zhk.promise=null;resolve(false)});
-                }catch(e){zhk.promise=null;resolve(false)}
+                    }).catch(function(e){console.log('[zhk-timing] init失败',String(e));zhk.promise=null;resolve(false)});
+                }catch(e){console.log('[zhk-timing] boot异常',String(e));zhk.promise=null;resolve(false)}
             }
             if(typeof ZhkLib!=='undefined'){boot();return}
             var s=document.createElement('script');
