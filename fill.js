@@ -9,6 +9,16 @@
      手写数据，GB2312 一级 3755 字，官方支持连笔/简写）。文件：
      lib/zhk_recognizer.bundle.js（esbuild 单文件，337KB）+
      data/zhk/{model.json,group1-shard1of1.bin,dict.txt}（约 1.26MB）。
+   v2.120 引擎安装体验（老板 2026-11-18 令）：
+   - ①闲时预装：app.js 在登录静置 3 分钟且页面可见时后台拉起本模块并预装引擎
+     （App.Fill.preload），学生进填空题即开即用；装过一次浏览器有缓存，几秒就绪。
+   - ②公平开考：进填空题时引擎没就绪 → 全屏遮罩「手写引擎安装中」＋已等待秒数，
+     计时器不启动（时间冻结），引擎就绪（或降级到基础引擎）才摘遮罩、开表开考。
+   - preload 导出＝loadEngine；loadOld 错误分支也回 cb，保证遮罩必摘不卡死。
+   v2.119 换装 AI 识别引擎（老板令「上 GitHub 找免费的高级方案」）：
+   - 主引擎换 @zh-keyboard/recognizer（Apache-2.0，TensorFlow.js 真手写数据训练，
+     3755 字，支持连笔简写）；lib/zhk_recognizer.bundle.js（esbuild 单文件，337KB）+
+     data/zhk/{model.json,group1-shard1of1.bin,dict.txt}（约 1.26MB）。
    - 实测（临时测试\zhk评估\zhk_eval.py，合成笔迹 10 用例）：标准口/三/一/入/
      十/木 全第 1（老引擎「十」进不了前十），连笔口第 2（输给同形「四」），
      人第 2（八/人本就难分），王第 4；乱画 X 不给答案；纯 CPU 每字 250~360ms。
@@ -56,7 +66,7 @@
             }
             if(typeof ZhkLib!=='undefined'){boot();return}
             var s=document.createElement('script');
-            s.src='lib/zhk_recognizer.bundle.js?v=2.119';
+            s.src='lib/zhk_recognizer.bundle.js?v=2.120';
             s.onload=boot;
             s.onerror=function(){zhk.promise=null;resolve(false)};
             document.head.appendChild(s);
@@ -85,7 +95,7 @@
         updateEngineText('AI 模型加载失败，切换基础引擎…');
         eng.promise=new Promise(function(resolve){
             var run=function(){
-                if(typeof HanziLookup==='undefined'){eng.status='error';updateEngineText('手写引擎加载失败');resolve();return}
+                if(typeof HanziLookup==='undefined'){eng.status='error';updateEngineText('手写引擎加载失败');resolve();cb&&cb();return}
                 fetch('data/mmah.json').then(function(r){return r.text()}).then(function(txt){
                     var data=JSON.parse(txt);
                     if(!data||!data.chars||!data.substrokes)throw new Error('数据格式异常');
@@ -104,6 +114,7 @@
                     eng.status='error';
                     updateEngineText('手写数据加载失败：'+(e&&e.message?e.message:e));
                     resolve();
+                    cb&&cb();
                 });
             };
             if(typeof HanziLookup!=='undefined'){run();return}
@@ -116,7 +127,7 @@
                 c.onload=run;c.onerror=run;
                 document.head.appendChild(c);
             };
-            s.onerror=function(){eng.status='error';updateEngineText('手写引擎脚本加载失败');resolve()};
+            s.onerror=function(){eng.status='error';updateEngineText('手写引擎脚本加载失败');resolve();cb&&cb()};
             document.head.appendChild(s);
         });
     }
@@ -126,6 +137,32 @@
         if(el)el.textContent=t;
         var box=document.getElementById('fill-panel');
         if(box)box.classList.toggle('engine-error',eng.status==='error');
+    }
+
+    // 2.120 引擎安装遮罩：进填空题引擎没就绪时全屏遮挡＋冻结计时（startTimer 延后），
+    // 学生看到「安装中＋已等待秒数」，就绪才摘掉开考。写作答界面上不可见即不显示。
+    var bootTick=null;
+    function showBoot(){
+        if(document.getElementById('fill-boot'))return;
+        var d=document.createElement('div');
+        d.id='fill-boot';
+        d.innerHTML='<div class="fill-boot-card">'+
+            '<div class="fill-boot-spin"></div>'+
+            '<div class="fill-boot-title">手写引擎安装中…</div>'+
+            '<div class="fill-boot-sub">考试计时已暂停，引擎装好才开始（公平起见）</div>'+
+            '<div class="fill-boot-sec" id="fill-boot-sec"></div>'+
+            '</div>';
+        document.body.appendChild(d);
+        var t0=Date.now();
+        bootTick=setInterval(function(){
+            var el=document.getElementById('fill-boot-sec');
+            if(el)el.textContent='已等待 '+Math.round((Date.now()-t0)/1000)+' 秒';
+        },1000);
+    }
+    function hideBoot(){
+        if(bootTick){clearInterval(bootTick);bootTick=null}
+        var d=document.getElementById('fill-boot');
+        if(d&&d.parentNode)d.parentNode.removeChild(d);
     }
 
     // ---------------------------------------------------------------- 渲染
@@ -209,7 +246,18 @@
         var undo=document.getElementById('btn-undo-answer');if(undo)undo.style.display='none';
         var absent=document.getElementById('btn-absent');if(absent)absent.style.display='none';
         updateSubmit();
-        App.Exam.startTimer(q.text);
+        // 2.120 公平开考：引擎没就绪先盖遮罩、计时器不启动（时间冻结），就绪才开表；
+        // 已就绪（zhk.r / 基础引擎）或引擎坏了（error 状态，走不了引擎也照常考）直接开表。
+        if(zhk.r||eng.matcher||eng.status==='error'){
+            App.Exam.startTimer(q.text);
+        }else{
+            showBoot();
+            loadEngine(function(){
+                hideBoot();
+                // 加载期间可能已退出本题（cancel 会把 st 置空），回场再开表
+                if(st&&st.exam===exam&&!st.done)App.Exam.startTimer(q.text);
+            });
+        }
     }
 
     function cellsHTML(gi){
@@ -737,9 +785,10 @@
         if(pad)clearTimeout(pad.timer);
         st=null;pad=null;
         unbindAC();
+        hideBoot();
         var qt=document.getElementById('question-text');
         if(qt)qt.onclick=null;
     }
 
-    App.Fill={renderQuestion:renderQuestion,submit:submit,timeUp:timeUp,cancel:cancel,engine:eng};
+    App.Fill={renderQuestion:renderQuestion,submit:submit,timeUp:timeUp,cancel:cancel,engine:eng,preload:loadEngine};
 })();
