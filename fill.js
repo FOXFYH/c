@@ -1,4 +1,4 @@
-/* 填空题模式（手写作答 · 按需加载）v2.110
+/* 填空题模式（手写作答 · 按需加载）v2.111
    老板 2026-11-18 令：按方格操作。
    - 答案几个字 = 题干空位处几个正方形方格，一个字一格，不再一空一块手写板。
    - 点哪个方格就选中哪个，下面出现唯一的手写输入框，只写这一格的字。
@@ -131,6 +131,8 @@
         document.getElementById('fill-submit').onclick=function(){submit()};
         bindAntiCheat();
         loadEngine();
+        if(eng.matcher)updateEngineText('手写引擎已就绪（'+eng.data.chars.length+' 字）');
+        else if(eng.status==='error')updateEngineText('手写引擎加载失败');
         var nextBtn=document.getElementById('btn-next-question');if(nextBtn)nextBtn.style.display='none';
         var undo=document.getElementById('btn-undo-answer');if(undo)undo.style.display='none';
         var absent=document.getElementById('btn-absent');if(absent)absent.style.display='none';
@@ -335,7 +337,8 @@
             refreshCells();updateSubmit();updateTarget();return
         }
         // 3) 当前格是空的：退到上一个已写的格并清掉，方便连续反悔
-        var prev=findPrevFilled(st?st.active-1:-1);
+        var from=(st.active>=0?st.active-1:st.cells.length-1);
+        var prev=findPrevFilled(from);
         if(prev>=0){
             st.cells[prev].ch='';
             refreshCells();updateSubmit();
